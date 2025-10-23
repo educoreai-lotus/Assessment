@@ -141,7 +141,7 @@
   
     "traceability": {
       "execution_id": "",
-      "last_phase": null
+      "last_phase": "10"
     },
     "phase_updates": [
       {
@@ -327,6 +327,54 @@
         "links": {
           "template": "templates/08-Testing_And_Verification.md"
         },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      }
+    ,
+      {
+        "version": "v3.1.3",
+        "traceability_id": "p09-update-0001",
+        "phase": "09",
+        "title": "Code Review & Deployment",
+        "status_after": "Done",
+        "artifacts": {
+          "release": [
+            "artifacts/code-review-report.json",
+            "artifacts/release-candidate.json",
+            "artifacts/deployment-summary.json"
+          ]
+        },
+        "links": {
+          "template": "templates/09-Code_Review_And_Deployment.md"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      }
+    ,
+      {
+        "version": "v3.1.4",
+        "traceability_id": "p10-update-0001",
+        "phase": "10",
+        "title": "Release & Deployment",
+        "status_after": "Done",
+        "artifacts": {
+          "deployment": [
+            "artifacts/deployment-plan.json",
+            "artifacts/release-notes.json",
+            "artifacts/post-deploy-validation.json",
+            "artifacts/monitoring-handbook.json"
+          ]
+        },
+        "links": {
+          "related": [
+            "artifacts/deployment-summary.json",
+            "artifacts/release-candidate.json",
+            "artifacts/integration-specifications.json",
+            "artifacts/release-plan.json",
+            "README.md"
+          ]
+        },
+        "notes": [
+          "REST-only integrations and demo mock-data environment reflected per README and integration-specifications."
+        ],
         "timestamps": { "created": "2025-10-23T00:00:00Z" }
       }
     ]
