@@ -69,6 +69,12 @@ It ensures that security is embedded at every layer of design and that all legal
 3. Tag sensitive data and high-risk processes.  
 4. Produce `security-requirements.json`.  
 5. Validate with stakeholders.
+> **Environment Context (Demo Mode):**
+> - The current demo environment contains **no production PII**; mock data only is used.
+> - Security controls are active for structure and logging validation but not handling real user data.
+> - All integrations operate in **REST-only** mode for now; secure transport (TLS 1.3) is enforced.
+> - Data residency and full compliance enforcement will be applied in production deployment (Phase 07+).
+
 
 ### 2️⃣ Threat Modeling
 1. Identify potential threats and attack vectors.  

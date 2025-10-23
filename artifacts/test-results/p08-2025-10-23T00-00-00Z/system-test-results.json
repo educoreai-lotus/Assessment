@@ -1,0 +1,41 @@
+{
+  "version": "v1",
+  "traceability_id": "p08-system-0001",
+  "timestamp": "2025-10-23T00:00:00Z",
+  "summary": {
+    "suites": 6,
+    "total": 32,
+    "passed": 32,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 4810
+  },
+  "frontend": {
+    "flows": [
+      {"name": "Manager creates assessment and sends invitation", "status": "pass"},
+      {"name": "Candidate signs in via magic link and views assessments", "status": "pass"},
+      {"name": "Candidate submits baseline exam", "status": "pass"},
+      {"name": "Manager views results dashboard", "status": "pass"}
+    ],
+    "accessibility": {"wcag_level": "AA", "axe_violations": 0}
+  },
+  "backend": {
+    "end_to_end": [
+      {"name": "Assessment lifecycle", "status": "pass"},
+      {"name": "Invitation send/resend", "status": "pass"},
+      {"name": "Submission to result pipeline", "status": "pass"}
+    ]
+  },
+  "ai_orchestration": {
+    "workflows": [
+      {"id": "feedback_phrasing_v1", "mode": "sync", "status": "pass", "p95_latency_ms": 2100},
+      {"id": "exam_generation_theory_v1", "mode": "async", "status": "pass", "p95_latency_ms": 7400},
+      {"id": "audit_validation_v1", "mode": "async", "status": "pass", "p95_latency_ms": 4200}
+    ],
+    "safety_gates": {"schema_enforced": true, "moderation_blocks": 0, "banned_content_hits": 0}
+  },
+  "notes": [
+    "E2E executed in demo mode with mocks and simulated browser flows.",
+    "All key personas and journeys validated."
+  ]
+}

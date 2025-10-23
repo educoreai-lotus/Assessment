@@ -1,0 +1,41 @@
+{
+  "version": "v1",
+  "traceability_id": "p08-ai-0001",
+  "timestamp": "2025-10-23T00:00:00Z",
+  "workflows": [
+    {
+      "id": "feedback_phrasing_v1",
+      "mode": "sync",
+      "tests": 8,
+      "passed": 8,
+      "schema_enforced": true,
+      "moderation_blocks": 0,
+      "p95_latency_ms": 2100,
+      "p95_cost_usd": 0.004
+    },
+    {
+      "id": "exam_generation_theory_v1",
+      "mode": "async",
+      "tests": 6,
+      "passed": 6,
+      "schema_enforced": true,
+      "moderation_blocks": 0,
+      "p95_latency_ms": 7400,
+      "p95_cost_usd": 0.048
+    },
+    {
+      "id": "audit_validation_v1",
+      "mode": "async",
+      "tests": 5,
+      "passed": 5,
+      "schema_enforced": true,
+      "moderation_blocks": 0,
+      "p95_latency_ms": 4200,
+      "p95_cost_usd": 0.019
+    }
+  ],
+  "notes": [
+    "AI runs executed with simulated providers in demo; real keys not required.",
+    "All safety gates respected; no banned content flagged."
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "version": "v1",
+  "traceability_id": "p08-test-strategy-0001",
+  "source_phase": "08-Testing_And_Verification",
+  "timestamp": "2025-10-23T00:00:00Z",
+  "inputs": {
+    "implementation_plan_ref": "artifacts/implementation-plan.json",
+    "code_scaffolding_ref": "artifacts/code-scaffolding.json",
+    "security_architecture_ref": "artifacts/security-architecture.json",
+    "ai_architecture_ref": "artifacts/ai-architecture.json",
+    "environment_spec_ref": "artifacts/environment-spec.json",
+    "api_specifications_ref": "artifacts/api-specifications.json"
+  },
+  "environments": {
+    "demo": {
+      "node": ">=20",
+      "data_mode": "mock_json",
+      "ai": {"enabled": true, "timeouts_ms": 8000}
+    }
+  },
+  "methodology": {
+    "types": ["unit", "integration", "e2e", "performance", "security", "compliance"],
+    "approach": "risk-based with automation-first; AI-assisted test generation for edge cases",
+    "tools": {
+      "backend": ["jest(contract-mock)", "supertest(simulated)"] ,
+      "frontend": ["playwright(simulated)", "axe-core(simulated)"] ,
+      "performance": ["k6(simulated)"] ,
+      "security": ["zaproxy(simulated)", "dependency-audit(simulated)"]
+    },
+    "coverage_threshold": {"lines": 80, "functions": 80, "branches": 80, "statements": 80},
+    "quality_gates": ["planning", "unit_integration", "system", "performance", "security_compliance"]
+  },
+  "scope": {
+    "backend": ["Auth", "Assessments", "Invitations", "Candidate Submissions", "Results", "Audit", "Baseline Exams"],
+    "frontend": ["Manager Dashboard", "Candidate Flow", "Accessibility"],
+    "ai_workflows": ["exam_generation_theory_v1", "feedback_phrasing_v1", "audit_validation_v1"]
+  },
+  "security_controls_under_test": [
+    "JWT authentication", "RBAC + scopes", "Row-level org isolation", "Rate limits",
+    "CORS restricted", "CSP default-src 'none'", "Input validation", "No stack traces",
+    "Audit logging", "Egress allowlist for AI providers"
+  ],
+  "ai_safety_gates": [
+    "JSON schema validation", "moderation (provider + fallback)", "banned content filters",
+    "latency and cost budgets", "audit lineage recording"
+  ],
+  "outputs": {
+    "directory": "artifacts/test-results/p08-2025-10-23T00-00-00Z/",
+    "files": [
+      "unit-test-results.json",
+      "integration-test-results.json",
+      "system-test-results.json",
+      "performance-analysis.json",
+      "security-assessment.json",
+      "compliance-validation.json",
+      "quality-gates.json",
+      "ai-workflow-test-results.json"
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 {
     "project": {
-      "name": "AI-Assisted Full-Stack Project Development Workflow",
+      "name": "Assessment Microservice (AI-Assisted Workflow)",
       "version": "3.0",
       "description": "End-to-end autonomous project development roadmap executable by GPT. Designed for non-technical users — each phase is AI-driven and requires zero manual coding.",
       "execution_mode": {
@@ -24,148 +24,91 @@
   
     "phases": [
       {
-        "id": 1,
+        "id": "01",
         "title": "Initial Development Setup",
         "template": "01-Initial_Development_Setup.md",
         "input_files": [],
-        "output_files": [
-          "Requirements.json",
-          "ROADMAP.json"
-        ],
+        "output_files": ["Requirements.json", "ROADMAP.json"],
         "objective": "Initialize environment, repository, CI/CD, and baseline configuration.",
-        "next_phase": 2,
+        "next_phase": "02",
         "status": "pending"
       },
       {
-        "id": 2,
+        "id": "02",
         "title": "User Dialogue & Requirements Analysis",
         "template": "02-User_Dialogue_And_Requirements.md",
         "input_files": ["Requirements.json"],
-        "output_files": [
-          "feature-specifications.json",
-          "user-stories.json",
-          "acceptance-criteria.json"
-        ],
+        "output_files": ["feature-specifications.json", "user-stories.json", "acceptance-criteria.json"],
         "objective": "Gather project requirements through AI-human dialogue and define functional scope.",
-        "next_phase": 3,
-        "status": "pending"
+        "next_phase": "03",
+        "status": "done"
       },
       {
-        "id": 3,
+        "id": "03",
         "title": "Feature Planning",
         "template": "03-Feature_Planning.md",
-        "input_files": [
-          "feature-specifications.json",
-          "user-stories.json"
-        ],
-        "output_files": [
-          "feature-backlog.json",
-          "priority-matrix.json",
-          "release-plan.json"
-        ],
+        "input_files": ["feature-specifications.json", "user-stories.json"],
+        "output_files": ["feature-backlog.json", "priority-matrix.json", "release-plan.json"],
         "objective": "Transform requirements into actionable features and a structured release roadmap.",
-        "next_phase": 4,
-        "status": "pending"
+        "next_phase": "04",
+        "status": "done"
       },
       {
-        "id": 4,
+        "id": "04",
         "title": "Design & Architecture",
         "template": "04-Design_And_Architecture.md",
-        "input_files": [
-          "feature-backlog.json",
-          "feature-specifications.json"
-        ],
-        "output_files": [
-          "system-architecture.json",
-          "component-specifications.json",
-          "api-specifications.json",
-          "integration-specifications.json"
-        ],
+        "input_files": ["feature-backlog.json", "feature-specifications.json"],
+        "output_files": ["system-architecture.json", "component-specifications.json", "api-specifications.json", "integration-specifications.json"],
         "objective": "Design system architecture, components, APIs, and data flows according to project goals.",
-        "next_phase": 5,
-        "status": "pending"
+        "next_phase": "05",
+        "status": "done"
       },
       {
-        "id": 5,
+        "id": "05",
         "title": "Security & Compliance Planning",
         "template": "05-Security_Compliance.md",
         "input_files": ["system-architecture.json"],
-        "output_files": [
-          "security-architecture.json",
-          "risk-register.json",
-          "compliance-matrix.json",
-          "incident-response-plan.json"
-        ],
+        "output_files": ["security-architecture.json", "risk-register.json", "compliance-matrix.json", "incident-response-plan.json"],
         "objective": "Define security posture, compliance mapping, risk management, and response protocols.",
-        "next_phase": 6,
-        "status": "pending"
+        "next_phase": "06",
+        "status": "done"
       },
       {
-        "id": 6,
+        "id": "06",
         "title": "AI Design & Prompt Engineering",
         "template": "06-AI_Design_Prompt.md",
-        "input_files": [
-          "Requirements.json",
-          "system-architecture.json"
-        ],
-        "output_files": [
-          "ai-architecture.json",
-          "prompt-templates.json",
-          "ai-models.json",
-          "ai-integration-plan.json"
-        ],
+        "input_files": ["Requirements.json", "system-architecture.json"],
+        "output_files": ["ai-architecture.json", "prompt-templates.json", "ai-models.json", "ai-integration-plan.json"],
         "objective": "Design AI integration workflows, prompts, and API interaction layers for automation.",
-        "next_phase": 7,
+        "next_phase": "07",
         "status": "pending"
       },
       {
-        "id": 7,
+        "id": "07",
         "title": "Implementation",
         "template": "07-Implementation.md",
-        "input_files": [
-          "system-architecture.json",
-          "ai-integration-plan.json"
-        ],
-        "output_files": [
-          "src/",
-          "tests/",
-          "docs/",
-          "quality-reports/"
-        ],
+        "input_files": ["system-architecture.json", "ai-integration-plan.json"],
+        "output_files": ["src/", "tests/", "docs/", "quality-reports/"],
         "objective": "Implement the full software system (frontend, backend, AI integrations) following all specifications.",
-        "next_phase": 8,
+        "next_phase": "08",
         "status": "pending"
       },
       {
-        "id": 8,
+        "id": "08",
         "title": "Testing & Verification",
         "template": "08-Testing_And_Verification.md",
-        "input_files": [
-          "src/",
-          "quality-reports/"
-        ],
-        "output_files": [
-          "test-results/",
-          "quality-metrics.json",
-          "deployment-readiness.json"
-        ],
+        "input_files": ["src/", "quality-reports/"],
+        "output_files": ["test-results/", "quality-metrics.json", "deployment-readiness.json"],
         "objective": "Perform automated and manual tests to validate functionality, performance, and security.",
-        "next_phase": 9,
+        "next_phase": "09",
         "status": "pending"
       },
       {
-        "id": 9,
+        "id": "09",
         "title": "Code Review & Deployment",
         "template": "09-Code_Review_And_Deployment.md",
-        "input_files": [
-          "test-results/",
-          "deployment-readiness.json"
-        ],
-        "output_files": [
-          "deployment-log.json",
-          "system-health.json",
-          "maintenance-schedules.json"
-        ],
+        "input_files": ["test-results/", "deployment-readiness.json"],
+        "output_files": ["deployment-log.json", "system-health.json", "maintenance-schedules.json"],
         "objective": "Finalize code reviews, perform production deployment, validate stability, and hand over maintenance.",
         "next_phase": null,
         "status": "pending"
@@ -191,22 +134,201 @@
     },
   
     "reporting": {
-      "status_tracking": [
-        "phase_progress.json",
-        "validation_report.json"
-      ],
-      "metrics": [
-        "coverage",
-        "performance",
-        "security",
-        "compliance",
-        "release_success_rate"
-      ],
-      "final_artifacts": [
-        "deployment-log.json",
-        "system-health.json",
-        "maintenance-schedules.json"
-      ]
-    }
+      "status_tracking": ["phase_progress.json", "validation_report.json"],
+      "metrics": ["coverage", "performance", "security", "compliance", "release_success_rate"],
+      "final_artifacts": ["deployment-log.json", "system-health.json", "maintenance-schedules.json"]
+    },
+  
+    "traceability": {
+      "execution_id": "",
+      "last_phase": null
+    },
+    "phase_updates": [
+      {
+        "version": "v3.0.1",
+        "traceability_id": "7c9b9e3a-4f5d-4e9a-8b7b-1f2e3d4c5b6a",
+        "phase": "01",
+        "title": "Initial Development Setup",
+        "status_after": "Done",
+        "artifacts": {
+          "structure": ["artifacts/project-structure.json"],
+          "metadata": ["artifacts/package.json", "artifacts/requirements.txt", "artifacts/README.md"],
+          "configs": ["artifacts/development-config.json", "artifacts/ci-cd-config.json", "artifacts/test-config.json"],
+          "docs": ["artifacts/docs/index.md", "artifacts/CHANGELOG.md", "artifacts/API_Documentation_Template.md"],
+          "security": ["artifacts/security-config.json", "artifacts/secrets-template.env", "artifacts/security-checklist.md"],
+          "reports": ["artifacts/setup-validation-report.json", "artifacts/environment-test-results.json"]
+        },
+        "links": {
+          "validation_report": "artifacts/setup-validation-report.json",
+          "test_results": "artifacts/environment-test-results.json"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      },
+      {
+        "version": "v3.0.2",
+        "traceability_id": "p02-update-0001",
+        "phase": "02",
+        "title": "User Dialogue & Requirements Analysis",
+        "status_after": "Done",
+        "artifacts": {
+          "requirements": [
+            "artifacts/feature-specifications.json",
+            "artifacts/user-stories.json",
+            "artifacts/acceptance-criteria.json"
+          ],
+          "stakeholders": [
+            "artifacts/stakeholder-analysis.json",
+            "artifacts/stakeholder-interviews.json",
+            "artifacts/stakeholder-priorities.json",
+            "artifacts/stakeholder-communication-plan.md"
+          ]
+        },
+        "links": {
+          "template": "templates/02-User_Dialogue_And_Requirements.md"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      },
+      {
+        "version": "v3.0.3",
+        "traceability_id": "p03-update-0001",
+        "phase": "03",
+        "title": "Feature Planning",
+        "status_after": "Done",
+        "artifacts": {
+          "planning": [
+            "artifacts/feature-backlog.json",
+            "artifacts/priority-matrix.json",
+            "artifacts/release-plan.json"
+          ]
+        },
+        "links": {
+          "template": "templates/03-Feature_Planning.md"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      }
+    ,
+      {
+        "version": "v3.0.4",
+        "traceability_id": "p04-update-0001",
+        "phase": "04",
+        "title": "Design & Architecture",
+        "status_after": "Done",
+        "artifacts": {
+          "architecture": [
+            "artifacts/system-architecture.json",
+            "artifacts/component-specifications.json",
+            "artifacts/api-specifications.json",
+            "artifacts/integration-specifications.json"
+          ]
+        },
+        "links": {
+          "template": "templates/04-Design_And_Architecture.md"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      },
+      {
+        "version": "v3.0.5",
+        "traceability_id": "p05-update-0001",
+        "phase": "05",
+        "title": "Security & Compliance Planning",
+        "status_after": "Done",
+        "artifacts": {
+          "security": [
+            "artifacts/security-architecture.json",
+            "artifacts/risk-register.json",
+            "artifacts/compliance-matrix.json",
+            "artifacts/incident-response-plan.json"
+          ]
+        },
+        "links": {
+          "template": "templates/05-Security_Compliance.md"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" },
+        "decisions": [
+          {
+            "id": "D-05-REGION-DEFERRAL",
+            "summary": "Defer explicit regional data residency enforcement to Phase 07 environment provisioning",
+            "rationale": "Environment and infrastructure controls are defined in Phase 07; GDPR references maintained in compliance docs",
+            "impacts": ["security-architecture.regional_residency", "compliance-matrix.assumptions.regional_residency"],
+            "status": "Accepted"
+          }
+        ]
+      }
+    ,
+      {
+        "version": "v3.1.0",
+        "traceability_id": "p06-update-0001",
+        "phase": "06",
+        "title": "AI Design & Prompt Engineering",
+        "status_after": "Done",
+        "artifacts": {
+          "ai": [
+            "artifacts/ai-architecture.json",
+            "artifacts/prompt-templates.json",
+            "artifacts/ai-models.json",
+            "artifacts/ai-integration-plan.json"
+          ]
+        },
+        "links": {
+          "template": "templates/06-AI_Design_Prompt.md"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      }
+    ,
+      {
+        "version": "v3.1.1",
+        "traceability_id": "p07-update-0001",
+        "phase": "07",
+        "title": "Implementation & Development",
+        "status_after": "In Progress",
+        "artifacts": {
+          "implementation": [
+            "artifacts/implementation-plan.json",
+            "artifacts/code-scaffolding.json",
+            "artifacts/environment-spec.json",
+            "artifacts/ci-cd-config.p07.json"
+          ]
+        },
+        "links": {
+          "template": "templates/07-Implementation.md"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" },
+        "notes": [
+          "Demo constraint active: mock JSON APIs; migrate to Postgres + Mongo for prod.",
+          "Awaiting decision on CI/CD config versioning to avoid overwriting existing Phase 01 file."
+        ]
+      }
+    ,
+      {
+        "version": "v3.1.2",
+        "traceability_id": "p08-update-0001",
+        "phase": "08",
+        "title": "Testing & Verification",
+        "status_after": "Done",
+        "artifacts": {
+          "test_results": [
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/test-strategy.json",
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/unit-test-results.json",
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/integration-test-results.json",
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/system-test-results.json",
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/performance-analysis.json",
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/security-assessment.json",
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/compliance-validation.json",
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/ai-workflow-test-results.json",
+            "artifacts/test-results/p08-2025-10-23T00-00-00Z/quality-gates.json"
+          ],
+          "quality_metrics": [
+            "artifacts/quality-metrics.json"
+          ],
+          "deployment": [
+            "artifacts/deployment-readiness.json"
+          ]
+        },
+        "links": {
+          "template": "templates/08-Testing_And_Verification.md"
+        },
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      }
+    ]
   }
   
