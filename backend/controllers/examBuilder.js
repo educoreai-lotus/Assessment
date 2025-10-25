@@ -46,13 +46,14 @@ async function buildBaselineExam(userId) {
 		questions,
 	};
 
-	// 6️⃣ Save trace to artifacts (append-only)
-	const artifactDir = path.join(__dirname, '../../artifacts/ai-generation');
-	if (!fs.existsSync(artifactDir)) fs.mkdirSync(artifactDir, { recursive: true });
-	fs.writeFileSync(
-		path.join(artifactDir, 'baseline-exam-build.json'),
-		JSON.stringify({ meta: { userId, timestamp, question_count: questions.length }, exam_id: examPackage.exam_id }, null, 2)
-	);
+    // 6️⃣ Save trace to artifacts (append-only) under a writable temp directory in containers
+    const os = require('os');
+    const artifactDir = path.join(os.tmpdir(), 'artifacts', 'ai-generation');
+    if (!fs.existsSync(artifactDir)) fs.mkdirSync(artifactDir, { recursive: true });
+    fs.writeFileSync(
+        path.join(artifactDir, 'baseline-exam-build.json'),
+        JSON.stringify({ meta: { userId, timestamp, question_count: questions.length }, exam_id: examPackage.exam_id }, null, 2)
+    );
 
 	return examPackage;
 }
