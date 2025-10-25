@@ -161,6 +161,13 @@ try {
 } catch (e) {
 	// Optional
 }
+// Mount simplified post-course exam router
+try {
+	const examPostCourse = require('./routes/examPostCourse');
+	app.use(`${API_BASE}/exams/postcourse`, examPostCourse);
+} catch (e) {
+	// Optional
+}
 // Proctoring routes
 try {
     const proctorRoutes = require('./routes/proctor');

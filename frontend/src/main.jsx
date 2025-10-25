@@ -41,7 +41,7 @@ root.render(
             <div className="logo">Assessment</div>
             <ul className="nav-links">
               <li><Link to="/">Baseline</Link></li>
-              <li><Link to="/post-course">Post-Course</Link></li>
+              <li><Link to="/postcourse">Post-Course</Link></li>
               <li><Link to="/post-course-results">Results</Link></li>
             </ul>
             <div className="header-controls">
@@ -54,7 +54,7 @@ root.render(
         <main id="main" style={{ paddingTop: '80px' }}>
           <Routes>
             <Route path="/" element={<BaselineExam />} />
-            <Route path="/post-course" element={<PostCourseExam />} />
+            <Route path="/postcourse" element={<PostCourseExam />} />
             <Route path="/post-course-results" element={<PostCourseResults />} />
           </Routes>
         </main>
