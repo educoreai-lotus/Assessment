@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchBaselineExam } from "../api/examApi";
-import { submitBaselineExam } from "../api/evaluationApi";
+import { submitBaselineExam, buildBaselineExam } from "../api/evaluationApi";
 import BaselineResults from "./BaselineResults";
 import QuestionCard from "../components/QuestionCard";
 import ExamTimer from "../components/ExamTimer";
@@ -14,7 +13,16 @@ export default function BaselineExam() {
   const [result, setResult] = useState(null);
 
   useEffect(() => {
-    fetchBaselineExam().then(setExam).catch(console.error);
+    async function loadExam() {
+      try {
+        const data = await buildBaselineExam();
+        console.log('✅ Received exam data:', data);
+        setExam(data);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    loadExam();
   }, []);
 
   if (!exam) return <div className="p-6 text-center">Loading baseline exam...</div>;
