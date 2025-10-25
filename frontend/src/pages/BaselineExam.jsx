@@ -15,6 +15,7 @@ export default function BaselineExam() {
   useEffect(() => {
     async function loadExam() {
       try {
+        console.log("🚀 Starting baseline exam fetch...");
         const data = await buildBaselineExam();
         console.log('✅ Received exam data:', data);
         setExam(data);
