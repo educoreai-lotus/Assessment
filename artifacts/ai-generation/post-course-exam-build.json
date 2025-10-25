@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "user_id": "demo-user",
+    "course_id": "demo-course",
+    "q_count": 9
+  },
+  "exam_summary": {
+    "type": "post-course",
+    "duration_min": 14
+  }
+}

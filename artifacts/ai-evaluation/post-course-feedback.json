@@ -1,0 +1,70 @@
+{
+  "ai_feedback": [
+    {
+      "question_id": "advanced-javascript-async",
+      "skill": "Async",
+      "topic": "Advanced JavaScript",
+      "score": 70,
+      "passed": true
+    },
+    {
+      "question_id": "advanced-javascript-promises",
+      "skill": "Promises",
+      "topic": "Advanced JavaScript",
+      "score": 94,
+      "passed": true
+    },
+    {
+      "question_id": "advanced-javascript-error-handling",
+      "skill": "Error Handling",
+      "topic": "Advanced JavaScript",
+      "score": 75,
+      "passed": true
+    },
+    {
+      "question_id": "react-components-hooks",
+      "skill": "Hooks",
+      "topic": "React Components",
+      "score": 98,
+      "passed": true
+    },
+    {
+      "question_id": "react-components-state-management",
+      "skill": "State Management",
+      "topic": "React Components",
+      "score": 76,
+      "passed": true
+    },
+    {
+      "question_id": "react-components-lifecycle",
+      "skill": "Lifecycle",
+      "topic": "React Components",
+      "score": 96,
+      "passed": true
+    },
+    {
+      "question_id": "api-integration-rest-apis",
+      "skill": "REST APIs",
+      "topic": "API Integration",
+      "score": 97,
+      "passed": true
+    },
+    {
+      "question_id": "api-integration-http",
+      "skill": "HTTP",
+      "topic": "API Integration",
+      "score": 74,
+      "passed": true
+    },
+    {
+      "question_id": "api-integration-error-responses",
+      "skill": "Error Responses",
+      "topic": "API Integration",
+      "score": 67,
+      "passed": true
+    }
+  ],
+  "final_grade": 83,
+  "summary": "Passed",
+  "generated_at": "2025-10-24T22:33:17.711Z"
+}
