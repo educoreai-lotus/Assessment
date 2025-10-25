@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { buildPostCourseExam, submitPostCourseExam } from "../api/postCourseApi";
 
 export default function PostCourseExam() {
   const [exam, setExam] = useState(null);
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     console.log("🚀 Starting post-course exam fetch...");
@@ -17,8 +19,10 @@ export default function PostCourseExam() {
   }, []);
 
   const handleSubmit = async () => {
-    const result = await submitPostCourseExam({ exam_id: exam.exam_id, answers });
+    const payload = { exam_id: exam.exam_id, answers, questions: exam.questions };
+    const result = await submitPostCourseExam(payload);
     console.log("📊 Evaluation result:", result);
+    navigate('/post-course-results', { state: { result } });
   };
 
   if (loading) return <p>Loading post-course exam...</p>;
@@ -28,9 +32,14 @@ export default function PostCourseExam() {
     <div>
       <h2>{exam.title}</h2>
       {exam.questions.map((q, i) => (
-        <div key={i}>
+        <div key={i} style={{ marginBottom: '1rem' }}>
           <p>{q.question}</p>
-          {/* render options here */}
+          <input
+            type="text"
+            placeholder="Your answer"
+            value={answers[q.id] || ''}
+            onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+          />
         </div>
       ))}
       <button onClick={handleSubmit}>Submit</button>

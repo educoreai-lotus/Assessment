@@ -9,15 +9,17 @@ exports.buildPostCourseExam = (req, res) => {
     });
 };
 
-exports.submitPostCourseExam = (req, res) => {
-    const { exam_id, answers } = req.body || {};
-    console.log('Received answers:', answers);
-    res.json({
-        exam_id,
-        score: 85,
-        passed: true,
-        feedback: 'Excellent work! Your understanding improved significantly.',
-    });
+const { evaluate } = require('../services/postCourseEvaluator');
+
+exports.submitPostCourseExam = async (req, res) => {
+    try {
+        const { exam_id, answers, questions } = req.body || {};
+        const userId = req.user?.sub || 'demo-user';
+        const result = await evaluate({ answers: answers || {}, questions: questions || [], userId });
+        res.json({ exam_id, ...result });
+    } catch (err) {
+        res.status(500).json({ error: 'server_error', message: err.message });
+    }
 };
 
 
