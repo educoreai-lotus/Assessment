@@ -20,17 +20,19 @@ app.use(helmet({
 	crossOriginEmbedderPolicy: false,
 }));
 
-// CORS configuration (whitelist)
+// CORS configuration (whitelist with branch deployments)
 const allowedOrigins = [
 	'http://localhost:5173',
-	'https://assessment-tests.vercel.app'
+	'https://assessment-tests.vercel.app',
+	'https://assessment-tests-git-main-khawlaabusaleh1-1883s-projects.vercel.app'
 ];
 
 app.use(cors({
 	origin: function (origin, callback) {
-		if (!origin || allowedOrigins.includes(origin)) {
+		if (!origin || allowedOrigins.some(o => String(origin).startsWith(o))) {
 			callback(null, true);
 		} else {
+			console.log('🚫 Blocked CORS for origin:', origin);
 			callback(new Error('Not allowed by CORS'));
 		}
 	},
