@@ -16,6 +16,7 @@ export async function submitBaselineExam({ userId = 'demo-user', answers, questi
 }
 
 export async function buildBaselineExam() {
+  console.log("📡 buildBaselineExam() invoked!");
   const url = `${API_BASE_URL}/exams/baseline/build`;
   console.log('🔗 Fetching from', url);
   console.log('🟡 buildBaselineExam(): about to fetch', url);
