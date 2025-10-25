@@ -20,15 +20,26 @@ app.use(helmet({
 	crossOriginEmbedderPolicy: false,
 }));
 
-// CORS configuration (whitelist with branch deployments)
+// CORS configuration and preflight handling
 const allowedOrigins = [
 	'http://localhost:5173',
 	'https://assessment-tests.vercel.app',
-	'https://assessment-tests-git-main-khawlaabusaleh1-1883s-projects.vercel.app'
+	'https://assessment-tests-git-main-khawlaabusaleh1-1883s-projects.vercel.app',
 ];
+
+app.use((req, res, next) => {
+	const origin = req.headers.origin;
+	res.header('Access-Control-Allow-Origin', allowedOrigins.includes(origin) ? origin : '*');
+	res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+	res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+	res.header('Access-Control-Allow-Credentials', 'true');
+	if (req.method === 'OPTIONS') return res.sendStatus(204);
+	next();
+});
 
 app.use(cors({
 	origin: function (origin, callback) {
+		console.log('🌐 Incoming origin:', origin);
 		if (!origin || allowedOrigins.some(o => String(origin).startsWith(o))) {
 			callback(null, true);
 		} else {
