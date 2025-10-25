@@ -208,6 +208,57 @@
       }
     ,
       {
+        "version": "v3.2.1",
+        "traceability_id": "p12-baseline-ai-scaffold",
+        "phase": "12.1",
+        "title": "Baseline Exam AI Scaffold",
+        "status_after": "completed",
+        "artifacts": {
+          "ai_generation": [
+            "artifacts/ai-generation/baseline-exam-build.json"
+          ]
+        },
+        "notes": [
+          "Added dynamic AI-based question generation per skill with REST integrations and baseline exam build route."
+        ],
+        "timestamps": { "created": "2025-10-24T00:00:00Z" }
+      }
+    ,
+      {
+        "version": "v3.2.0",
+        "traceability_id": "p11-update-0001",
+        "phase": "11",
+        "title": "Code Generation",
+        "status_after": "Done",
+        "artifacts": {
+          "codegen": [
+            "artifacts/codegen-manifest.p11.json",
+            "backend/server.js",
+            "backend/mock-data/baseline-exam.json",
+            "frontend/index.html",
+            "frontend/src/main.jsx",
+            "frontend/package.json",
+            "frontend/vite.config.js"
+          ]
+        },
+        "links": {
+          "inputs": [
+            "artifacts/system-architecture.json",
+            "artifacts/component-specifications.json",
+            "artifacts/api-specifications.json",
+            "artifacts/integration-specifications.json",
+            "artifacts/security-architecture.json"
+          ]
+        },
+        "notes": [
+          "REST-only, mock JSON data, demo token required",
+          "Security gates per Phase 05 applied",
+          "AI integration boundaries per Phase 06 respected"
+        ],
+        "timestamps": { "created": "2025-10-23T00:00:00Z" }
+      }
+    ,
+      {
         "version": "v3.0.4",
         "traceability_id": "p04-update-0001",
         "phase": "04",
@@ -300,6 +351,31 @@
       }
     ,
       {
+        "version": "v3.1.1-f1",
+        "traceability_id": "p07-ui-baseline-exam",
+        "phase": "07",
+        "title": "Frontend Baseline Exam UI",
+        "status_after": "Completed",
+        "artifacts": {
+          "frontend": [
+            "frontend/src/api/examApi.js",
+            "frontend/src/pages/BaselineExam.jsx",
+            "frontend/src/components/QuestionCard.jsx",
+            "frontend/src/components/ExamTimer.jsx",
+            "frontend/src/index.css",
+            "frontend/src/main.jsx"
+          ]
+        },
+        "links": {
+          "backend": [
+            "backend/routes/exams.js",
+            "backend/controllers/examBuilder.js"
+          ]
+        },
+        "timestamps": { "created": "2025-10-24T00:00:00Z" }
+      }
+    ,
+      {
         "version": "v3.1.2",
         "traceability_id": "p08-update-0001",
         "phase": "08",
@@ -350,6 +426,33 @@
       }
     ,
       {
+        "version": "v3.3.0",
+        "traceability_id": "p13-ai-evaluation",
+        "phase": "13",
+        "title": "AI Evaluation & Feedback",
+        "status_after": "completed",
+        "artifacts": {
+          "backend": [
+            "backend/controllers/examSubmit.js",
+            "backend/services/mockAiEvaluator.js",
+            "backend/routes/examSubmissions.js",
+            "backend/server.js"
+          ],
+          "frontend": [
+            "frontend/src/api/evaluationApi.js",
+            "frontend/src/pages/BaselineResults.jsx",
+            "frontend/src/pages/BaselineExam.jsx"
+          ],
+          "ai_evaluation": [
+            "artifacts/ai-evaluation/feedback-sample.json"
+          ]
+        },
+        "links": {
+          "endpoint": "/api/v1/exams/baseline/submit"
+        },
+        "timestamps": { "created": "2025-10-24T00:00:00Z" }
+      },
+      {
         "version": "v3.1.4",
         "traceability_id": "p10-update-0001",
         "phase": "10",
@@ -377,6 +480,43 @@
         ],
         "timestamps": { "created": "2025-10-23T00:00:00Z" }
       }
+    ],
+    "additional_updates": [
+      {
+        "phase": "16",
+        "title": "AI Validation, Proctoring, and Retake System",
+        "status": "delivered",
+        "artifacts": [
+          "artifacts/ai-validation/validation-log.json",
+          "artifacts/proctoring/logs.json",
+          "artifacts/ai-generation/retake-exam.json"
+        ],
+        "notes": "Validation gate on question build, live anti-cheat logging, AI-driven retake generation and cooldown.",
+        "date": "2025-10-25"
+      },
+      {
+        "phase": "14.1",
+        "title": "Post-Course Retake Handling & Attempt Tracking",
+        "status": "delivered",
+        "artifacts": [
+          "artifacts/attempt-log.json",
+          "artifacts/ai-evaluation/post-course-feedback.json"
+        ],
+        "notes": "Enforce Directory policy; cooldowns; override; result versioning.",
+        "date": "2025-10-25"
+      },
+      {
+        "phase": "14",
+        "name": "Post-Course Exam Scaffold",
+        "outputs": [
+          "backend/controllers/postCourseExamBuilder.js",
+          "backend/controllers/postCourseExamSubmit.js",
+          "frontend/src/pages/PostCourseExam.jsx",
+          "frontend/src/pages/PostCourseResults.jsx",
+          "artifacts/ai-generation/post-course-exam-build.json",
+          "artifacts/ai-evaluation/post-course-feedback.json"
+        ],
+        "status": "ready"
+      }
     ]
   }
-  
