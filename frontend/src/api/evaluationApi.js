@@ -18,11 +18,14 @@ export async function submitBaselineExam({ userId = 'demo-user', answers, questi
 export async function buildBaselineExam() {
   const url = `${API_BASE_URL}/exams/baseline/build`;
   console.log('🔗 Fetching from', url);
+  console.log('🟡 buildBaselineExam(): about to fetch', url);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       Authorization: 'Bearer demo-token',
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ user: 'demo-user' }),
   });
   if (!res.ok) throw new Error(`Build failed: ${res.status}`);
   return res.json();
