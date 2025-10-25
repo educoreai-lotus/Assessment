@@ -56,8 +56,9 @@ async function generateQuestionsForSkill(skill) {
             correct_answer: 'A',
         })];
     }
-    const system = 'You are an assessment generator. Output strict JSON only.';
-    const user = `Create exactly 1 multiple-choice question for the skill: "${skillName}".
+    try {
+        const system = 'You are an assessment generator. Output strict JSON only.';
+        const user = `Create exactly 1 multiple-choice question for the skill: "${skillName}".
 Return strict JSON with this shape:
 {
   "questions": [
@@ -72,29 +73,40 @@ Return strict JSON with this shape:
     }
   ]
 }`;
-    const resp = await client.chat.completions.create({
-        model: AI_MODEL,
-        temperature: AI_TEMPERATURE,
-        response_format: { type: 'json_object' },
-        messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-        ],
-    });
-    const content = coerceString(resp?.choices?.[0]?.message?.content);
-    const json = safeJsonParse(content) || {};
-    const items = Array.isArray(json.questions) ? json.questions : [];
-    if (!items.length) {
+        const resp = await client.chat.completions.create({
+            model: AI_MODEL,
+            temperature: AI_TEMPERATURE,
+            response_format: { type: 'json_object' },
+            messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: user },
+            ],
+        });
+        const content = coerceString(resp?.choices?.[0]?.message?.content);
+        const json = safeJsonParse(content) || {};
+        const items = Array.isArray(json.questions) ? json.questions : [];
+        if (!items.length) {
+            return [validateAiQuestion({
+                id: `ai-${coerceString(skill?.id || skillName).toLowerCase()}`,
+                type: 'theoretical',
+                skill: skillName,
+                question: `What is a key concept of ${skillName}?`,
+                choices: ['A', 'B', 'C', 'D'],
+                correct_answer: 'A',
+            })];
+        }
+        return items.map((q, i) => validateAiQuestion(q, { id: `ai-${coerceString(skill?.id || skillName)}-${i+1}`, skill: skillName, type: 'theoretical' }));
+    } catch (_) {
+        // Fallback deterministic question if AI call fails
         return [validateAiQuestion({
             id: `ai-${coerceString(skill?.id || skillName).toLowerCase()}`,
             type: 'theoretical',
             skill: skillName,
-            question: `What is a key concept of ${skillName}?`,
+            question: `Which option best describes ${skillName}?`,
             choices: ['A', 'B', 'C', 'D'],
             correct_answer: 'A',
         })];
     }
-    return items.map((q, i) => validateAiQuestion(q, { id: `ai-${coerceString(skill?.id || skillName)}-${i+1}`, skill: skillName, type: 'theoretical' }));
 }
 
 async function generateQuestionsForTopics(topicName, skills) {
