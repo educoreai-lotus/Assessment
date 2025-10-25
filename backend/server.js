@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const helmet = require('helmet');
+const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
 // Configuration
@@ -19,6 +20,23 @@ app.use(helmet({
 	crossOriginEmbedderPolicy: false,
 }));
 
+// CORS configuration (whitelist)
+const allowedOrigins = [
+	'http://localhost:5173',
+	'https://assessment-tests.vercel.app'
+];
+
+app.use(cors({
+	origin: function (origin, callback) {
+		if (!origin || allowedOrigins.includes(origin)) {
+			callback(null, true);
+		} else {
+			callback(new Error('Not allowed by CORS'));
+		}
+	},
+	credentials: true,
+}));
+
 // Basic JSON body parsing
 app.use(express.json({ limit: '100kb' }));
 
@@ -31,16 +49,7 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS restricted (demo-safe default)
-app.use((req, res, next) => {
-    const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
-    res.header('Access-Control-Allow-Origin', allowedOrigin);
-    res.header('Vary', 'Origin');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Accept, Content-Type, Authorization, X-Correlation-Id, X-User-Id, x-user-id');
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
-    next();
-});
+// (CORS preflight handled by cors middleware)
 
 // Correlation ID for observability
 app.use((req, res, next) => {
