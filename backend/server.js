@@ -11,6 +11,9 @@ const API_BASE = '/api/v1';
 // Create app
 const app = express();
 
+// Enable proxy trust for Railway/X-Forwarded-* headers
+app.set('trust proxy', 1);
+
 // Security headers per Phase 05
 app.use(helmet({
 	crossOriginEmbedderPolicy: false,
