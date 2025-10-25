@@ -1,8 +1,7 @@
-backend/node_modules
-backend/.env
-frontend/
-artifacts/
-.git/
-.gitignore
-*.md
-*.log
+node_modules
+npm-debug.log
+artifacts
+templates
+.git
+.github
+.DS_Store

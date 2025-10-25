@@ -2,14 +2,12 @@ FROM node:18
 
 WORKDIR /app
 
-# ✅ Copy backend package files correctly
-COPY ./backend/package*.json ./
+# Copy full backend first (so package.json definitely exists)
+COPY ./backend ./backend
 
-# ✅ Install dependencies
+WORKDIR /app/backend
+
 RUN npm install --omit=dev
-
-# ✅ Copy backend source code
-COPY ./backend ./
 
 ENV NODE_ENV=production
 ENV PORT=4000
