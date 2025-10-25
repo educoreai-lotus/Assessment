@@ -1,8 +1,8 @@
-FROM node:20-alpine
+FROM node:18
 
 WORKDIR /app
 
-# Copy backend package files first for better caching
+# Copy only backend package files first
 COPY backend/package*.json ./
 RUN npm install --omit=dev
 
@@ -13,6 +13,5 @@ ENV NODE_ENV=production
 ENV PORT=4000
 EXPOSE 4000
 
-# Use npm start -> "node server.js"
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
 
