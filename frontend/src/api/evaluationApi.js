@@ -1,5 +1,5 @@
 export async function submitBaselineExam({ userId = 'demo-user', answers, questions, passingGrade = 70 }) {
-  const res = await fetch('http://localhost:4000/api/v1/exams/baseline/submit', {
+  const res = await fetch('https://assessment-tests-production.up.railway.app/api/v1/exams/baseline/submit', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
