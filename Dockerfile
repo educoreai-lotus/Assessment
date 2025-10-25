@@ -2,12 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install only backend dependencies first for better layer caching
-COPY backend/package*.json ./
-RUN npm ci --omit=dev || npm install --omit=dev
-
-# Copy backend source
+# Copy backend source and install production deps
 COPY backend/ ./
+RUN npm install --omit=dev
 
 ENV NODE_ENV=production
 ENV PORT=4000
