@@ -1,12 +1,18 @@
 const fs = require('fs');
 const path = require('path');
-const { getPolicy, getLearnerProfile } = require('../services/integrations/directory');
+const { getPolicy, getLearnerProfile, getAttempts } = require('../services/integrations/directory');
 const { getSkillTargets } = require('../services/integrations/skillsEngine');
 const { fetchDevLabChallenge } = require('../services/integrations/devLab');
 const { generateQuestions } = require('../services/ai/questionGenerator');
 
-async function buildBaselineExam(userId) {
+async function buildBaselineExam(userId, req) {
 	const timestamp = new Date().toISOString();
+
+	// Enforce attempts policy (single attempt)
+	const { attempts, maxAttempts } = await getAttempts({ userId, examType: 'baseline' });
+	if (attempts >= maxAttempts) {
+		return { status: 403, body: { error: 'BASELINE_LOCKED', message: 'Baseline exam may be taken only once.' } };
+	}
 
 	// 1️⃣ Fetch policy (passing grade only)
 	const policy = await getPolicy();
@@ -27,6 +33,7 @@ async function buildBaselineExam(userId) {
 	const durationMin = questions.length * 3;
 
 	// 6️⃣ Assemble package
+	const returnUrl = (req?.query?.return) || (req?.headers?.['x-return-url']) || undefined;
 	const examPackage = {
 		exam_id: `baseline-${Date.now()}`,
 		user_id: userId,
@@ -35,6 +42,9 @@ async function buildBaselineExam(userId) {
 		passing_grade: passingGrade,
 		duration_min: durationMin,
 		question_count: questions.length,
+		attempt: attempts + 1,
+		max_attempts: maxAttempts,
+		return_url: returnUrl,
 		questions,
 	};
 
@@ -47,7 +57,7 @@ async function buildBaselineExam(userId) {
 		JSON.stringify({ meta: { userId, timestamp, question_count: questions.length }, exam_id: examPackage.exam_id }, null, 2)
 	);
 
-	return examPackage;
+	return { status: 200, body: examPackage };
 }
 
 module.exports = { buildBaselineExam };

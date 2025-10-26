@@ -16,8 +16,12 @@ export default function BaselineExam() {
     async function loadExam() {
       try {
         console.log("🚀 Starting baseline exam fetch...");
+        const params = new URLSearchParams(window.location.search);
+        const ret = params.get('return') || document.referrer || undefined;
+        if (ret) localStorage.setItem('returnUrl', ret);
         const data = await buildBaselineExam();
         console.log('✅ Received exam data:', data);
+        if (data?.return_url) localStorage.setItem('returnUrl', data.return_url);
         setExam(data);
       } catch (e) {
         console.error(e);

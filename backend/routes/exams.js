@@ -6,8 +6,9 @@ const { requireScope } = require('../utils/auth');
 router.post('/baseline/build', requireScope('submit:assessments'), async (req, res) => {
 	try {
 		const userId = req.user?.sub || 'demo-user';
-		const result = await buildBaselineExam(userId);
-		res.status(200).json(result);
+		const out = await buildBaselineExam(userId, req);
+		if (out.status !== 200) return res.status(out.status).json(out.body);
+		return res.status(200).json(out.body);
 	} catch (err) {
 		console.error('Baseline build error:', err);
 		res.status(500).json({ error: 'server_error', message: err.message });

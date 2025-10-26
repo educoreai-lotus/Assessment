@@ -81,6 +81,8 @@ function evaluateCodeHeuristics(code, tests) {
     }
 }
 
+const { getPassingGrades } = require('./integrations/directory');
+
 async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions = [], answers = {}, rubric, meta } = {}) {
     const passingGrade = getPassingGrade();
     const evaluation = await evaluateSubmission({ questions, answers, passingGrade });
@@ -106,6 +108,20 @@ async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions 
     const passed = total >= passingGrade;
     const summary = evaluation.summary || (passed ? 'Passed' : 'Failed');
 
+    // Apply per-skill thresholds from Directory
+    const pg = await getPassingGrades({ userId, examType: 'postcourse' });
+    const defaultPassing = pg?.defaultPassing ?? passingGrade;
+    const skillsPassing = pg?.skills || {};
+    const skill_status = {};
+    for (const [skill, v] of Object.entries(feedback)) {
+        const key = String(skill).toLowerCase();
+        const threshold = typeof skillsPassing[key] === 'number' ? skillsPassing[key] : defaultPassing;
+        const sPassed = Number(v.score || 0) >= threshold;
+        v.passed = sPassed;
+        v.threshold = threshold;
+        skill_status[key] = sPassed ? 'done' : 'needs_improvement';
+    }
+
     const artifact = {
         exam_id: examId || null,
         user_id: userId,
@@ -119,6 +135,8 @@ async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions 
         passed,
         summary,
         passing_grade: passingGrade,
+        passing_thresholds: { default: defaultPassing, skills: skillsPassing },
+        skill_status,
         created_at: new Date().toISOString(),
     };
 
@@ -135,6 +153,8 @@ async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions 
         passed,
         feedback,
         summary,
+        passing_thresholds: { default: defaultPassing, skills: skillsPassing },
+        skill_status,
         artifact_path: artifactPath,
     };
 }

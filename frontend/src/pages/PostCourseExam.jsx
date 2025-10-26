@@ -14,9 +14,13 @@ export default function PostCourseExam() {
 
   useEffect(() => {
     console.log("🚀 Starting post-course exam fetch...");
+    const params = new URLSearchParams(window.location.search);
+    const ret = params.get('return') || document.referrer || undefined;
+    if (ret) localStorage.setItem('returnUrl', ret);
     buildPostCourseExam()
       .then((data) => {
         console.log("✅ Received post-course exam:", data);
+        if (data?.return_url) localStorage.setItem('returnUrl', data.return_url);
         setExam(data);
       })
       .finally(() => setLoading(false));
