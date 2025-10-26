@@ -24,6 +24,19 @@ export default function PostCourseResults() {
         {attemptInfo ? (
           <div className="text-sm text-gray-500 mb-2">Attempt {attemptInfo.attempts} of {attemptInfo.maxAttempts}</div>
         ) : null}
+        {!result.passed && result.requires_retake ? (
+          <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-800 p-3 mb-4">
+            Retake required — questions will focus on skills needing improvement.
+          </div>
+        ) : null}
+        {!result.passed && Array.isArray(result.unmet_skills) && result.unmet_skills.length ? (
+          <div className="rounded-md border border-gray-200 bg-white dark:bg-gray-900 p-3 mb-4">
+            <div className="text-sm font-semibold mb-1">Unmet skills</div>
+            <ul className="list-disc pl-5 text-sm text-gray-700 dark:text-gray-300">
+              {result.unmet_skills.map(s => (<li key={s}>{s}</li>))}
+            </ul>
+          </div>
+        ) : null}
         <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors" style={{ textAlign: 'left' }}>
           <h2 className={`text-2xl font-semibold ${result.passed ? 'text-green-600' : 'text-red-600'} dark:text-gray-100`}>Final Grade: {finalGrade}</h2>
           <p className="text-gray-600 dark:text-gray-300 mt-1">
@@ -52,11 +65,12 @@ export default function PostCourseResults() {
         {result.artifact_path ? (
           <p className="text-sm mt-3 text-gray-600 dark:text-gray-300">Artifact recorded at: {result.artifact_path}</p>
         ) : null}
-        <button onClick={() => {
+        <button disabled={attemptInfo && attemptInfo.attempts >= attemptInfo.maxAttempts}
+          onClick={() => {
           const u = localStorage.getItem('returnUrl') || result.return_url || '/';
           window.location.href = u;
-        }} className="mt-6 inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2 text-white font-medium hover:bg-emerald-700 transition-all shadow-md">
-          Return to Portal
+        }} className={`mt-6 inline-flex items-center rounded-lg px-5 py-2 font-medium transition-all shadow-md ${attemptInfo && attemptInfo.attempts >= attemptInfo.maxAttempts ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+          {attemptInfo && attemptInfo.attempts >= attemptInfo.maxAttempts ? 'Attempts Exhausted' : 'Return to Portal'}
         </button>
       </div>
       </div>

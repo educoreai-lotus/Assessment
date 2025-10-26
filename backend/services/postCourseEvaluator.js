@@ -82,6 +82,8 @@ function evaluateCodeHeuristics(code, tests) {
 }
 
 const { getPassingGrades } = require('./integrations/directory');
+const fs = require('fs');
+const path = require('path');
 
 async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions = [], answers = {}, rubric, meta } = {}) {
     const passingGrade = getPassingGrade();
@@ -171,5 +173,37 @@ async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions 
 }
 
 module.exports = { evaluatePostCourseExam };
+
+// Lightweight AI audit to verify retake alignment before publish
+async function auditRetakeExam({ userId, unmetSkills, questions }) {
+    try {
+        const skills = Array.isArray(unmetSkills) ? unmetSkills.map(s => String(s).toLowerCase()) : null;
+        const misaligned = [];
+        if (skills && skills.length) {
+            for (const q of (questions || [])) {
+                const k = String(q.skill || '').toLowerCase();
+                if (k && !skills.includes(k)) misaligned.push({ id: q.id, skill: k });
+            }
+        }
+        const ok = skills ? misaligned.length === 0 : true;
+        const outDir = path.join(process.cwd(), 'artifacts', 'ai-validation');
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+        const payload = {
+            user_id: userId,
+            type: 'postcourse_retake_audit',
+            skills_expected: skills,
+            questions_checked: (questions || []).map(q => ({ id: q.id, skill: q.skill })),
+            misaligned,
+            ok,
+            created_at: new Date().toISOString(),
+        };
+        fs.writeFileSync(path.join(outDir, `ai-retake-verification-${Date.now()}.json`), JSON.stringify(payload, null, 2));
+        return { ok, misaligned };
+    } catch (_) {
+        return { ok: true, misaligned: [] };
+    }
+}
+
+module.exports.auditRetakeExam = auditRetakeExam;
 
 

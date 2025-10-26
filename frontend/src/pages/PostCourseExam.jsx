@@ -47,11 +47,28 @@ export default function PostCourseExam() {
 
   if (loading) return <p className="p-6 text-center text-gray-800 dark:text-gray-100 transition-colors">Loading post-course exam...</p>;
   if (!exam) return <p className="p-6 text-center text-gray-800 dark:text-gray-100 transition-colors">Exam not found.</p>;
+  if (exam?.error === 'POSTCOURSE_LOCKED') {
+    return (
+      <section className="personalized-dashboard">
+        <div className="dashboard-container max-w-3xl mx-auto mt-12 px-6">
+          <h1 className="section-title">Post-Course Exam</h1>
+          <div className="rounded-md border border-red-300 bg-red-50 text-red-800 p-4">
+            No remaining attempts.
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="personalized-dashboard">
       <div className="dashboard-container">
         <h1 className="section-title">Post-Course Exam</h1>
+        {exam?.attempt > 1 ? (
+          <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-800 p-3 mb-4">
+            Retake — focusing on: {Array.isArray(exam.exam_skills) ? exam.exam_skills.join(', ') : 'targeted skills'}
+          </div>
+        ) : null}
         <ExamTimer minutes={exam.duration_min || 30} />
         <ProctorMonitor />
         <div className="dashboard-grid">
