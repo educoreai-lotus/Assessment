@@ -18,6 +18,22 @@ const { incrementAttempt } = require('../services/integrations/directory');
 const { auditRetakeExam } = require('../services/postCourseEvaluator');
 const { saveResult, getLastAttempt } = require('../services/postCourseResultsStore');
 
+function normalizeSkillKey(name) {
+    return String(name || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s_\-\.]/g, '')
+        .replace(/\s+/g, '_');
+}
+
+async function assembleExamForSkills({ skillsKeys, targetSkills, courseId }) {
+    // Map normalized keys back to target skill objects
+    const targets = (targetSkills || []).filter((s) => skillsKeys.includes(normalizeSkillKey(s.name || s.id || s)));
+    const qs = await generateQuestions({ targetSkills: targets, courseId, examType: 'postcourse' });
+    // Debug log to verify non-empty generation
+    try { console.log('[postcourse] assembleExamForSkills', { skills: skillsKeys, generated_count: Array.isArray(qs) ? qs.length : 0 }); } catch (_) {}
+    return Array.isArray(qs) ? qs : [];
+}
+
 exports.buildPostCourseExam = async (req, res) => {
     try {
         const userId = req.user?.sub || 'demo-user';
@@ -29,6 +45,9 @@ exports.buildPostCourseExam = async (req, res) => {
             return res.status(403).json({ error: 'POSTCOURSE_LOCKED', message: 'No remaining attempts.' });
         }
 
+        // Debug: confirm Directory mock load
+        try { console.log('[postcourse] directory_config', { userId, max_attempts, course_passing_grade, has_skill_thresholds: !!(skill_thresholds && Object.keys(skill_thresholds).length) }); } catch (_) {}
+
         // Determine unmet skills from last saved result if any
         let unmetSkills = null;
         const last = getLastAttempt(userId);
@@ -37,19 +56,25 @@ exports.buildPostCourseExam = async (req, res) => {
         }
 
         const profile = await getLearnerProfile(userId);
-        let targetSkills = await getSkillTargets(profile);
+        const allTargetSkills = await getSkillTargets(profile);
+        const allSkillKeys = allTargetSkills.map((s) => normalizeSkillKey(s.name || s.id || s));
+        const isRetake = Array.isArray(unmetSkills) && unmetSkills.length > 0;
+        const skillsForExam = isRetake ? unmetSkills.map(normalizeSkillKey) : allSkillKeys;
 
-        if (Array.isArray(unmetSkills) && unmetSkills.length) {
-            targetSkills = targetSkills.filter(s => unmetSkills.includes((s.name || s).toString().toLowerCase().replace(/\s+/g, '_')));
+        // Generate questions for desired skills
+        let aiQs = await assembleExamForSkills({ skillsKeys: skillsForExam, targetSkills: allTargetSkills, courseId: profile.course_id });
+        // Fallback to full set if generation is empty for retake
+        if (!Array.isArray(aiQs) || aiQs.length === 0) {
+            aiQs = await assembleExamForSkills({ skillsKeys: allSkillKeys, targetSkills: allTargetSkills, courseId: profile.course_id });
         }
-
-        const aiQs = await generateQuestions({ targetSkills, courseId: profile.course_id, examType: 'postcourse' });
-        // Select two diverse written questions
-        const written = pickRandom(aiQs.filter(q => q.type === 'written'), 2);
+        // Select two diverse written questions (or take all written if fewer)
+        const writtenPool = Array.isArray(aiQs) ? aiQs.filter(q => q && q.type === 'written') : [];
+        const written = writtenPool.length <= 2 ? writtenPool : pickRandom(writtenPool, 2);
         const challenge = await fetchDevLabChallenge({ skill: 'javascript' });
+        const devlabSkill = skillsForExam[0] || 'general';
         const questions = [
             ...written,
-            { id: 'devlab_code', type: 'devlab', title: challenge.title, prompt: challenge.prompt, examples: challenge.examples, starter_code: challenge.starter_code, tests: challenge.tests },
+            { id: 'devlab_code', type: 'devlab', skill: devlabSkill, title: challenge.title, prompt: challenge.prompt, examples: challenge.examples, starter_code: challenge.starter_code, tests: challenge.tests },
         ];
 
         // AI validation/audit gate (best-effort)
@@ -62,9 +87,8 @@ exports.buildPostCourseExam = async (req, res) => {
         const returnUrl = (req?.query?.return) || (req?.headers?.['x-return-url']) || undefined;
         const attemptNumber = attempts_used + 1;
         const version = attemptNumber; // simple versioning aligned to attempt
-        const examSkills = Array.from(new Set(questions.map(q => q.skill).filter(Boolean)));
-        const allTargetSkillKeys = Array.from(new Set(targetSkills.map(s => (s.name || s).toString().toLowerCase().replace(/\s+/g, '_'))));
-        const excludedSkills = allTargetSkillKeys.filter(sk => !examSkills.includes(sk));
+        const examSkills = Array.from(new Set(skillsForExam));
+        const excludedSkills = isRetake ? Array.from(new Set(allSkillKeys.filter(sk => !examSkills.includes(sk)))) : [];
         res.json({
             exam_id: 'postcourse-' + Date.now(),
             title: 'Post-Course Exam',
