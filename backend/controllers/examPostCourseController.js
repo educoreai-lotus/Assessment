@@ -35,6 +35,7 @@ async function assembleExamForSkills({ skillsKeys, targetSkills, courseId }) {
 }
 
 exports.buildPostCourseExam = async (req, res) => {
+    try { console.log('✅ buildPostCourseExam hit'); } catch (_) {}
     try {
         const userId = req.user?.sub || 'demo-user';
         const directory = await getUserExamConfig(userId, 'postcourse');
@@ -112,6 +113,7 @@ exports.buildPostCourseExam = async (req, res) => {
 const { evaluatePostCourseExam } = require('../services/postCourseEvaluator');
 
 exports.submitPostCourseExam = async (req, res) => {
+    try { console.log('✅ submitPostCourseExam hit'); } catch (_) {}
     try {
         const { exam_id, user_id, answers, questions, rubric, meta } = req.body || {};
         const userId = user_id || req.user?.sub || 'demo-user';

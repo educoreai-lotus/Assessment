@@ -155,30 +155,10 @@ try {
 } catch (e) {
 	// Optional
 }
-// Mount simplified post-course exam router
-try {
-	const examPostCourse = require('./routes/examPostCourse');
-	app.use(`${API_BASE}/exams/postcourse`, examPostCourse);
-    try { console.log('[mount] router /api/v1/exams/postcourse'); } catch (_) {}
-} catch (e) {
-	// Optional
-}
-// Fallback direct mounts in case router load fails in production
-try {
-    const postController = require('./controllers/examPostCourseController');
-    const buildHandler = postController.buildExam || postController.buildPostCourseExam;
-    const submitHandler = postController.submitExam || postController.submitPostCourseExam;
-    if (typeof buildHandler === 'function') {
-        app.post(`${API_BASE}/exams/postcourse/build`, buildHandler);
-        try { console.log('[mount] direct POST /api/v1/exams/postcourse/build'); } catch (_) {}
-    }
-    if (typeof submitHandler === 'function') {
-        app.post(`${API_BASE}/exams/postcourse/submit`, submitHandler);
-        try { console.log('[mount] direct POST /api/v1/exams/postcourse/submit'); } catch (_) {}
-    }
-} catch (_) {
-    // ignore
-}
+// Mount simplified post-course exam router (unconditional)
+const examPostCourseRouter = require('./routes/examPostCourse');
+app.use(`${API_BASE}/exams/postcourse`, examPostCourseRouter);
+console.log('✅ Mounted /api/v1/exams/postcourse routes');
 // Proctoring routes
 try {
     const proctorRoutes = require('./routes/proctor');
@@ -213,8 +193,6 @@ app.use((err, req, res, next) => {
 	return sendError(res, 500, 'server_error', 'Unexpected error');
 });
 
-app.listen(PORT, () => {
-	console.log(`API listening on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 
