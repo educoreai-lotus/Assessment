@@ -9,14 +9,14 @@ exports.buildPostCourseExam = (req, res) => {
     });
 };
 
-const { evaluate } = require('../services/postCourseEvaluator');
+const { evaluatePostCourseExam } = require('../services/postCourseEvaluator');
 
 exports.submitPostCourseExam = async (req, res) => {
     try {
-        const { exam_id, answers, questions } = req.body || {};
-        const userId = req.user?.sub || 'demo-user';
-        const result = await evaluate({ answers: answers || {}, questions: questions || [], userId });
-        res.json({ exam_id, ...result });
+        const { exam_id, user_id, answers, questions, rubric, meta } = req.body || {};
+        const userId = user_id || req.user?.sub || 'demo-user';
+        const result = await evaluatePostCourseExam({ examId: exam_id, userId, questions: questions || [], answers: answers || {}, rubric, meta });
+        res.json(result);
     } catch (err) {
         res.status(500).json({ error: 'server_error', message: err.message });
     }
