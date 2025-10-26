@@ -18,14 +18,14 @@ export default function BaselineResults({ result }) {
 
   return (
     <section className="personalized-dashboard">
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-300">
+      <div>
       <div className="dashboard-container max-w-3xl mx-auto mt-12 px-6">
         <h1 className="section-title">AI Evaluation Results</h1>
         {attempt != null && max != null && (
           <div className="text-sm text-gray-500 mb-2">Attempt {attempt} of {max}</div>
         )}
-        <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors duration-300">
-          <h2 className={`text-2xl font-semibold ${passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>Final Grade: {grade}</h2>
+        <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors">
+          <h2 className={`text-2xl font-semibold ${passed ? 'text-green-600' : 'text-red-600'} dark:text-gray-100`}>Final Grade: {grade}</h2>
           <p className="text-gray-600 dark:text-gray-300 mt-1">
             {passed
               ? `User achieved a final grade of ${grade}, meeting passing criteria.`

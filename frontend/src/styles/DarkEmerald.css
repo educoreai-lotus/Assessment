@@ -515,6 +515,7 @@ body {
         z-index: 1000;
         padding: var(--spacing-sm) 0;
         transition: all 0.3s ease;
+        text-align: center;
 }
 
 .day-mode .header {
@@ -532,8 +533,9 @@ body {
         margin: 0 auto;
         padding: 0 var(--spacing-lg);
         display: flex;
-        justify-content: space-between;
+        justify-content: center;
         align-items: center;
+        gap: var(--spacing-lg);
 }
 
 .header-controls {
@@ -898,7 +900,7 @@ body {
 }
 
 .achievement-badge span {
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         color: var(--text-secondary);
         font-weight: 500;
 }
@@ -1848,4 +1850,5 @@ body {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
 }
+
 

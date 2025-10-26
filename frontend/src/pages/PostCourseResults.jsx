@@ -18,14 +18,14 @@ export default function PostCourseResults() {
         : {});
   return (
     <section className="personalized-dashboard">
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-300">
+      <div>
       <div className="dashboard-container max-w-3xl mx-auto mt-12 px-6">
         <h1 className="section-title">Post-Course Evaluation Results</h1>
         {attemptInfo ? (
           <div className="text-sm text-gray-500 mb-2">Attempt {attemptInfo.attempts} of {attemptInfo.maxAttempts}</div>
         ) : null}
-        <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors duration-300" style={{ textAlign: 'left' }}>
-          <h2 className={`text-2xl font-semibold ${result.passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>Final Grade: {finalGrade}</h2>
+        <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors" style={{ textAlign: 'left' }}>
+          <h2 className={`text-2xl font-semibold ${result.passed ? 'text-green-600' : 'text-red-600'} dark:text-gray-100`}>Final Grade: {finalGrade}</h2>
           <p className="text-gray-600 dark:text-gray-300 mt-1">
             {result.passed
               ? `User achieved a final grade of ${finalGrade}, meeting passing criteria.`
@@ -50,7 +50,7 @@ export default function PostCourseResults() {
           ))}
         </div>
         {result.artifact_path ? (
-          <p className="text-sm mt-3 text-gray-600 dark:text-gray-400">Artifact recorded at: {result.artifact_path}</p>
+          <p className="text-sm mt-3 text-gray-600 dark:text-gray-300">Artifact recorded at: {result.artifact_path}</p>
         ) : null}
         <button onClick={() => {
           const u = localStorage.getItem('returnUrl') || result.return_url || '/';

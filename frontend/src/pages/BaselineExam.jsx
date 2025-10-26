@@ -30,7 +30,7 @@ export default function BaselineExam() {
     loadExam();
   }, []);
 
-  if (!exam) return <div className="p-6 text-center">Loading baseline exam...</div>;
+  if (!exam) return <div className="p-6 text-center text-gray-800 dark:text-gray-100 transition-colors">Loading baseline exam...</div>;
 
   const question = exam.questions[index];
   const total = exam.questions.length;

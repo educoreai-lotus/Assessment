@@ -45,8 +45,8 @@ export default function PostCourseExam() {
     navigate('/post-course-results', { state: { result } });
   }
 
-  if (loading) return <p>Loading post-course exam...</p>;
-  if (!exam) return <p>Exam not found.</p>;
+  if (loading) return <p className="p-6 text-center text-gray-800 dark:text-gray-100 transition-colors">Loading post-course exam...</p>;
+  if (!exam) return <p className="p-6 text-center text-gray-800 dark:text-gray-100 transition-colors">Exam not found.</p>;
 
   return (
     <section className="personalized-dashboard">
