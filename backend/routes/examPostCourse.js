@@ -1,9 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { buildPostCourseExam, submitPostCourseExam } = require('../controllers/examPostCourseController');
+const controller = require('../controllers/examPostCourseController');
 
-router.post('/build', buildPostCourseExam);
-router.post('/submit', submitPostCourseExam);
+// Support both canonical names and aliases expected by infra
+const buildHandler = controller.buildExam || controller.buildPostCourseExam;
+const submitHandler = controller.submitExam || controller.submitPostCourseExam;
+
+router.post('/build', buildHandler);
+router.post('/submit', submitHandler);
 
 module.exports = router;
 
