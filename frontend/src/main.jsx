@@ -6,6 +6,7 @@ import PostCourseExam from './pages/PostCourseExam'
 import PostCourseResults from './pages/PostCourseResults'
 import './index.css'
 import './styles/DarkEmerald.css'
+import Header from './components/Header'
 // Navbar with theme toggle removed per revert
 
 function ThemeContainer({ children }) {
@@ -28,26 +29,7 @@ function ThemeContainer({ children }) {
   return (
     <>
       <a href="#main" className="skip-link">Skip to content</a>
-      <header className="header transition-colors">
-        <div className="nav-container">
-          <div className="logo">Assessment</div>
-          <ul className="nav-links">
-            <li><Link to="/">Baseline</Link></li>
-            <li><Link to="/postcourse">Post-Course</Link></li>
-            <li><Link to="/post-course-results">Results</Link></li>
-          </ul>
-          <div className="header-controls">
-            <button
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-              className="theme-toggle transition-colors"
-              title={theme === 'night-mode' ? 'Switch to day mode' : 'Switch to night mode'}
-            >
-              {theme === 'night-mode' ? '☀️' : '🌙'}
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header onToggleTheme={toggleTheme} theme={theme} />
       <div className="transition-colors" style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
         {children}
       </div>
