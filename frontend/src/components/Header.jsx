@@ -1,16 +1,16 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import LightLogo from '../assets/WhatsApp Image 2025-10-26 at 20.42.27.jpeg'
-import DarkLogo from '../assets/WhatsApp Image 2025-10-26 at 20.42.27 (1).jpeg'
+import logoDay from "../assets/logo-day.jpg";
+import logoNight from "../assets/logo-night.jpg";
 
 export default function Header({ onToggleTheme, theme }) {
   return (
     <header className="header transition-colors">
       <div className="nav-container">
         <div className="brand">
-          <div className="brand-logo" aria-hidden="true">
-            <img src={LightLogo} alt="Educore AI Logo" className="logo-light" height={40} />
-            <img src={DarkLogo} alt="Educore AI Logo" className="logo-dark" height={40} />
+          <div className="brand-logo" aria-hidden="true" style={{ marginRight: '10px' }}>
+            <img src={logoDay} alt="Educore AI Logo" className="logo-light" height={40} />
+            <img src={logoNight} alt="Educore AI Logo" className="logo-dark" height={40} />
           </div>
           <span className="logo">Assessment</span>
         </div>
