@@ -324,6 +324,23 @@ html { transition: background-color 0.4s ease, color 0.4s ease; }
         background: var(--bg-secondary);
 }
 
+/* Question Card and Answer Options */
+.question-card {
+        box-shadow: var(--shadow-card);
+}
+
+.answer-option:hover {
+        background: rgba(255, 255, 255, 0.05);
+        transform: scale(1.02);
+}
+
+.answer-option input:checked + span {
+        color: var(--accent-green);
+        font-weight: 600;
+        transition: color 0.2s ease, transform 0.2s ease;
+        transform: scale(1.03);
+}
+
 .dashboard-container {
         max-width: 1200px;
         margin: 0 auto;
