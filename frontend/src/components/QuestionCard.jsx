@@ -7,11 +7,24 @@ export default function QuestionCard({ question, index, total, selected, onAnswe
       <h2 className="font-semibold mb-2">
         Question {index + 1} of {total}
       </h2>
-      <p className="mb-3">{question.title ? `${question.title} — ` : ''}{question.question}</p>
+      {question.title ? <div className="font-semibold mb-2">{question.title}</div> : null}
+      {question.context ? <div className="text-sm text-gray-600 mb-2">{question.context}</div> : null}
+      <p className="mb-3">{question.prompt || question.question}</p>
 
       {isDevLab ? (
         <div>
           <p className="text-sm text-gray-600 mb-2">Coding challenge. Provide your solution in JavaScript.</p>
+          {Array.isArray(question.examples) && question.examples.length ? (
+            <div className="mb-3" style={{ textAlign: 'left' }}>
+              <div className="font-semibold mb-1">Example</div>
+              {question.examples.map((ex, i) => (
+                <div key={i} className="text-sm">
+                  <div><span className="font-mono">input</span>: {JSON.stringify(ex.input)}</div>
+                  <div><span className="font-mono">output</span>: {JSON.stringify(ex.output || ex.expected)}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <textarea
             rows={10}
             className="w-full border p-2 rounded font-mono"
