@@ -20,29 +20,21 @@ app.use(helmet({
 	crossOriginEmbedderPolicy: false,
 }));
 
-// CORS configuration and preflight handling (production frontend only)
-const allowedOrigins = [
-	'https://assessment-tests.vercel.app',
-];
-
-app.use((req, res, next) => {
-	const origin = req.headers.origin;
-	if (allowedOrigins.includes(origin)) {
-		res.header('Access-Control-Allow-Origin', origin);
-	}
-	res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-	res.header('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-	res.header('Access-Control-Allow-Credentials', 'true');
-	if (req.method === 'OPTIONS') return res.sendStatus(204);
-	next();
-});
-
-app.use(cors({
-	origin: allowedOrigins,
-	methods: ['GET', 'POST', 'OPTIONS'],
-	allowedHeaders: ['Authorization', 'Content-Type'],
-	credentials: true,
-}));
+// CORS configuration for Vercel frontend and local dev
+app.use(
+    cors({
+        origin: [
+            'https://assessment-tests.vercel.app',
+            'http://localhost:5173',
+        ],
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        credentials: true,
+    })
+);
+// Preflight handling
+app.options('*', cors());
+console.log('✅ CORS configured for Vercel frontend and local dev');
 
 // Basic JSON body parsing
 app.use(express.json({ limit: '100kb' }));
