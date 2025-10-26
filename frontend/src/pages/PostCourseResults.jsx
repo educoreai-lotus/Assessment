@@ -1,11 +1,18 @@
-import React from "react";
-import { useLocation } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import SkillResultCard from "../components/SkillResultCard";
 
 export default function PostCourseResults() {
   const { state } = useLocation();
-  const result = state?.result;
-  if (!result) return <p className="p-6">No results yet.</p>;
+  const navigate = useNavigate();
+  const [result, setResult] = useState(null);
+  console.log("PostCourseResults loaded", result);
+  useEffect(() => {
+    if (state?.result) {
+      setResult(state.result);
+    }
+  }, [state]);
+  if (!result) return <p className="p-6">Loading results...</p>;
   const finalGrade = typeof result.final_grade === 'number' ? result.final_grade : (typeof result.score_total === 'number' ? result.score_total : (typeof result.score === 'number' ? result.score : 0));
   const status = result.summary || (result.passed != null ? (result.passed ? 'Passed' : 'Failed') : '');
   const gradeColor = result.passed ? 'text-green-600' : 'text-red-600';
@@ -16,6 +23,7 @@ export default function PostCourseResults() {
     : (Array.isArray(result.ai_feedback)
         ? Object.fromEntries(result.ai_feedback.map(s => [String(s.skill).toLowerCase(), { score: s.score, feedback: s.feedback, weight: s.weight }]))
         : {});
+  console.log("Render conditions:", result?.requires_retake, result?.attempt, result?.max_attempts);
   return (
     <section className="personalized-dashboard">
       <div>
@@ -24,11 +32,11 @@ export default function PostCourseResults() {
         {attemptInfo ? (
           <div className="text-sm text-gray-500 mb-2">Attempt {attemptInfo.attempts} of {attemptInfo.maxAttempts}</div>
         ) : null}
-        {!result.passed && result.requires_retake ? (
-          <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-800 p-3 mb-4">
-            Retake required — questions will focus on skills needing improvement.
-          </div>
-        ) : null}
+        {result.requires_retake ? (
+          <div className="alert-warning">You must retake this exam to pass the course.</div>
+        ) : (
+          <div className="alert-success">✅ Course passed successfully!</div>
+        )}
         {!result.passed && Array.isArray(result.unmet_skills) && result.unmet_skills.length ? (
           <div className="rounded-md border border-gray-200 bg-white dark:bg-gray-900 p-3 mb-4">
             <div className="text-sm font-semibold mb-1">Unmet skills</div>
@@ -37,6 +45,22 @@ export default function PostCourseResults() {
             </ul>
           </div>
         ) : null}
+        {result?.requires_retake && result?.attempt < result?.max_attempts && (
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={() => navigate("/postcourse")}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2 rounded-lg transition-all"
+            >
+              🔁 Retake Exam
+            </button>
+          </div>
+        )}
+
+        {result?.requires_retake && result?.attempt >= result?.max_attempts && (
+          <div className="mt-4 p-4 bg-red-100 border border-red-300 text-red-700 text-center rounded-lg">
+            🚫 You have reached the maximum number of attempts. Please contact your instructor or support for assistance.
+          </div>
+        )}
         <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors" style={{ textAlign: 'left' }}>
           <h2 className={`text-2xl font-semibold ${result.passed ? 'text-green-600' : 'text-red-600'} dark:text-gray-100`}>Final Grade: {finalGrade}</h2>
           <p className="text-gray-600 dark:text-gray-300 mt-1">
