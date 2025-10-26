@@ -7,6 +7,17 @@ async function getLearnerSkills(userId) {
 	];
 }
 
-module.exports = { getLearnerSkills };
+async function getSkillTargets(profile) {
+	// Derive target skills from profile; mocked mapping
+	return [
+		{ id: 'nodejs_runtime', name: 'Node.js runtime', difficulty: 'medium' },
+		{ id: 'api_design', name: 'API design', difficulty: 'medium' },
+		{ id: 'async_programming', name: 'async programming', difficulty: 'medium' },
+		{ id: 'error_handling', name: 'error handling', difficulty: 'medium' },
+		{ id: 'authentication', name: 'authentication', difficulty: 'medium' },
+	];
+}
+
+module.exports = { getLearnerSkills, getSkillTargets };
 
 

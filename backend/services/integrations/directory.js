@@ -11,6 +11,17 @@ async function getPassingPolicy() {
     return { passing_grade: p.passing_grade, max_attempts: p.max_attempts };
 }
 
-module.exports = { getPolicy, getPassingPolicy };
+async function getLearnerProfile(userId = 'demo-user') {
+    // Mocked directory profile; in production, call DIRECTORY_API_URL
+    return {
+        user_id: userId,
+        course_id: 'demo-course',
+        org_id: 'demo-org',
+        level: 'intermediate',
+        preferences: { language: 'en' },
+    };
+}
+
+module.exports = { getPolicy, getPassingPolicy, getLearnerProfile };
 
 
