@@ -587,6 +587,19 @@ body {
         background-clip: text;
 }
 
+/* Image logo styles (distinct from text gradient) */
+.brand img.logo {
+        height: 42px;
+        width: auto;
+        margin-right: 12px;
+        border-radius: 6px;
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease;
+}
+
+.brand img.logo:hover {
+        transform: scale(1.05);
+}
+
 .brand {
         display: inline-flex;
         align-items: center;

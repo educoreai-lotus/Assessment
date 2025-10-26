@@ -12,7 +12,6 @@ export default function Header({ onToggleTheme, theme }) {
             src={logoSrc}
             alt="Educore AI"
             className="logo"
-            style={{ height: 40, width: 'auto', marginRight: 10, borderRadius: 6, transition: 'opacity 0.4s ease, transform 0.3s ease' }}
           />
           <span className="logo">Assessment</span>
         </div>
