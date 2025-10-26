@@ -17,21 +17,22 @@ export default function PostCourseResults() {
         ? Object.fromEntries(result.ai_feedback.map(s => [String(s.skill).toLowerCase(), { score: s.score, feedback: s.feedback, weight: s.weight }]))
         : {});
   return (
-    <section className="personalized-dashboard" style={{ background: 'linear-gradient(135deg, #f8fafc, #eef2f7)' }}>
+    <section className="personalized-dashboard">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-300">
       <div className="dashboard-container max-w-3xl mx-auto mt-12 px-6">
         <h1 className="section-title">Post-Course Evaluation Results</h1>
         {attemptInfo ? (
           <div className="text-sm text-gray-500 mb-2">Attempt {attemptInfo.attempts} of {attemptInfo.maxAttempts}</div>
         ) : null}
-        <div className="rounded-xl bg-white shadow-sm p-6 border border-gray-100 mb-6" style={{ textAlign: 'left' }}>
-          <h2 className={`text-2xl font-semibold ${gradeColor}`}>Final Grade: {finalGrade}</h2>
-          <p className="text-gray-600 mt-1">
+        <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors duration-300" style={{ textAlign: 'left' }}>
+          <h2 className={`text-2xl font-semibold ${result.passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>Final Grade: {finalGrade}</h2>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">
             {result.passed
               ? `User achieved a final grade of ${finalGrade}, meeting passing criteria.`
               : `User achieved a final grade of ${finalGrade}, below the passing grade of ${thresholds?.default ?? 70}.`}
           </p>
           {result?.score_by_type ? (
-            <div className="text-sm text-gray-500 mt-1">
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Sections — Written: {result.score_by_type.written ?? 0}, Code: {result.score_by_type.code ?? 0}
             </div>
           ) : null}
@@ -49,7 +50,7 @@ export default function PostCourseResults() {
           ))}
         </div>
         {result.artifact_path ? (
-          <p className="text-sm mt-3 text-gray-600">Artifact recorded at: {result.artifact_path}</p>
+          <p className="text-sm mt-3 text-gray-600 dark:text-gray-400">Artifact recorded at: {result.artifact_path}</p>
         ) : null}
         <button onClick={() => {
           const u = localStorage.getItem('returnUrl') || result.return_url || '/';
@@ -57,6 +58,7 @@ export default function PostCourseResults() {
         }} className="mt-6 inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2 text-white font-medium hover:bg-emerald-700 transition-all shadow-md">
           Return to Portal
         </button>
+      </div>
       </div>
     </section>
   );

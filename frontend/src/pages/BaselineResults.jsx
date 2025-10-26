@@ -17,15 +17,16 @@ export default function BaselineResults({ result }) {
         : {});
 
   return (
-    <section className="personalized-dashboard" style={{ background: 'linear-gradient(135deg, #f8fafc, #eef2f7)' }}>
+    <section className="personalized-dashboard">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-300">
       <div className="dashboard-container max-w-3xl mx-auto mt-12 px-6">
         <h1 className="section-title">AI Evaluation Results</h1>
         {attempt != null && max != null && (
           <div className="text-sm text-gray-500 mb-2">Attempt {attempt} of {max}</div>
         )}
-        <div className="rounded-xl bg-white shadow-sm p-6 border border-gray-100 mb-6">
-          <h2 className={`text-2xl font-semibold ${gradeColor}`}>Final Grade: {grade}</h2>
-          <p className="text-gray-600 mt-1">
+        <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors duration-300">
+          <h2 className={`text-2xl font-semibold ${passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>Final Grade: {grade}</h2>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">
             {passed
               ? `User achieved a final grade of ${grade}, meeting passing criteria.`
               : `User achieved a final grade of ${grade}, below the passing grade of ${thresholds?.default ?? 70}.`}
@@ -50,6 +51,7 @@ export default function BaselineResults({ result }) {
         }} className="mt-6 inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2 text-white font-medium hover:bg-emerald-700 transition-all shadow-md">
           Return to Portal
         </button>
+      </div>
       </div>
     </section>
   );
