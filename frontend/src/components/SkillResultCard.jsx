@@ -1,0 +1,22 @@
+import React from "react";
+
+export default function SkillResultCard({ skillKey, data, defaultThreshold = 70, thresholds = {} }) {
+  const skill = String(skillKey || '').toLowerCase();
+  const label = skill.replaceAll('_', ' ');
+  const threshold = typeof thresholds[skill] === 'number' ? thresholds[skill] : defaultThreshold;
+  const passed = Number(data?.score || 0) >= threshold;
+  return (
+    <div className="rounded-lg border border-gray-200 p-4 mb-4 bg-white shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-800">{label}</h3>
+      <p className="text-sm text-gray-600">
+        Score: <strong>{data?.score ?? 0}</strong> • Threshold: <strong>{threshold}</strong>
+      </p>
+      <p className={`text-sm mt-1 ${passed ? 'text-green-600' : 'text-amber-600'}`}>
+        {passed ? 'Status: Passed' : 'Status: Needs Improvement'}
+      </p>
+      {data?.feedback ? (
+        <p className="text-sm text-gray-500 mt-1">{data.feedback}</p>
+      ) : null}
+    </div>
+  );
+}

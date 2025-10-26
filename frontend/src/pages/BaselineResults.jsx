@@ -1,54 +1,53 @@
 import React from "react";
+import SkillResultCard from "../components/SkillResultCard";
 
 export default function BaselineResults({ result }) {
   if (!result) return <div className="p-6">No results available.</div>;
   const passed = !!(result.passed || (result.summary === 'Passed'));
-  const grade = typeof result.final_grade === 'number' ? result.final_grade : 0;
+  const grade = typeof result.final_grade === 'number' ? result.final_grade : (typeof result.score_total === 'number' ? result.score_total : 0);
   const gradeColor = passed ? 'text-green-600' : 'text-red-600';
   const attempt = result.attempt;
   const max = result.max_attempts;
-  const feedback = Array.isArray(result.ai_feedback) ? result.ai_feedback : [];
   const thresholds = result.passing_thresholds || { default: 70, skills: {} };
-  const skillStatus = result.skill_status || {};
+  // Normalize feedback map: prefer object map if present
+  const feedbackMap = result.feedback && !Array.isArray(result.feedback)
+    ? result.feedback
+    : (Array.isArray(result.ai_feedback)
+        ? Object.fromEntries(result.ai_feedback.map(s => [String(s.skill).toLowerCase(), { score: s.score, feedback: s.feedback }]))
+        : {});
+
   return (
-    <section className="personalized-dashboard">
-      <div className="dashboard-container">
+    <section className="personalized-dashboard" style={{ background: 'linear-gradient(135deg, #f8fafc, #eef2f7)' }}>
+      <div className="dashboard-container max-w-3xl mx-auto mt-12 px-6">
         <h1 className="section-title">AI Evaluation Results</h1>
         {attempt != null && max != null && (
-          <p className="text-sm mb-2">Attempt {attempt} of {max}</p>
+          <div className="text-sm text-gray-500 mb-2">Attempt {attempt} of {max}</div>
         )}
-        <div className="mb-4 p-4 dashboard-card" style={{ textAlign: 'left' }}>
-          <p className={`text-lg font-semibold ${gradeColor}`}>Final Grade: {grade}</p>
-          <p className="mt-2">{passed ? 'Passed' : 'Failed'}</p>
-          <p className="mt-1 text-sm">Default passing: {thresholds.default}</p>
+        <div className="rounded-xl bg-white shadow-sm p-6 border border-gray-100 mb-6">
+          <h2 className={`text-2xl font-semibold ${gradeColor}`}>Final Grade: {grade}</h2>
+          <p className="text-gray-600 mt-1">
+            {passed
+              ? `User achieved a final grade of ${grade}, meeting passing criteria.`
+              : `User achieved a final grade of ${grade}, below the passing grade of ${thresholds?.default ?? 70}.`}
+          </p>
         </div>
-        <div className="space-y-3">
-          {feedback.map((item, idx) => (
-            <div key={idx} className="p-3 dashboard-card" style={{ textAlign: 'left' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div className="font-medium">{item.skill}</div>
-                  <div className="text-sm">
-                    Score: {item.score}
-                    {thresholds.skills && thresholds.skills[String(item.skill).toLowerCase()] != null ? (
-                      <> • Pass: {thresholds.skills[String(item.skill).toLowerCase()]}</>
-                    ) : null}
-                  </div>
-                  {skillStatus[String(item.skill).toLowerCase()] && (
-                    <div className="text-sm mt-1">Status: {skillStatus[String(item.skill).toLowerCase()] === 'done' ? 'Done' : 'Needs Improvement'}</div>
-                  )}
-                </div>
-                <span className="btn" style={{ background: item.passed ? 'var(--gradient-secondary)' : 'linear-gradient(135deg,#ef4444,#f97316)', color: '#fff' }}>
-                  {item.passed ? 'Passed' : 'Needs Improvement'}
-                </span>
-              </div>
-            </div>
+
+        <div className="mt-4">
+          {Object.entries(feedbackMap).map(([skill, data]) => (
+            <SkillResultCard
+              key={skill}
+              skillKey={skill}
+              data={data}
+              defaultThreshold={thresholds?.default ?? 70}
+              thresholds={thresholds?.skills ?? {}}
+            />
           ))}
         </div>
+
         <button onClick={() => {
-          const u = localStorage.getItem('returnUrl') || result.return_url || '/';
+          const u = result.return_url || localStorage.getItem('returnUrl') || '/';
           window.location.href = u;
-        }} className="mt-6 inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2 text-white hover:bg-emerald-800">
+        }} className="mt-6 inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2 text-white font-medium hover:bg-emerald-700 transition-all shadow-md">
           Return to Portal
         </button>
       </div>
