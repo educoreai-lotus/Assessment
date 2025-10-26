@@ -21,20 +21,20 @@ app.use(helmet({
 }));
 
 // CORS configuration for Vercel frontend and local dev
-app.use(
-    cors({
-        origin: [
-            'https://assessment-tests.vercel.app',
-            'http://localhost:5173',
-        ],
-        methods: ['GET', 'POST', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
-        credentials: true,
-    })
-);
-// Preflight handling
-app.options('*', cors());
+const corsOptions = {
+    origin: [
+        'https://assessment-tests.vercel.app',
+        'http://localhost:5173',
+    ],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+};
+app.use(cors(corsOptions));
+// Preflight handling (Express 5-safe regex)
+app.options(/.*/, cors(corsOptions));
 console.log('✅ CORS configured for Vercel frontend and local dev');
+console.log('✅ CORS safely initialized for all routes');
 
 // Basic JSON body parsing
 app.use(express.json({ limit: '100kb' }));
