@@ -7,7 +7,7 @@ export default function PostCourseResults() {
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
   console.log("PostCourseResults loaded", result);
-  console.log("DEBUG:", result?.requires_retake, result?.attempt, result?.max_attempts);
+  console.log("DEBUG:", result?.requires_retake, result?.attempt_info?.attempts, result?.attempt_info?.maxAttempts);
   useEffect(() => {
     if (state?.result) {
       setResult(state.result);
@@ -17,14 +17,14 @@ export default function PostCourseResults() {
   const finalGrade = typeof result.final_grade === 'number' ? result.final_grade : (typeof result.score_total === 'number' ? result.score_total : (typeof result.score === 'number' ? result.score : 0));
   const status = result.summary || (result.passed != null ? (result.passed ? 'Passed' : 'Failed') : '');
   const gradeColor = result.passed ? 'text-green-600' : 'text-red-600';
-  const attemptInfo = result.attempt_info || (result.attempt && result.max_attempts ? { attempts: result.attempt, maxAttempts: result.max_attempts } : null);
+  const attemptInfo = result.attempt_info || null;
   const thresholds = result.passing_thresholds || { default: 70, skills: {} };
   const feedbackMap = result.feedback && !Array.isArray(result.feedback)
     ? result.feedback
     : (Array.isArray(result.ai_feedback)
         ? Object.fromEntries(result.ai_feedback.map(s => [String(s.skill).toLowerCase(), { score: s.score, feedback: s.feedback, weight: s.weight }]))
         : {});
-  console.log("Render conditions:", result?.requires_retake, result?.attempt, result?.max_attempts);
+  console.log("Render conditions:", result?.requires_retake, result?.attempt_info?.attempts, result?.attempt_info?.maxAttempts);
   return (
     <section className="personalized-dashboard">
       <div>
@@ -46,7 +46,7 @@ export default function PostCourseResults() {
             </ul>
           </div>
         ) : null}
-        {result?.requires_retake && result?.attempt < result?.max_attempts && (
+        {result?.requires_retake && result?.attempt_info?.attempts < result?.attempt_info?.maxAttempts && (
           <div className="mt-4 flex justify-center">
             <button
               onClick={() => navigate("/postcourse")}
@@ -57,7 +57,7 @@ export default function PostCourseResults() {
           </div>
         )}
 
-        {result?.requires_retake && result?.attempt >= result?.max_attempts && (
+        {result?.requires_retake && result?.attempt_info?.attempts >= result?.attempt_info?.maxAttempts && (
           <div className="mt-4 p-4 bg-red-100 border border-red-300 text-red-700 text-center rounded-lg">
             🚫 You have reached the maximum number of attempts. Please contact your instructor or support for assistance.
           </div>
