@@ -124,11 +124,12 @@ function aggregateBySkill(questions, answers, passingGrade) {
         const skill = q.skill || 'General';
         const actual = coerceString((answers || {})[q.id]);
         const expected = coerceString(q.correct_answer || q.expected_answer || '');
-        let score = 0;
+        let score = 0; // zero baseline
         if (expected && actual) {
-            score = actual.trim().toLowerCase() === expected.trim().toLowerCase() ? 100 : 60;
+            score = actual.trim().toLowerCase() === expected.trim().toLowerCase() ? 100 : 0;
         } else if (actual) {
-            score = 60;
+            // No correct answer provided; cannot heuristically score here → keep 0
+            score = 0;
         }
         if (!stats.has(skill)) stats.set(skill, { total: 0, count: 0 });
         const s = stats.get(skill);
@@ -156,7 +157,8 @@ async function evaluateSubmission({ questions, answers, passingGrade }) {
     const payload = { questions: (questions || []).map(q => ({ id: q.id, skill: q.skill || 'General', correct_answer: q.correct_answer || q.expected_answer || null })), answers: answers || {}, passing_grade: passingGrade || 70 };
     const user = `Given the questions (with optional correct_answer) and user answers, evaluate per skill.
 Rules:
-- If correct_answer exists and matches answer, score 100 for that question; else 60.
+- Start all scores at 0. If correct_answer exists and matches answer, score 100 for that question; else 0.
+- If a question has no correct_answer, score the answer's quality/accuracy concisely from 0..100 (no floors or offsets).
 - Aggregate average per skill (0-100), mark passed if >= passing_grade.
 - Compute final_grade as average across all questions (0-100), round to int.
 Return JSON:

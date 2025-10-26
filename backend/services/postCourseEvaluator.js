@@ -88,7 +88,18 @@ async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions 
     const evaluation = await evaluateSubmission({ questions, answers, passingGrade });
     const weights = toSkillWeights(questions);
     const feedback = toFeedbackMap(evaluation.ai_feedback, weights, passingGrade);
-    const writtenScore = Number(evaluation.final_grade || 0);
+    // Written section scoring — start from zero
+    let writtenScore = Number(evaluation.final_grade || 0);
+    if (Array.isArray(answers?.written)) {
+        const sectionScores = await Promise.all((answers.written || []).map(async (ans) => {
+            try {
+                const single = await evaluateSubmission({ questions: [ans.question], answers: { [ans.question?.id]: ans.answer }, passingGrade });
+                // clamp to [0, 100]
+                return Math.max(0, Math.min(100, Number(single?.final_grade || 0)));
+            } catch (_) { return 0; }
+        }));
+        writtenScore = sectionScores.length ? Math.round(sectionScores.reduce((a, b) => a + b, 0) / sectionScores.length) : 0;
+    }
 
     // Code scoring (DevLab)
     const devlabQuestion = (questions || []).find(q => String(q.type).toLowerCase() === 'devlab');
