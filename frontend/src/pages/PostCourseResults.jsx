@@ -7,6 +7,7 @@ export default function PostCourseResults() {
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
   console.log("PostCourseResults loaded", result);
+  console.log("DEBUG:", result?.requires_retake, result?.attempt, result?.max_attempts);
   useEffect(() => {
     if (state?.result) {
       setResult(state.result);
