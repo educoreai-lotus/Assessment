@@ -82,8 +82,6 @@ function evaluateCodeHeuristics(code, tests) {
 }
 
 const { getPassingGrades } = require('./integrations/directory');
-const fs = require('fs');
-const path = require('path');
 
 async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions = [], answers = {}, rubric, meta } = {}) {
     const passingGrade = getPassingGrade();
