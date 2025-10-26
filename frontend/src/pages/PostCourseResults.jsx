@@ -5,7 +5,7 @@ export default function PostCourseResults() {
   const { state } = useLocation();
   const result = state?.result;
   if (!result) return <p className="p-6">No results yet.</p>;
-  const finalGrade = typeof result.final_grade === 'number' ? result.final_grade : (typeof result.score === 'number' ? result.score : 0);
+  const finalGrade = typeof result.final_grade === 'number' ? result.final_grade : (typeof result.score_total === 'number' ? result.score_total : (typeof result.score === 'number' ? result.score : 0));
   const status = result.summary || (result.passed != null ? (result.passed ? 'Passed' : 'Failed') : '');
   const feedbackArray = Array.isArray(result.ai_feedback)
     ? result.ai_feedback
@@ -22,6 +22,11 @@ export default function PostCourseResults() {
         <div className="dashboard-card" style={{ textAlign: 'left' }}>
           <p className="text-lg font-semibold">Final Grade: {finalGrade}</p>
           <p className="mt-2">Status: {status}</p>
+          {result?.score_by_type ? (
+            <div className="mt-2 text-sm">
+              Sections — Written: {result.score_by_type.written ?? 0}, Code: {result.score_by_type.code ?? 0}
+            </div>
+          ) : null}
         </div>
         <div className="space-y-3 mt-4">
           {feedbackArray.map((f, i) => (

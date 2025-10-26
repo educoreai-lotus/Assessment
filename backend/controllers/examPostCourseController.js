@@ -1,11 +1,18 @@
-exports.buildPostCourseExam = (req, res) => {
+const { fetchDevLabChallenge } = require('../services/integrations/devLab');
+
+exports.buildPostCourseExam = async (req, res) => {
+    const challenge = await fetchDevLabChallenge();
+    const questions = [
+        { id: 'q1', type: 'theoretical', question: 'What is Node.js used for?', skill: 'Node.js Basics', expected_answer: 'server-side javascript runtime' },
+        { id: 'q2', type: 'theoretical', question: 'Explain REST vs gRPC briefly.', skill: 'API Design', expected_answer: 'rest is http json, grpc is binary rpc' },
+        { id: 'devlab_code', type: 'devlab', title: challenge.title, prompt: challenge.prompt, starter_code: challenge.starter_code, tests: challenge.tests },
+    ];
     res.json({
         exam_id: 'postcourse-' + Date.now(),
         title: 'Post-Course Exam',
-        questions: [
-            { id: 1, question: 'What is Node.js used for?' },
-            { id: 2, question: 'Explain REST vs gRPC briefly.' },
-        ],
+        duration_min: questions.length * 3,
+        question_count: questions.length,
+        questions,
     });
 };
 
