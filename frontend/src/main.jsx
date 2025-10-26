@@ -5,6 +5,7 @@ import BaselineExam from './pages/BaselineExam'
 import PostCourseExam from './pages/PostCourseExam'
 import PostCourseResults from './pages/PostCourseResults'
 import './index.css'
+import Navbar from './components/Navbar'
 
 function ThemeContainer({ children }) {
   useEffect(() => {
@@ -33,24 +34,9 @@ root.render(
   <React.StrictMode>
     <BrowserRouter>
       <ThemeContainer>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-500 ease-in-out">
         <a href="#main" className="skip-link">Skip to content</a>
-        <div className="bg-animation" />
-        <div className="particles" aria-hidden="true" />
-        <header className="header">
-          <div className="nav-container">
-            <div className="logo">Assessment</div>
-            <ul className="nav-links">
-              <li><Link to="/">Baseline</Link></li>
-              <li><Link to="/postcourse">Post-Course</Link></li>
-              <li><Link to="/post-course-results">Results</Link></li>
-            </ul>
-            <div className="header-controls">
-              <button className="theme-toggle" aria-label="Toggle theme" onClick={() => window.toggleThemeMode && window.toggleThemeMode()}>
-                ☾
-              </button>
-            </div>
-          </div>
-        </header>
+        <Navbar />
         <main id="main" style={{ paddingTop: '80px' }}>
           <Routes>
             <Route path="/" element={<BaselineExam />} />
@@ -58,6 +44,7 @@ root.render(
             <Route path="/post-course-results" element={<PostCourseResults />} />
           </Routes>
         </main>
+        </div>
       </ThemeContainer>
     </BrowserRouter>
   </React.StrictMode>
