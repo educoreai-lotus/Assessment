@@ -20,33 +20,27 @@ app.use(helmet({
 	crossOriginEmbedderPolicy: false,
 }));
 
-// CORS configuration and preflight handling
+// CORS configuration and preflight handling (production frontend only)
 const allowedOrigins = [
-	'http://localhost:5173',
 	'https://assessment-tests.vercel.app',
-	'https://assessment-tests-git-main-khawlaabusaleh1-1883s-projects.vercel.app',
 ];
 
 app.use((req, res, next) => {
 	const origin = req.headers.origin;
-	res.header('Access-Control-Allow-Origin', allowedOrigins.includes(origin) ? origin : '*');
-	res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-	res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+	if (allowedOrigins.includes(origin)) {
+		res.header('Access-Control-Allow-Origin', origin);
+	}
+	res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+	res.header('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 	res.header('Access-Control-Allow-Credentials', 'true');
 	if (req.method === 'OPTIONS') return res.sendStatus(204);
 	next();
 });
 
 app.use(cors({
-	origin: function (origin, callback) {
-		console.log('🌐 Incoming origin:', origin);
-		if (!origin || allowedOrigins.some(o => String(origin).startsWith(o))) {
-			callback(null, true);
-		} else {
-			console.log('🚫 Blocked CORS for origin:', origin);
-			callback(new Error('Not allowed by CORS'));
-		}
-	},
+	origin: allowedOrigins,
+	methods: ['GET', 'POST', 'OPTIONS'],
+	allowedHeaders: ['Authorization', 'Content-Type'],
 	credentials: true,
 }));
 
