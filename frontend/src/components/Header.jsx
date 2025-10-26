@@ -2,15 +2,18 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 
 export default function Header({ onToggleTheme, theme }) {
-  const isNight = theme === 'night-mode' || theme === 'dark' || document.body.classList.contains('night-mode');
-  const logoSrc = isNight ? '/logo-night.jpg' : '/logo-day.jpg';
+  const isDarkMode = theme === 'night-mode' || theme === 'dark' || document.body.classList.contains('night-mode');
+  const logoSrc = isDarkMode ? '/logo-night.jpeg' : '/logo-day.jpeg';
   return (
     <header className="header transition-colors">
       <div className="nav-container">
         <div className="brand">
-          <div className="brand-logo" aria-hidden="true" style={{ marginRight: '10px' }}>
-            <img src={logoSrc} alt="Educore AI Logo" height={40} style={{ width: 'auto', borderRadius: 6, transition: 'opacity 0.3s ease' }} />
-          </div>
+          <img
+            src={logoSrc}
+            alt="Educore AI"
+            className="logo"
+            style={{ height: 40, width: 'auto', marginRight: 10, borderRadius: 6, transition: 'opacity 0.4s ease, transform 0.3s ease' }}
+          />
           <span className="logo">Assessment</span>
         </div>
         <ul className="nav-links">
@@ -23,9 +26,9 @@ export default function Header({ onToggleTheme, theme }) {
             onClick={onToggleTheme}
             aria-label="Toggle theme"
             className="theme-toggle transition-colors"
-            title={theme === 'night-mode' ? 'Switch to day mode' : 'Switch to night mode'}
+            title={isDarkMode ? 'Switch to day mode' : 'Switch to night mode'}
           >
-            {theme === 'night-mode' ? '☀️' : '🌙'}
+            {isDarkMode ? '☀️' : '🌙'}
           </button>
         </div>
       </div>
