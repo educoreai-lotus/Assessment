@@ -49,8 +49,8 @@ root.render(
             <Route path="/" element={<Navigate to="/welcome" replace />} />
             <Route path="/welcome" element={<WelcomeExam />} />
             <Route path="/postcourse" element={<PostCourseExam />} />
-            <Route path="/post-course-results" element={<PostCourseResults />} />
             <Route path="/baseline" element={<BaselineExam />} />
+            <Route path="/post-course-results" element={<PostCourseResults />} />
           </Routes>
         </main>
       </ThemeContainer>

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 
 export default function Header({ onToggleTheme, theme }) {
   const isDarkMode = theme === 'night-mode' || theme === 'dark' || document.body.classList.contains('night-mode');
@@ -23,9 +23,9 @@ export default function Header({ onToggleTheme, theme }) {
 
       <nav className="nav-center">
         <ul className="nav-links">
-          <li><Link to="/">Baseline</Link></li>
-          <li><Link to="/postcourse">Post-Course</Link></li>
-          <li><Link to="/post-course-results">Results</Link></li>
+          <li><NavLink to="/baseline">Baseline Exam</NavLink></li>
+          <li><NavLink to="/postcourse">Post-Course</NavLink></li>
+          <li><NavLink to="/post-course-results">Results</NavLink></li>
         </ul>
       </nav>
 
