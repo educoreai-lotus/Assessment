@@ -42,18 +42,22 @@ export default function PostCourseResults() {
         {!result.passed && Array.isArray(result.unmet_skills) && result.unmet_skills.length ? (
           <div className="rounded-md border border-gray-200 bg-white dark:bg-gray-900 p-3 mb-4">
             <div className="text-sm font-semibold mb-1">Unmet skills</div>
-            <ul className="list-disc pl-5 text-sm text-gray-700 dark:text-gray-300">
-              {result.unmet_skills.map(s => (<li key={s}>{s}</li>))}
-            </ul>
+            <div className="unmet-skills fade-in">
+              {result.unmet_skills.map((skill) => (
+                <div key={skill} className="skill-tag">
+                  <span>⚠️</span> {String(skill).replaceAll("_", " ")}
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
         {result?.requires_retake && (
           <div className="result-card mt-4 p-4 bg-gray-800 text-gray-100 rounded-lg shadow-md dark:bg-gray-800 dark:text-gray-100">
             {result?.attempt_info?.attempts < result?.attempt_info?.maxAttempts && (
-              <div className="flex justify-center">
+              <div className="retake-container">
                 <button
                   onClick={() => navigate("/postcourse")}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-black dark:text-white font-semibold px-6 py-2 rounded-lg transition-all shadow-md"
+                  className="retake-button exam-action"
                 >
                   🔁 Retake Exam
                 </button>
