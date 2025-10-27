@@ -33,9 +33,7 @@ export default function PostCourseResults() {
         {attemptInfo ? (
           <div className="text-sm text-gray-500 mb-2">Attempt {attemptInfo.attempts} of {attemptInfo.maxAttempts}</div>
         ) : null}
-        {result.requires_retake ? (
-          <div className="alert-warning">You must retake this exam to pass the course.</div>
-        ) : (
+        {!result.requires_retake && (
           <div className="alert-success">✅ Course passed successfully!</div>
         )}
         {!result.passed && Array.isArray(result.unmet_skills) && result.unmet_skills.length ? (
@@ -46,20 +44,24 @@ export default function PostCourseResults() {
             </ul>
           </div>
         ) : null}
-        {result?.requires_retake && result?.attempt_info?.attempts < result?.attempt_info?.maxAttempts && (
-          <div className="mt-4 flex justify-center">
-            <button
-              onClick={() => navigate("/postcourse")}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2 rounded-lg transition-all"
-            >
-              🔁 Retake Exam
-            </button>
-          </div>
-        )}
+        {result?.requires_retake && (
+          <div className="result-card mt-4 p-4 bg-gray-800 text-gray-100 rounded-lg shadow-md dark:bg-gray-800 dark:text-gray-100">
+            {result?.attempt_info?.attempts < result?.attempt_info?.maxAttempts && (
+              <div className="flex justify-center">
+                <button
+                  onClick={() => navigate("/postcourse")}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-black dark:text-white font-semibold px-6 py-2 rounded-lg transition-all shadow-md"
+                >
+                  🔁 Retake Exam
+                </button>
+              </div>
+            )}
 
-        {result?.requires_retake && result?.attempt_info?.attempts >= result?.attempt_info?.maxAttempts && (
-          <div className="mt-4 p-4 bg-red-100 border border-red-300 text-red-700 text-center rounded-lg">
-            🚫 You have reached the maximum number of attempts. Please contact your instructor or support for assistance.
+            {result?.attempt_info?.attempts >= result?.attempt_info?.maxAttempts && (
+              <div className="p-3 bg-red-100 border border-red-300 text-red-700 text-center rounded-lg">
+                🚫 You have reached the maximum number of attempts. Please contact your instructor or support for assistance.
+              </div>
+            )}
           </div>
         )}
         <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors" style={{ textAlign: 'left' }}>
