@@ -15,7 +15,7 @@ export default function WelcomePostCourse() {
     <div className="welcome-screen fade-in">
       <h1>👋 Hello, {userName || 'Learner'}</h1>
       <h2>Are you ready for your exam?</h2>
-      <p>
+      <p className="intro-caption">
         This exam will assess your post-course understanding and provide AI-driven feedback on your skills.
       </p>
       <button

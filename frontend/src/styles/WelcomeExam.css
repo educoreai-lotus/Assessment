@@ -57,4 +57,50 @@
   text-align: center;
 }
 
+/* ===============================
+   Animated Entrance for Welcome
+   =============================== */
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.welcome-screen h1 {
+  animation: popIn 0.8s ease-out forwards;
+  animation-delay: 0.1s;
+}
+
+.welcome-screen .intro-caption {
+  opacity: 0;
+  animation: popIn 1s ease-out forwards;
+  animation-delay: 0.5s;
+}
+
+.start-exam-button {
+  opacity: 0;
+  animation: popIn 1s ease-out forwards;
+  animation-delay: 1s;
+}
+
+/* Optional subtle hover pulse */
+@keyframes buttonPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.start-exam-button:hover {
+  animation: buttonPulse 1.2s infinite;
+}
+
 
