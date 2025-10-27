@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import BaselineExam from './pages/BaselineExam'
+import WelcomeExam from './pages/WelcomeExam'
 import PostCourseExam from './pages/PostCourseExam'
 import PostCourseResults from './pages/PostCourseResults'
 import './index.css'
@@ -44,9 +46,11 @@ root.render(
       <ThemeContainer>
         <main id="main" style={{ paddingTop: '80px' }}>
           <Routes>
-            <Route path="/" element={<BaselineExam />} />
+            <Route path="/" element={<Navigate to="/welcome" replace />} />
+            <Route path="/welcome" element={<WelcomeExam />} />
             <Route path="/postcourse" element={<PostCourseExam />} />
             <Route path="/post-course-results" element={<PostCourseResults />} />
+            <Route path="/baseline" element={<BaselineExam />} />
           </Routes>
         </main>
       </ThemeContainer>
