@@ -148,7 +148,11 @@ exports.submitPostCourseExam = async (req, res) => {
         try { recordAttempt({ userId, examType: 'postcourse', result: { final: { grade: result.score_total, passed: result.passed } } }); } catch (_) {}
 
         await incrementAttempt({ userId, examType: 'postcourse', examId: exam_id, score: result.score_total ?? result.score, passed: result.passed });
-        const attempt_info = await getAttempts({ userId, examType: 'postcourse' });
+        const attempt_raw = await getAttempts({ userId, examType: 'postcourse' });
+        const examConfig = await getUserExamConfig(userId, 'postcourse');
+        const maxAttempts = Number(examConfig?.max_attempts ?? attempt_raw.maxAttempts ?? 3);
+        try { console.log('[PostCourseEvaluator] Using Directory config maxAttempts:', maxAttempts); } catch (_) {}
+        const attempt_info = { attempts: attempt_raw.attempts, maxAttempts };
         // Persist summary for next build
         saveResult({
             userId,

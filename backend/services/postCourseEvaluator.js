@@ -81,10 +81,19 @@ function evaluateCodeHeuristics(code, tests) {
     }
 }
 
-const { getPassingGrades } = require('./integrations/directory');
+const { getPassingGrades, getUserExamConfig } = require('./integrations/directory');
 
 async function evaluatePostCourseExam({ examId, userId = 'demo-user', questions = [], answers = {}, rubric, meta } = {}) {
     const passingGrade = getPassingGrade();
+    // Align evaluator with Directory-configured attempt policy (for visibility/logging)
+    let maxAttempts = 3;
+    try {
+        const examConfig = await getUserExamConfig(userId, 'postcourse');
+        maxAttempts = Number(examConfig?.max_attempts ?? 3);
+    } catch (_) {
+        // noop: fallback already set
+    }
+    try { console.log('[PostCourseEvaluator] Using Directory config maxAttempts:', maxAttempts); } catch (_) {}
     const evaluation = await evaluateSubmission({ questions, answers, passingGrade });
     const weights = toSkillWeights(questions);
     const feedback = toFeedbackMap(evaluation.ai_feedback, weights, passingGrade);
