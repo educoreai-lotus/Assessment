@@ -39,7 +39,16 @@ exports.buildPostCourseExam = async (req, res) => {
     try {
         const userId = req.user?.sub || 'demo-user';
         const directory = await getUserExamConfig(userId, 'postcourse');
-        const { max_attempts, course_passing_grade, skill_thresholds } = directory;
+        const coursePolicy = await require('../services/directoryPolicy').getPostCoursePolicy({ userId });
+        const effectivePolicy = {
+            ...coursePolicy,
+            passing_grade: directory.course_passing_grade ?? coursePolicy.passing_grade,
+            max_attempts: directory.max_attempts ?? coursePolicy.max_attempts,
+            attempts_used: directory.attempts_used ?? 0,
+            skill_thresholds: directory.skill_thresholds ?? {},
+        };
+        try { console.log("[PostCourseExam] Using Directory configuration:", effectivePolicy); } catch (_) {}
+        const { max_attempts, passing_grade: course_passing_grade, skill_thresholds } = effectivePolicy;
         const attemptInfo = await getAttempts({ userId, examType: 'postcourse' });
         const attempts_used = attemptInfo.attempts;
         if (attempts_used >= max_attempts) {
@@ -104,6 +113,7 @@ exports.buildPostCourseExam = async (req, res) => {
             questions,
             exam_skills: examSkills,
             excluded_skills: excludedSkills,
+            policy: effectivePolicy,
         });
     } catch (err) {
         res.status(500).json({ error: 'server_error', message: err.message });
