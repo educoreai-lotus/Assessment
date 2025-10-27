@@ -30,7 +30,7 @@ try { attemptTracker = require('../attemptTracker'); } catch (_) { attemptTracke
 
 async function getUserExamConfig(userId = 'demo-user', examType = 'postcourse') {
     // Simulated Directory API contract
-    if (String(userId) === 'demo') {
+    if (String(userId).startsWith('demo')) {
         return {
             userId: 'demo',
             examType,
