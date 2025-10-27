@@ -23,8 +23,8 @@ export default function Header({ onToggleTheme, theme }) {
 
       <nav className="nav-center">
         <ul className="nav-links">
-          <li><NavLink to="/baseline">Baseline Exam</NavLink></li>
-          <li><NavLink to="/postcourse">Post-Course</NavLink></li>
+          <li><NavLink to="/welcome-baseline">Baseline Exam</NavLink></li>
+          <li><NavLink to="/welcome-postcourse">Post-Course Exam</NavLink></li>
           <li><NavLink to="/post-course-results">Results</NavLink></li>
         </ul>
       </nav>
