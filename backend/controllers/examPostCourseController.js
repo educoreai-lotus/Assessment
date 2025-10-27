@@ -37,17 +37,17 @@ async function assembleExamForSkills({ skillsKeys, targetSkills, courseId }) {
 exports.buildPostCourseExam = async (req, res) => {
     try { console.log('✅ buildPostCourseExam hit'); } catch (_) {}
     try {
-        const userId = req.user?.sub || 'demo-user';
+        const userId = req.headers['x-user-id'] || req.user?.id || req.user?.sub || 'demo';
         const examConfig = await getUserExamConfig(userId, 'postcourse');
         const coursePolicy = await require('../services/directoryPolicy').getPostCoursePolicy({ userId });
         const effectivePolicy = {
-            ...coursePolicy,
             passing_grade: examConfig.course_passing_grade ?? coursePolicy.passing_grade,
             max_attempts: examConfig.max_attempts ?? coursePolicy.max_attempts,
+            retry_cooldown_hours: coursePolicy.retry_cooldown_hours,
             attempts_used: examConfig.attempts_used ?? 0,
             skill_thresholds: examConfig.skill_thresholds ?? {},
         };
-        try { console.log('[PostCourseBuild] Using Directory config max_attempts:', effectivePolicy.max_attempts); } catch (_) {}
+        try { console.log('[PostCourseBuild] Directory-configured max_attempts:', effectivePolicy.max_attempts); } catch (_) {}
         const { max_attempts, passing_grade: course_passing_grade, skill_thresholds } = effectivePolicy;
         const attemptInfo = await getAttempts({ userId, examType: 'postcourse' });
         const attempts_used = attemptInfo.attempts;
@@ -106,7 +106,7 @@ exports.buildPostCourseExam = async (req, res) => {
             question_count: questions.length,
             attempt: attemptNumber,
             version,
-            max_attempts: max_attempts,
+            max_attempts: effectivePolicy.max_attempts,
             course_passing_grade,
             skill_thresholds,
             return_url: returnUrl,
