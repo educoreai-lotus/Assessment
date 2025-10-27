@@ -6,6 +6,9 @@ export default function PostCourseResults() {
   const { state } = useLocation();
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
+  useEffect(() => {
+    document.title = "EduCore AI | Testing & Exams";
+  }, []);
   console.log("PostCourseResults loaded", result);
   console.log("DEBUG:", result?.requires_retake, result?.attempt_info?.attempts, result?.attempt_info?.maxAttempts);
   useEffect(() => {

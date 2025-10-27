@@ -1,7 +1,10 @@
-import React from "react";
+import React, { useEffect } from "react";
 import SkillResultCard from "../components/SkillResultCard";
 
 export default function BaselineResults({ result }) {
+  useEffect(() => {
+    document.title = "EduCore AI | Testing & Exams";
+  }, []);
   if (!result) return <div className="p-6">No results available.</div>;
   const passed = !!(result.passed || (result.summary === 'Passed'));
   const grade = typeof result.final_grade === 'number' ? result.final_grade : (typeof result.score_total === 'number' ? result.score_total : 0);

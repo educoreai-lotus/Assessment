@@ -13,6 +13,7 @@ export default function BaselineExam() {
   const [result, setResult] = useState(null);
 
   useEffect(() => {
+    document.title = "EduCore AI | Testing & Exams";
     async function loadExam() {
       try {
         console.log("🚀 Starting baseline exam fetch...");

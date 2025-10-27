@@ -13,6 +13,7 @@ export default function PostCourseExam() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    document.title = "EduCore AI | Testing & Exams";
     console.log("🚀 Starting post-course exam fetch...");
     const params = new URLSearchParams(window.location.search);
     const ret = params.get('return') || document.referrer || undefined;

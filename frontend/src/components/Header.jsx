@@ -16,7 +16,9 @@ export default function Header({ onToggleTheme, theme }) {
     <header className="header header-bar transition-colors">
       <div className="left-section">
         <img src={logoSrc} alt="Educore AI" className="header-logo" />
-        <h1 className="app-title">Assessment</h1>
+        <h1 className="app-title">
+          <span className="text-emerald-500 font-bold text-xl">Assessment <span className="text-gray-300 font-normal">| Testing & Exams</span></span>
+        </h1>
       </div>
 
       <nav className="nav-center">
