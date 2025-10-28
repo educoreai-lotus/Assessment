@@ -26,6 +26,8 @@ async function submitBaseline(req, res) {
 
     const payload = {
       ...result,
+      type: 'baseline',
+      requires_retake: false,
       timestamp: new Date().toISOString(),
     };
 
@@ -35,12 +37,17 @@ async function submitBaseline(req, res) {
     const filePath = path.join(artifactDir, 'baseline-feedback.json');
     fs.writeFileSync(filePath, JSON.stringify({ user_id: userId || user_id, ...payload }, null, 2));
 
-    try {
-      await directory.incrementAttempt({ userId, examType: 'baseline', examId: req.body?.exam_id || 'baseline', score: payload.final_grade, passed: payload.summary === 'Passed' });
-    } catch (_) {}
-    const info = await directory.getAttempts({ userId, examType: 'baseline' });
+    // Do not increment or report attempts for baseline
+    delete payload.attempt;
+    delete payload.max_attempts;
+    delete payload.attempt_info;
+    if (payload.policy) {
+      delete payload.policy.max_attempts;
+      delete payload.policy.retry_cooldown_hours;
+      delete payload.policy.attempts_used;
+    }
 
-    return res.status(200).json({ ...payload, attempt: info.attempts, max_attempts: info.maxAttempts });
+    return res.status(200).json(payload);
   } catch (err) {
     console.error('Baseline submit error:', err);
     return res.status(500).json({ error: 'server_error', message: 'Unexpected error during evaluation' });

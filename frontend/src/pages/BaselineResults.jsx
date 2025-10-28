@@ -9,8 +9,7 @@ export default function BaselineResults({ result }) {
   const passed = !!(result.passed || (result.summary === 'Passed'));
   const grade = typeof result.final_grade === 'number' ? result.final_grade : (typeof result.score_total === 'number' ? result.score_total : 0);
   const gradeColor = passed ? 'text-green-600' : 'text-red-600';
-  const attempt = result.attempt;
-  const max = result.max_attempts;
+  const examType = result?.type || 'baseline';
   const thresholds = result.passing_thresholds || { default: 70, skills: {} };
   // Normalize feedback map: prefer object map if present
   const feedbackMap = result.feedback && !Array.isArray(result.feedback)
@@ -24,8 +23,8 @@ export default function BaselineResults({ result }) {
       <div>
       <div className="dashboard-container max-w-3xl mx-auto mt-12 px-6">
         <h1 className="section-title">AI Evaluation Results</h1>
-        {attempt != null && max != null && (
-          <div className="text-sm text-gray-500 mb-2">Attempt {attempt} of {max}</div>
+        {examType === 'postcourse' && result?.attempt_info && (
+          <div className="text-sm text-gray-500 mb-2">Attempt {result.attempt_info.attempts} of {result.attempt_info.maxAttempts}</div>
         )}
         <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm p-6 border border-gray-100 dark:border-gray-700 mb-6 transition-colors">
           <h2 className={`text-2xl font-semibold ${passed ? 'text-green-600' : 'text-red-600'} dark:text-gray-100`}>Final Grade: {grade}</h2>

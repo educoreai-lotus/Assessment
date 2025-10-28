@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { getPolicy, getLearnerProfile, getAttempts } = require('../services/integrations/directory');
+const { getPolicy, getLearnerProfile } = require('../services/integrations/directory');
 const { getSkillTargets } = require('../services/integrations/skillsEngine');
 const { fetchDevLabChallenge } = require('../services/integrations/devLab');
 const { generateQuestions } = require('../services/ai/questionGenerator');
@@ -8,11 +8,7 @@ const { generateQuestions } = require('../services/ai/questionGenerator');
 async function buildBaselineExam(userId, req) {
 	const timestamp = new Date().toISOString();
 
-	// Enforce attempts policy (single attempt)
-	const { attempts, maxAttempts } = await getAttempts({ userId, examType: 'baseline' });
-	if (attempts >= maxAttempts) {
-		return { status: 403, body: { error: 'BASELINE_LOCKED', message: 'Baseline exam may be taken only once.' } };
-	}
+    // Baseline attempts are not enforced
 
 	// 1️⃣ Fetch policy (passing grade only)
 	const policy = await getPolicy();
@@ -34,7 +30,7 @@ async function buildBaselineExam(userId, req) {
 
 	// 6️⃣ Assemble package
 	const returnUrl = (req?.query?.return) || (req?.headers?.['x-return-url']) || undefined;
-	const examPackage = {
+    const examPackage = {
 		exam_id: `baseline-${Date.now()}`,
 		user_id: userId,
 		timestamp,
@@ -42,11 +38,20 @@ async function buildBaselineExam(userId, req) {
 		passing_grade: passingGrade,
 		duration_min: durationMin,
 		question_count: questions.length,
-		attempt: attempts + 1,
-		max_attempts: maxAttempts,
 		return_url: returnUrl,
+        requires_retake: false,
 		questions,
 	};
+
+    // Ensure no attempt-related fields are present in payload (defensive)
+    delete examPackage.attempt;
+    delete examPackage.max_attempts;
+    delete examPackage.attempt_info;
+    if (examPackage.policy) {
+        delete examPackage.policy.max_attempts;
+        delete examPackage.policy.retry_cooldown_hours;
+        delete examPackage.policy.attempts_used;
+    }
 
 	// 7️⃣ Save trace to artifacts (append-only) under a writable temp directory in containers
 	const os = require('os');
