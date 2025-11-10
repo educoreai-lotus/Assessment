@@ -547,7 +547,7 @@
             "phase": "07",
             "id": "DB-002",
             "title": "Connected MongoDB Atlas via Mongoose",
-            "commit": "<commit-hash>",
+            "commit": "5f08e0a58891ad8bc1bf1969691809ef4e08f629",
             "status": "done",
             "traceability_id": "auto-generated",
             "notes": "Added MongoDB connector and /health/mongo route"

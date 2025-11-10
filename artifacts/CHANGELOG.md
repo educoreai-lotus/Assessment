@@ -2,6 +2,7 @@
 
 ## v4.2.0 - Phase 07.2: MongoDB Integration (2025-11-10)
 - Connected backend to MongoDB Atlas via Mongoose and exposed `/health/mongo` for runtime verification.
+- Commit: 5f08e0a58891ad8bc1bf1969691809ef4e08f629
 
 ## v3.4.0 - Phase 16: AI Validation, Proctoring, Retake (2025-10-25)
 - Added backend `backend/services/aiValidator.js` to validate AI-generated questions and log to `artifacts/ai-validation/validation-log.json`.
