@@ -1,12 +1,16 @@
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const mongoose = require('mongoose');
 const pool = require('./config/supabaseDB');
+const connectMongo = require('./config/mongoDB');
 
 const PORT = process.env.PORT || 4000;
 const API_BASE = '/api/v1';
 
 const app = express();
+
+connectMongo();
 
 app.set('trust proxy', 1);
 
@@ -40,6 +44,20 @@ app.get('/health/postgres', async (req, res) => {
     console.error('Health check error:', err);
     res.status(500).json({ ok: false, error: 'Postgres not reachable' });
   }
+});
+
+app.get('/health/mongo', (req, res) => {
+  const state = mongoose.connection.readyState;
+  res.json({
+    ok: state === 1,
+    state,
+    message:
+      state === 1
+        ? 'MongoDB connected'
+        : state === 2
+          ? 'MongoDB connecting'
+          : 'MongoDB disconnected',
+  });
 });
 
 app.use(`${API_BASE}`, (req, res) => {
