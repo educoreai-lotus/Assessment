@@ -1,123 +1,176 @@
-# Assessment Tests – AI-Assisted Exam Microservice
+# 🧩 EduCore AI – Assessment Microservice
 
-## 🎯 Project Overview
+### 📘 Overview
 
-This project implements an **AI-driven Assessment Microservice** that builds and manages baseline and post-course exams for learners.  
-It automatically assembles question packages, evaluates results, and delivers AI-generated feedback — all with full auditability, security, and localization.
+The **Assessment Microservice** creates, delivers, grades, and records all EduCore AI exams.  
 
-### 🧠 System Purpose
-The system provides two types of evaluations:
-1. **Baseline Exam** — Conducted at the start of a course to measure initial skill level.  
-   - Combines theoretical and coding questions (from **DevLab**).  
-   - Establishes the learner’s baseline proficiency.
-2. **Post-Course Exam** — Conducted after completing a course.  
-   - Attempts and policies defined by **Directory** (max attempts, passing grade).  
-   - Integrates with **Skills Engine** and **Course Builder** to generate targeted, adaptive questions.  
-   - Blocks further attempts once all allowed tries are exhausted.
+It manages **baseline** and **post-course** assessments, generates **AI-based questions**, evaluates answers, enforces integrity through **live proctoring**, and synchronizes structured results with all other EduCore microservices.
 
 ---
 
-### 🧩 Architecture Overview (Onion Architecture)
+## 🔗 Integrations
 
-- **Frontend:** React (**JavaScript + ES6**) on **Vercel** — supports both SSR and SPA:  
-  - **SSR (Server-Side Rendering):** pre-renders pages for faster first load and SEO.  
-  - **SPA (Single-Page Application):** smooth navigation and instant user experience.  
-  - The hybrid approach combines the benefits of both for performance and UX.
+| Microservice | Role |
 
-- **Backend:** Node.js (**JavaScript**) on **Railway**  
-  - Core business logic, exam orchestration, and system integrations.  
-  - Exposes **REST APIs** for external communication and **gRPC** for internal microservice calls *(planned for future phase)*.  
-  - **Currently running in demo mode** — uses **mock JSON data sources** for exams, submissions, and user metadata.  
-  - Production migration to **PostgreSQL + MongoDB** is already defined for later deployment phases.
+|---------------|------|
 
----
+| **Directory** | Provides `passing_grade` + `max_attempts`; receives completion metadata. |
 
-### 🧱 Datastores
-- **PostgreSQL** — Primary relational storage for exams, attempts, and results (ACID).  
-- **MongoDB** — For logs, incidents, and proctoring evidence (flexible JSON format).  
-- In **demo mode**, mock JSON files emulate these databases for local testing and early integration.
+| **Skills Engine** | Provides learner skill list for baseline; receives evaluated results **plus coverage map and final status** for post-course. |
 
----
+| **Course Builder** | Provides course coverage map and learner metadata; receives final results and may grant extra attempts. |
 
-### 🔗 Integrations
-| Service | Protocol | Role |
-|:--|:--|:--|
-| **Directory** | REST | Policies: max attempts, passing grades |
-| **Skills Engine** | REST | Learner skills profile & AI feedback |
-| **DevLab** | gRPC *(planned)* | Coding question generation |
-| **Course Builder** | gRPC *(planned)* | Course content map (coverage focus) |
-| **Learning Analytics** | REST | Reporting & insights |
-| **HR Management** | REST | Summary reports to management |
-| **Chatbot (Support)** | REST | Incident reporting only |
+| **DevLab** | Two-way exchange of coding and theoretical questions with difficulty control and validation. |
 
-#### Directory Service usage
-- For Baseline Exams, only the passing grade is used for per-skill evaluation.
-- For Post-Course Exams, both passing grade and max attempts are used to control retake eligibility.
+| **Learning Analytics** | Pulls complete result packages for performance dashboards. |
 
-> 🧠 **Note:** For the MVP phase, all integrations use **REST-only** communication.  
-> gRPC integrations for DevLab and Course Builder will be introduced post-deployment (Phase 10+).
+| **Reporting & HR** | Pulls summarized data for compliance and official records. |
+
+| **RAG (Chatbot)** | Forwards incident reports; Assessment decides continue/retake. |
+
+| **Protocol Camera** | Streams proctoring events; Assessment logs and summarizes integrity data. |
+
+# 🧩 EduCore AI – Assessment Microservice ### 📘 Overview The **Assessment Microservice** creates, delivers, grades, and records all EduCore AI exams. It manages **baseline** and **post-course** assessments, generates **AI-based questions**, evaluates answers, enforces integrity through **live proctoring**, and synchronizes structured results with all other EduCore microservices. --- ## 🔗 Integrations | Microservice | Role | |---------------|------| | **Directory** | Provides passing_grade + max_attempts; receives completion metadata. | | **Skills Engine** | Provides learner skill list for baseline; receives evaluated results **plus coverage map and final status** for post-course. | | **Course Builder** | Provides course coverage map and learner metadata; receives final results and may grant extra attempts. | | **DevLab** | Two-way exchange of coding and theoretical questions with difficulty control and validation. | | **Learning Analytics** | Pulls complete result packages for performance dashboards. | | **Reporting & HR** | Pulls summarized data for compliance and official records. | | **RAG (Chatbot)** | Forwards incident reports; Assessment decides continue/retake. | | **Protocol Camera** | Streams proctoring events; Assessment logs and summarizes integrity data. | --- ## 🧭 User Flows ### 1️⃣ Baseline Exam
+1. **Skills Engine → Assessment**: learner ID + name + skills list + passing_grade.
+2. Assessment fetches passing_grade (if not included) from Directory.
+3. AI generates medium-difficulty theoretical + coding questions (via DevLab).
+4. AI grades answers and produces per-skill and final results.
+5. Results stored in PostgreSQL and MongoDB.
+6. Assessment sends results to:
+   - **Skills Engine** → per-skill statuses, scores, passing_grade, final_grade, passed.
+   - **Learning Analytics** → full data package (on request).
 
 ---
 
-### 🔒 Security & Quality
-- OAuth2 + JWT authentication (user level)
-- mTLS for service-to-service encryption *(planned)*
-- Row-level org isolation (RLS in PostgreSQL)
-- Encryption at rest (PostgreSQL & MongoDB)
-- WCAG 2.1 AA accessibility
-- TDD-first development with CI/CD gates and contract tests
-- i18n support (EN / HE / AR)
-- Full observability stack: logs + metrics + traces
+### 2️⃣ Post-Course Exam
+1. **Course Builder → Assessment**: learner ID, course ID, coverage map.
+2. Assessment fetches passing_grade + max_attempts from Directory.
+3. AI generates questions based on the coverage map (skills come indirectly from Skills Engine).
+4. Rules:
+   - Passed → no further attempts.
+   - Failed & reached max attempts → locked until extra attempt granted by Course Builder.
+5. After submission AI evaluates answers and stores results.
+6. Assessment sends to:
+   - **Directory** → completion metadata.
+   - **Course Builder** → passing_grade, final_grade, passed.
+   - **Skills Engine** → per-skill results **+ coverage map + final status**.
+   - **Reporting & HR** → summarized data.
+   - **Learning Analytics** → detailed payload (on request).
 
 ---
 
-### 🤖 AI Capabilities
-- **Exam Generation** – Theoretical question creation (prompt templates + schema validation)  
-- **Feedback Phrasing** – AI-generated feedback in the learner’s locale  
-- **Audit Validation** – AI-based analysis of exam integrity and anomalies
+## 🧩 DevLab Integration (Two-Way Logic)
 
----
+### 📥 What Assessment Receives (from DevLab)
+During exam generation when Assessment requests coding questions:
+json
+{
+  "questions": [
+    {
+      "qid": "devlab_q42",
+      "type": "code",
+      "difficulty": "medium",
+      "skill_id": "s_js_async",
+      "lesson_id": "L-101",
+      "course_name": "Intro to JS",
+      "stem": "Write an async function that fetches data from an API and logs the result.",
+      "expected_output": "{ data: ... }",
+      "correct_answer": "async function fetchData(url){ const res = await fetch(url); const data = await res.json(); console.log(data); }"
+    }
+  ]
+}
+➡ Stored in exam_packages.questions[] (MongoDB). Used for coding questions (no hints shown to learners).
 
-## 🧭 Development Flow
-
-This repository follows the **AI-assisted SDLC** driven by `/templates/Main-Project-Development-Flow.md`.  
-Each numbered phase (01–09) produces artifacts stored under `/artifacts/`, ensuring full traceability and versioned governance.
-
----
-
-## 📁 Project Structure
-
-.
-├─ templates/ # Development phase templates
-│ ├─ Main-Project-Development-Flow.md # Overview of development flow
-│ ├─ 01-Initial_Development_Setup.md # Phase 1: Project setup
-│ ├─ 02-User_Dialogue_And_Requirements.md # Phase 2: Requirements gathering
-│ ├─ 03-Feature_Planning.md # Phase 3: Feature planning
-│ ├─ 04-Design_And_Architecture.md # Phase 4: System design
-│ ├─ 05-Security_Compliance.md # Phase 5: Security & compliance
-│ ├─ 06-AI_Design_Prompt.md # Phase 6: AI prompt creation
-│ ├─ 07-Implementation.md # Phase 7: Code implementation
-│ ├─ 08-Testing_And_Verification.md # Phase 8: Testing & verification
-│ └─ 09-Code_Review_And_Deployment.md # Phase 9: Review & deployment
-├─ artifacts/ # AI-generated outputs
-│ ├─ ROADMAP.json # Project roadmap
-│ └─ ... (per-phase JSONs)
-├─ .gitignore # Git ignore rules
-└─ README.md # This file
-
-markdown
+📤 What Assessment Sends (to DevLab)
+When DevLab requests new theoretical questions for validation or training:
+json
 Copy code
+{
+  "exam_id": "ex_51a2",
+  "attempt_id": "att_9m1x",
+  "difficulty": "hard",
+  "question": {
+    "type": "mcq",
+    "stem": "Which statement about event loop and microtasks in JavaScript is true?",
+    "choices": [
+      "Microtasks run before rendering and before next macrotask.",
+      "Microtasks run after each macrotask batch completes.",
+      "Microtasks run after DOM updates.",
+      "Microtasks run only during async/await functions."
+    ],
+    "correct_answer": "Microtasks run before rendering and before next macrotask.",
+    "hints": [
+      "Hint 1: Think about microtasks and macrotasks scheduling order.",
+      "Hint 2: Microtasks often come from Promises.",
+      "Hint 3: They execute before rendering."
+    ]
+  }
+}
+➡ Stored in ai_audit_trail (MongoDB) and linked via exam_packages.lineage.generation_refs. DevLab may respond with a validation result for question quality.
 
+🎥 Proctoring (Protocol Camera)
+Continuous monitoring during exam; each event logs exam_id, user_id, event_type, timestamp, severity_score, resolution_status. Three violations → auto-termination. Events stored in proctoring_events (MongoDB); summary in exam_attempts.proctoring_summary (PostgreSQL).
+
+💬 Incident Handling (RAG Service)
+RAG forwards learner reports to Assessment. Assessment analyzes proctoring and audit logs → decides continue or retake (is_counted_as_attempt = false). Stored in incidents (MongoDB) and acknowledged back to RAG.
+
+🧠 AI Components
+Component Purpose
+Question Generation Creates theoretical + coding questions and hints based on skills or coverage map.
+AI Evaluation Grades answers, determines per-skill mastery, computes final grade.
+AI Feedback Generates personalized feedback per skill and exam.
+AI Audit Trail Logs prompts + responses for traceability in MongoDB.
+
+⚖️ Rules & Governance
+Append-only data (history preserved)
+Encrypted in transit and at rest
+Row-Level Security per learner (user_id)
+AI lineage tracking (model version + prompt metadata)
+
+🧱 Tech Stack
+Layer Technology
+Backend Node.js (Express REST API)
+Frontend React / Next.js
+Databases PostgreSQL + MongoDB
+AI Layer OpenAI GPT-4o-mini
+Deployment Railway (backend) + Vercel (frontend)
+Integrations Directory, Skills Engine, Course Builder, DevLab, RAG, Learning Analytics, Reporting & HR, Protocol Camera
+
+🚀 Quick Setup
+bash
+Copy code
+git clone <repo_url>
+cd assessment-tests
+npm install
+
+# Environment
+cp secrets-template.env .env
+# Add SUPABASE_DB_URL and MONGO_DB_URI
+
+# Initialize PostgreSQL schema
+psql $SUPABASE_DB_URL -f backend/db/init.sql
+
+# Run server
+npm run dev
+
+# Health checks
+curl http://localhost:3000/health/postgres
+curl http://localhost:3000/health/mongo
+
+🧾 Version
+v4.3.1 – Database schema and dual-DB models finalized (Phase 07.3 Complete)
+
+yaml
+Copy code
 ---
+✅ Now this README covers:
+- Directory logic
+- Skills Engine coverage map handling
+- Full DevLab bidirectional flow
+- All microservices and payload consistency
 
-### 🧩 Development Phases
+Save this as your **project root README.md**, then run Courser, initialize templates and documentation.
 
-1. **Initial Development Setup** — Environment setup  
-2. **User Dialogue & Requirements** — Requirement gathering  
-3. **Feature Planning** — Feature prioritization  
-4. **Design & Architecture** — System design and technical specifications  
-5. **Security & Compliance** — Security controls and compliance  
-6. **AI Design & Prompt Engineering** — AI-assisted generation and evaluation logic  
-7. **Implementation** — Code development and deployment  
-8. **Testing & Verification** — Automated and manual validation  
-9. **Code Review & Deployment** — Final review and production release
+pgsql
+Copy code
+to link it with your SDLC tracker before proceeding to **Phase 07.4 (API & Integration Layer)**.
