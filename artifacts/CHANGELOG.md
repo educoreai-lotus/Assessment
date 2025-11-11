@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
+- Executed API and docs tests with Jest/Supertest.
+- Results:
+  - Test suites: 3 total; 2 passed; 1 failed to run (health suite import error)
+  - Tests: 12 passed; 0 failed
+- Generated `artifacts/Validation_Report_Phase08.md` summarizing outcomes and remediation notes.
+- Artifacts: `artifacts/jest-results-phase08.json`, `artifacts/p08-testing-verification.json`
+- Notes: Health route suite failure due to model import in test context; endpoints and Swagger docs validated successfully.
+
 ## v4.3.1-p074 - Phase 07.4: API & Integration Layer (2025-11-11)
 - Added unified inbound endpoint `/api/assessment/integration` (POST/GET) per Integration Map covering Directory, Skills Engine, Course Builder, DevLab, RAG, Protocol Camera, Learning Analytics, and Management.
 - Implemented outbound integration service clients:
