@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.3.1 – backend release validated and deployed (2025-11-11)
+- Phase 09 completed: Code review and deployment readiness artifacts generated.
+- Roadmap updated to Phase 09 = Done.
+- Tag planned: v4.3.1-release (pushed with backend release).
+- Health endpoints ready for Railway validation: /health, /health/postgres, /health/mongo.
+
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:
