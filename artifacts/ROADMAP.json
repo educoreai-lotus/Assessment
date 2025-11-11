@@ -593,6 +593,17 @@
             "artifacts/system-health.json"
           ]
         },
+        "validation": {
+          "railway": {
+            "url": "https://assessment-tests-production.up.railway.app",
+            "summary_file": "artifacts/phase09-verification-summary.json",
+            "health": {
+              "health": "ok",
+              "health_postgres": "error",
+              "health_mongo": "error"
+            }
+          }
+        },
         "ci_cd": {
           "backend": "Railway (validated config presence and runtime entrypoint)",
           "frontend": "Vercel (deferred pending 07.5 adapters)"

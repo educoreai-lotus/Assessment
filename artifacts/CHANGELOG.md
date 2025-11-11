@@ -6,6 +6,14 @@
 - Tag planned: v4.3.1-release (pushed with backend release).
 - Health endpoints ready for Railway validation: /health, /health/postgres, /health/mongo.
 
+## v4.3.1 – backend health verified and release validated on Railway (2025-11-11)
+- Railway URL: https://assessment-tests-production.up.railway.app
+- Endpoint results recorded in `artifacts/phase09-verification-summary.json`
+  - /health: ok
+  - /health/postgres: error (Postgres not reachable)
+  - /health/mongo: error (MongoDB health check failed)
+- Next: Begin Phase 07.5 – Frontend Service Adapters
+
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:
