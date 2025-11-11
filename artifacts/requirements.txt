@@ -1,2 +1,0 @@
-# Phase 01 artifact: no runtime dependencies defined yet
-# Add packages in later phases as required

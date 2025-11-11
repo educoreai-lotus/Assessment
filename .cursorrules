@@ -1,0 +1,15 @@
+# Cursor Execution Rules for Assessment-Tests Project
+# These rules guide GPT in Cursor to execute your 9 templates automatically.
+
+- Always follow: /templates/Main-Project-Development-Flow.md
+- Run phases strictly in numeric order (01 → 09)
+- For each active phase:
+  - Load and execute only the referenced .md template
+  - Output artifacts only to /artifacts/
+  - Use append-only versioning (no overwriting)
+- Ask at most one clear question at a time if any information is missing
+- Never request code input from the user; generate everything automatically when a phase requires it
+- All answers and generated files must follow the structure defined in the templates
+- Stop when the Exit Criteria or Success Criteria for a phase are met
+- Maintain ROADMAP.json as the central tracking file for all phases
+- All actions and generated files must be logged or versioned in /artifacts/

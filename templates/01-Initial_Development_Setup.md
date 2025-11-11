@@ -68,8 +68,19 @@ It defines the **ground truth for all subsequent phases**, ensuring consistency,
 3.1 Configure build system (e.g., Webpack, Vite, or Next).  
 3.2 Initialize testing framework (Jest / Mocha / PyTest).  
 3.3 Create base CI/CD workflow (GitHub Actions / Railway).  
-3.4 Define `.env` and environment variable schema.  
-3.5 Configure logging and error handling boilerplate.
+3.4 **Database & Environment Configuration:**
+   - Define `.env` schema with database connection strings (PostgreSQL, MongoDB).
+   - Configure environment variables for API keys, external service URLs.
+   - Set up secrets management (dotenv-safe, Vault, or cloud secrets manager).
+   - Document environment variable requirements in `artifacts/environment-spec.json`.
+3.5 **Database Connection Setup:**
+   - Configure database client libraries (pg, mongoose, Prisma, etc.).
+   - Set up connection pooling configuration.
+   - Create database connection utilities and error handling.
+3.6 Configure logging and error handling boilerplate.
+3.7 **Initialize ROADMAP.json:**
+   - Create feature-based `ROADMAP.json` structure.
+   - Initialize feature tracking schema.
 
 ### 4. 🧾 Documentation Setup
 4.1 Create `docs/` directory and structure.  

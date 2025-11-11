@@ -27,6 +27,18 @@
     "features": [
         {
             "note": "Features array initialized. Individual features will be added as they are planned and implemented. Each feature follows the unified SDLC phase structure."
+        },
+        {
+            "feature_id": "FEAT-AI-PROMPT-ENGINE",
+            "name": "AI Prompt Engine",
+            "status": "In-Progress",
+            "owner": "Assessment",
+            "phases": { "07": "In-Progress" },
+            "links": {
+                "prompts": "ai/prompts/assessment_prompts.md",
+                "template": "templates/06-AI_Design_Prompt.md",
+                "clarifications": "artifacts/ClarificationsAndRefinements.md"
+            }
         }
     ],
   
@@ -749,6 +761,45 @@
           "template": "templates/07-Implementation.md",
           "schema_reference": "templates/Database_Schema_Spec.md"
         }
+      },
+      {
+        "version": "v4.3.1-p074",
+        "traceability_id": "phase-07-4-full-integration-build",
+        "phase": "07.4",
+        "title": "API & Integration Layer (Full Integration Build)",
+        "status_after": "In Progress",
+        "artifacts": {
+          "backend": [
+            "backend/routes/integration.js",
+            "backend/controllers/integrationController.js",
+            "backend/services/integrations/directoryService.js",
+            "backend/services/integrations/skillsEngineService.js",
+            "backend/services/integrations/courseBuilderService.js",
+            "backend/services/integrations/devlabService.js",
+            "backend/services/integrations/ragService.js",
+            "backend/services/integrations/protocolCameraService.js",
+            "backend/swagger/index.js",
+            "backend/server.js"
+          ],
+          "ai_prompts": [
+            "ai/prompts/assessment_prompts.md"
+          ]
+        },
+        "features_status": {
+          "all_features_phase_07": "In-Progress",
+          "linked_features": [
+            "FEAT-BASELINE-EXAM",
+            "FEAT-POST-COURSE-EXAM",
+            "FEAT-DELAB",
+            "FEAT-PROCTORING",
+            "FEAT-INCIDENTS",
+            "FEAT-DIRECTORY",
+            "FEAT-SKILLS-ENGINE",
+            "FEAT-ANALYTICS-REPORTING",
+            "FEAT-AI-PROMPT-ENGINE"
+          ]
+        },
+        "timestamps": { "created": "2025-11-11T00:00:00Z" }
       }
     ],
     "additional_updates": [

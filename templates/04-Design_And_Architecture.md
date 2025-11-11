@@ -68,6 +68,21 @@ It transforms approved features into a **cohesive, scalable, and secure system b
 4. Document high-level diagrams (C4 Model: Context → Container → Component → Code).  
 5. Record rationale in `architecture-decisions.json`.
 
+**Real SDLC Database & Integration Architecture:**
+- **Database Architecture:** PostgreSQL (primary relational) and MongoDB (logs/audit) with connection pooling, replication, and backup strategies.
+- **API Architecture:** REST APIs for external services, gRPC for internal microservice communication (DevLab, Course Builder).
+- **Integration Points:** External service APIs, authentication services, third-party integrations with real endpoints and authentication.
+
+**Feature-Based Architecture:**
+- Each feature's architecture (backend, frontend, database) is designed and documented.
+- Integration points per feature are identified and specified.
+- Architecture decisions are linked to features in `ROADMAP.json`.
+
+**Clarification Requirements:**
+- **Ask user:** What external services need integration? (specify service names, endpoints, authentication methods)
+- **Ask user:** What database hosting and management approach? (managed services, self-hosted, cloud providers)
+
+
 ### 2️⃣ Component Design
 1. Define components and their boundaries.  
 2. Specify responsibilities, dependencies, and interaction contracts.  
@@ -76,11 +91,37 @@ It transforms approved features into a **cohesive, scalable, and secure system b
 5. Validate modularity and testability.
 
 ### 3️⃣ Data Architecture
-1. Model entities, schemas, and relationships.  
-2. Define data storage technologies (SQL, NoSQL, object store).  
-3. Specify data access patterns and constraints.  
-4. Design for migration, backup, and versioning.  
-5. Produce ER and data flow diagrams.
+
+**Real Database Schema Design:**
+1. **PostgreSQL Schema Design:**
+   - Model entities, schemas, and relationships with real table structures.
+   - Define primary keys, foreign keys, indexes, and constraints.
+   - Specify data types, nullability, and default values.
+   - Design for ACID compliance and transaction integrity.
+2. **MongoDB Collection Design:**
+   - Design collections for logs, audit trails, and document storage.
+   - Define document schemas and validation rules.
+   - Specify indexing strategies for query performance.
+3. **Data Access Patterns:**
+   - Define repository patterns and data access layer.
+   - Specify query patterns (reads, writes, aggregations).
+   - Design connection pooling and transaction management.
+4. **Migration & Versioning:**
+   - Design database migration strategy (versioned migrations).
+   - Plan for backup, restore, and disaster recovery.
+   - Define schema versioning and rollback procedures.
+5. **Feature-Specific Schemas:**
+   - Design database schemas per feature.
+   - Document feature-to-database mapping.
+   - Store schema specifications in `artifacts/specs/{feature_id}_db.json`.
+6. **Produce Artifacts:**
+   - ER diagrams with real table structures.
+   - Data flow diagrams showing database connections.
+   - Migration scripts and database setup documentation.
+
+**Clarification Requirements:**
+- **Ask user:** What database schema design tool should be used? (e.g., Prisma, Sequelize, raw SQL migrations)
+- **Ask user:** What specific database tables/collections are needed per feature?
 
 ### 4️⃣ API Design
 1. Design REST/gRPC/GraphQL endpoints and contracts.  
@@ -90,11 +131,37 @@ It transforms approved features into a **cohesive, scalable, and secure system b
 5. Generate OpenAPI/Swagger documentation.
 
 ### 5️⃣ Integration Design
-1. Identify external systems and integration points.  
-2. Choose integration patterns (Pub/Sub, Webhooks, API Gateway).  
-3. Define error handling, retry, and fallback strategies.  
-4. Design observability and monitoring for integrations.  
-5. Produce integration architecture diagrams.
+
+**Real External Service Integration:**
+1. **External Systems Identification:**
+   - Identify all external systems and their real API endpoints.
+   - Document authentication methods (API keys, OAuth, JWT tokens).
+   - Specify service URLs, base paths, and versioning.
+2. **Integration Patterns:**
+   - Choose integration patterns (REST, gRPC, Pub/Sub, Webhooks, API Gateway).
+   - Design service-to-service communication (internal microservices).
+   - Plan for API Gateway or service mesh if needed.
+3. **Error Handling & Resilience:**
+   - Define error handling, retry logic, and circuit breakers.
+   - Design fallback strategies and degraded mode handling.
+   - Implement timeout and rate limiting policies.
+4. **Observability:**
+   - Design logging, metrics, and tracing for integrations.
+   - Plan for monitoring external service health and latency.
+   - Design alerting for integration failures.
+5. **Feature-Specific Integrations:**
+   - Document integration points per feature.
+   - Specify which external services each feature uses.
+   - Store integration specs in `artifacts/specs/{feature_id}_integrations.json`.
+6. **Produce Artifacts:**
+   - Integration architecture diagrams with real endpoints.
+   - API contract specifications.
+   - Integration test plans and sandbox configuration.
+
+**Clarification Requirements:**
+- **Ask user:** What external services need integration? (provide service names, endpoints, authentication details)
+- **Ask user:** What API Gateway or service mesh solution should be used?
+- **Ask user:** What monitoring and observability tools? (e.g., Prometheus, Datadog, New Relic)
 
 ---
 

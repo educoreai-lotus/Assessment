@@ -148,4 +148,28 @@
   - Traceability ID: p09-exec-2025-11-11
   - Rationale: Validate release path
 
+---
+
+## Phase 07.4 – API & Integration Layer (Full Integration Build)
+
+- [2025-11-11] Unified inbound integration endpoint implemented at `/api/assessment/integration` (POST, GET) per Integration Map
+  - Phase: 07.4
+  - Traceability ID: phase-07-4-full-integration-build
+  - Rationale: Single, deterministic contract for Skills Engine, Course Builder, DevLab, RAG, Protocol Camera, Learning Analytics, and Management
+
+- [2025-11-11] Outbound integration service clients scaffolded (Directory, Skills Engine, Course Builder, DevLab, RAG, Protocol Camera)
+  - Phase: 07.4
+  - Traceability ID: phase-07-4-service-clients
+  - Rationale: Decouple external calls behind environment-based service adapters
+
+- [2025-11-11] Swagger auto-generation mounted at `/docs` with spec written to `backend/swagger/swagger.json`
+  - Phase: 07.4
+  - Traceability ID: phase-07-4-swagger
+  - Rationale: Ensure discoverable, versioned API surface
+
+- [2025-11-11] AI Prompt Engine templates created at `ai/prompts/assessment_prompts.md`
+  - Phase: 07.4
+  - Traceability ID: phase074-ai-prompt-engine
+  - Rationale: Standardized prompts for generation, grading, and feedback with auditability
+
 

@@ -63,11 +63,23 @@ Transform validated requirements into a **structured, prioritized, and testable 
 5. Refine based on feedback; mark blocked items with reasons.
 
 ### 3️⃣ Technical Specification
-1. Draft technical requirements per feature (APIs, data models, constraints).  
-2. Propose interface contracts and error semantics.  
-3. Note performance, security, and observability needs.  
-4. Record technical **assumptions** and **open questions**.  
-5. Link to upstream/downstream services and schemas.
+1. **Feature-Based Technical Specs:**
+   - Draft technical requirements per feature (APIs, data models, constraints).
+   - Map each feature to database schemas (PostgreSQL tables, MongoDB collections).
+   - Identify API endpoints and external service integrations per feature.
+   - Define data flow per feature (inputs → processing → outputs → integrations).
+2. **Database & Integration Specifications:**
+   - Specify database models and schemas per feature.
+   - Identify external API endpoints and integration requirements.
+   - Document authentication and authorization requirements.
+3. Propose interface contracts and error semantics.  
+4. Note performance, security, and observability needs.  
+5. Record technical **assumptions** and **open questions** in `clarificationsAndRefinements.md`.  
+6. Link to upstream/downstream services and schemas.
+7. **Initialize ROADMAP.json Features:**
+   - Create feature entries in `ROADMAP.json` with feature_id, name, status, and traceability_id.
+   - Map features to phases they will progress through.
+   - Store feature specifications in `artifacts/specs/{feature_id}_spec.json`.
 
 ### 4️⃣ Effort Estimation
 1. Run estimation (Planning Poker / Story Points / T-shirt).  
@@ -81,7 +93,11 @@ Transform validated requirements into a **structured, prioritized, and testable 
 2. Balance **business value**, **technical risk**, **dependencies**, and **UX impact**.  
 3. Select **MVP scope**; define cut lines and non-MVP items.  
 4. Create milestone/release plan with target windows.  
-5. Publish the **prioritized feature backlog**.
+5. **Publish Feature-Based Backlog:**
+   - Publish the **prioritized feature backlog** in `feature-backlog.json`.
+   - Update `ROADMAP.json` with all features in prioritized order.
+   - Link features to their database schemas, API endpoints, and integration points.
+   - Initialize feature status tracking (Planned, In-Progress, Done, Blocked).
 
 ---
 
@@ -198,5 +214,4 @@ feature-backlog.json and feature-specifications.json approved by PO & Tech Lead.
 MVP + release plan published; dependencies sequenced.
 
 All artifacts linked in ROADMAP.json.
-
 Ready to proceed to Phase 04 — Design & Architecture.

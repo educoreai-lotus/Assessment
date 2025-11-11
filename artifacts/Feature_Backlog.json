@@ -10,7 +10,7 @@
       "status": "Planned",
       "priority": 1,
       "owner": "Assessment",
-      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "In-Progress" },
       "dependencies": ["FEAT-DELAB"],
       "links": {
         "requirements": "artifacts/Requirements.json",
@@ -23,7 +23,7 @@
       "status": "Planned",
       "priority": 2,
       "owner": "Assessment",
-      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "In-Progress" },
       "dependencies": ["FEAT-BASELINE-EXAM", "FEAT-DELAB", "FEAT-DIRECTORY"],
       "links": {
         "requirements": "artifacts/Requirements.json",
@@ -36,7 +36,7 @@
       "status": "Planned",
       "priority": 3,
       "owner": "Assessment",
-      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "In-Progress" },
       "dependencies": [],
       "links": {
         "requirements": "artifacts/Requirements.json",
@@ -49,7 +49,7 @@
       "status": "Planned",
       "priority": 4,
       "owner": "Assessment",
-      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "In-Progress" },
       "dependencies": [],
       "links": {
         "requirements": "artifacts/Requirements.json",
@@ -62,7 +62,7 @@
       "status": "Planned",
       "priority": 5,
       "owner": "Assessment",
-      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "In-Progress" },
       "dependencies": ["FEAT-PROCTORING"],
       "links": {
         "requirements": "artifacts/Requirements.json",
@@ -75,7 +75,7 @@
       "status": "Planned",
       "priority": 6,
       "owner": "Assessment",
-      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "In-Progress" },
       "dependencies": [],
       "links": {
         "requirements": "artifacts/Requirements.json",
@@ -88,7 +88,7 @@
       "status": "Planned",
       "priority": 7,
       "owner": "Assessment",
-      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "In-Progress" },
       "dependencies": [],
       "links": {
         "requirements": "artifacts/Requirements.json",
@@ -101,10 +101,66 @@
       "status": "Planned",
       "priority": 8,
       "owner": "Assessment",
-      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "In-Progress" },
       "dependencies": ["FEAT-BASELINE-EXAM", "FEAT-POST-COURSE-EXAM"],
       "links": {
         "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-API-GATEWAY",
+      "name": "API Gateway",
+      "status": "In-Progress",
+      "priority": 9,
+      "owner": "Assessment",
+      "phases": { "07": "In-Progress" },
+      "dependencies": [],
+      "links": {
+        "roadmap": "artifacts/ROADMAP.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-INTEGRATION-SERVICES",
+      "name": "Integration Services",
+      "status": "In-Progress",
+      "priority": 10,
+      "owner": "Assessment",
+      "phases": { "07": "In-Progress" },
+      "dependencies": [],
+      "links": {
+        "roadmap": "artifacts/ROADMAP.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-AI-PROMPT-ENGINE",
+      "name": "AI Prompt Engine",
+      "status": "In-Progress",
+      "priority": 11,
+      "owner": "Assessment",
+      "phases": { "07": "In-Progress" },
+      "dependencies": [],
+      "links": {
+        "prompts": "ai/prompts/assessment_prompts.md",
+        "template": "templates/06-AI_Design_Prompt.md",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-FE-SERVICE-ADAPTERS",
+      "name": "Frontend Service Adapters",
+      "status": "Planned",
+      "priority": 12,
+      "owner": "Assessment",
+      "phases": { "07.5": "Planned" },
+      "dependencies": [
+        "FEAT-API-GATEWAY",
+        "FEAT-INTEGRATION-SERVICES"
+      ],
+      "links": {
+        "roadmap": "artifacts/ROADMAP.json",
         "clarifications": "artifacts/ClarificationsAndRefinements.md"
       }
     }

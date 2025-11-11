@@ -4,6 +4,9 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const pool = require('./config/supabaseDB');
 const connectMongo = require('./config/mongoDB');
+const models = require('./models');
+const integrationRoutes = require('./routes/integration');
+const { mountSwagger } = require('./swagger');
 
 const PORT = process.env.PORT || 4000;
 const API_BASE = '/api/v1';
@@ -28,6 +31,9 @@ app.use(cors({
 
 app.use(express.json({ limit: '50kb' }));
 
+// Swagger docs
+mountSwagger(app);
+
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -38,33 +44,131 @@ app.get('/health', (req, res) => {
 
 app.get('/health/postgres', async (req, res) => {
   try {
-    const result = await pool.query('SELECT NOW()');
-    res.json({ ok: true, now: result.rows[0].now });
+    const {
+      rows: [{ now }],
+    } = await pool.query('SELECT NOW() AS now');
+
+    const expectedTables = [
+      'users',
+      'exams',
+      'exam_attempts',
+      'attempt_skills',
+      'outbox_integrations',
+    ];
+
+    const { rows: tableRows } = await pool.query(
+      `
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = ANY($1::text[])
+      `,
+      [expectedTables]
+    );
+
+    const missingTables = expectedTables.filter(
+      (tableName) => !tableRows.find((row) => row.table_name === tableName)
+    );
+
+    const {
+      rows: [{ has_type: hasExamType }],
+    } = await pool.query(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_type
+          WHERE typname = 'exam_type'
+        ) AS has_type
+      `
+    );
+
+    const { rows: enumRows } = await pool.query(
+      `
+        SELECT enumlabel
+        FROM pg_enum
+        WHERE enumtypid = 'exam_type'::regtype
+      `
+    );
+
+    const examTypeValues = enumRows.map(({ enumlabel }) => enumlabel).sort();
+    const expectedEnumValues = ['baseline', 'postcourse'];
+    const missingEnumValues = expectedEnumValues.filter(
+      (value) => !examTypeValues.includes(value)
+    );
+
+    res.json({
+      ok:
+        missingTables.length === 0 &&
+        hasExamType &&
+        missingEnumValues.length === 0,
+      now,
+      hasExamType,
+      missingTables,
+      examTypeValues,
+      missingEnumValues,
+    });
   } catch (err) {
     console.error('Health check error:', err);
     res.status(500).json({ ok: false, error: 'Postgres not reachable' });
   }
 });
 
-app.get('/health/mongo', (req, res) => {
-  const state = mongoose.connection.readyState;
-  res.json({
-    ok: state === 1,
-    state,
-    message:
-      state === 1
-        ? 'MongoDB connected'
-        : state === 2
-          ? 'MongoDB connecting'
-          : 'MongoDB disconnected',
-  });
+app.get('/health/mongo', async (req, res) => {
+  try {
+    const state = mongoose.connection.readyState;
+
+    if (state !== 1) {
+      return res.status(503).json({
+        ok: false,
+        state,
+        message:
+          state === 2
+            ? 'MongoDB connecting'
+            : state === 0
+              ? 'MongoDB disconnected'
+              : 'MongoDB disconnecting',
+      });
+    }
+
+    const admin = mongoose.connection.db.admin();
+    const ping = await admin.ping();
+
+    const expectedCollections = [
+      'exam_packages',
+      'ai_audit_trail',
+      'proctoring_events',
+      'incidents',
+    ];
+
+    const collections = await mongoose.connection.db
+      .listCollections({ name: { $in: expectedCollections } })
+      .toArray();
+
+    const existingCollections = collections.map((collection) => collection.name);
+    const missingCollections = expectedCollections.filter(
+      (name) => !existingCollections.includes(name)
+    );
+
+    res.json({
+      ok: missingCollections.length === 0,
+      state,
+      registeredModels: Object.keys(models),
+      ping,
+      observedCollections: existingCollections,
+      missingCollections,
+    });
+  } catch (error) {
+    console.error('Mongo health check error:', error);
+    res.status(500).json({ ok: false, error: 'MongoDB health check failed' });
+  }
 });
 
+// Mount integration endpoints EXACTLY as per integration map (no version prefix)
+app.use('/', integrationRoutes);
+
+// Keep versioned base for future non-integration routes
 app.use(`${API_BASE}`, (req, res) => {
-  res.status(501).json({
-    status: 'pending',
-    message: 'Core API implementation removed during Phase 07 cleanup. Rebuild required.',
-  });
+  res.status(404).json({ error: 'not_found' });
 });
 
 app.use((req, res) => {

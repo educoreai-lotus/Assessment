@@ -1,5 +1,22 @@
 # Changelog
 
+## v4.3.1-p074 - Phase 07.4: API & Integration Layer (2025-11-11)
+- Added unified inbound endpoint `/api/assessment/integration` (POST/GET) per Integration Map covering Directory, Skills Engine, Course Builder, DevLab, RAG, Protocol Camera, Learning Analytics, and Management.
+- Implemented outbound integration service clients:
+  - Directory: `/api/directory/policy/:exam_type`, `/api/directory/exam-results`
+  - Skills Engine: `/api/skills-engine/assessment-results`
+  - Course Builder: `/api/course-builder/exam-results`
+  - DevLab: `/api/devlab/theoretical`, `/api/devlab/results`
+  - RAG: `/api/rag/incident-response`
+  - Protocol Camera: `/api/protocol-camera/summary`
+- Mounted Swagger docs at `/docs` and generated `backend/swagger/swagger.json`.
+- Created AI Prompt Engine templates at `ai/prompts/assessment_prompts.md`.
+- Traceability:
+  - phase-07-4-full-integration-build
+  - phase-07-4-service-clients
+  - phase-07-4-swagger
+  - phase074-ai-prompt-engine
+
 ## v4.3.1 - SDLC Template Execution (Phases 01–09) (2025-11-11)
 - Executed Main Project Development Flow (v4.0) sequentially for phases 01–09.
 - Generated one artifact JSON per phase:
