@@ -1,0 +1,114 @@
+{
+  "version": "v4.3.1",
+  "traceability_id": "backlog-v4-3-1-seed",
+  "timestamp": "2025-11-11T00:00:00Z",
+  "prioritization": "Value-Risk (seed)",
+  "features": [
+    {
+      "feature_id": "FEAT-BASELINE-EXAM",
+      "name": "Baseline Exam",
+      "status": "Planned",
+      "priority": 1,
+      "owner": "Assessment",
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "dependencies": ["FEAT-DELAB"],
+      "links": {
+        "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-POST-COURSE-EXAM",
+      "name": "Post-Course Exam",
+      "status": "Planned",
+      "priority": 2,
+      "owner": "Assessment",
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "dependencies": ["FEAT-BASELINE-EXAM", "FEAT-DELAB", "FEAT-DIRECTORY"],
+      "links": {
+        "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-DELAB",
+      "name": "DevLab Two-Way Integration",
+      "status": "Planned",
+      "priority": 3,
+      "owner": "Assessment",
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "dependencies": [],
+      "links": {
+        "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-PROCTORING",
+      "name": "Live Proctoring (Protocol Camera)",
+      "status": "Planned",
+      "priority": 4,
+      "owner": "Assessment",
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "dependencies": [],
+      "links": {
+        "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-INCIDENTS",
+      "name": "Incident Handling (RAG)",
+      "status": "Planned",
+      "priority": 5,
+      "owner": "Assessment",
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "dependencies": ["FEAT-PROCTORING"],
+      "links": {
+        "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-DIRECTORY",
+      "name": "Directory Policy Integration",
+      "status": "Planned",
+      "priority": 6,
+      "owner": "Assessment",
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "dependencies": [],
+      "links": {
+        "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-SKILLS-ENGINE",
+      "name": "Skills Engine Integration",
+      "status": "Planned",
+      "priority": 7,
+      "owner": "Assessment",
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "dependencies": [],
+      "links": {
+        "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    },
+    {
+      "feature_id": "FEAT-ANALYTICS-REPORTING",
+      "name": "Learning Analytics + Reporting/HR",
+      "status": "Planned",
+      "priority": 8,
+      "owner": "Assessment",
+      "phases": { "01": "Ready", "02": "Ready", "03": "Ready", "04": "Ready", "05": "Ready", "06": "Ready", "07": "Ready" },
+      "dependencies": ["FEAT-BASELINE-EXAM", "FEAT-POST-COURSE-EXAM"],
+      "links": {
+        "requirements": "artifacts/Requirements.json",
+        "clarifications": "artifacts/ClarificationsAndRefinements.md"
+      }
+    }
+  ]
+}
+
+

@@ -1,0 +1,72 @@
+{
+  "version": "v4.3.1",
+  "previous_version": null,
+  "traceability_id": "reqs-v4-3-1-baseline",
+  "source_phase": "01-Initial_Development_Setup",
+  "timestamp": "2025-11-11T00:00:00Z",
+  "project": {
+    "name": "EduCore AI – Assessment Microservice",
+    "description": "Creates, delivers, grades, and records EduCore AI exams with dual databases, live proctoring, AI lineage, and integrations across the EduCore platform.",
+    "readme_ref": "README.md@v4.3.1"
+  },
+  "system_generated": {
+    "integrations": [
+      { "service": "Directory", "role": "passing_grade, max_attempts; receives completion metadata" },
+      { "service": "Skills Engine", "role": "baseline skills; receives per-skill results + coverage + final status" },
+      { "service": "Course Builder", "role": "coverage map + learner metadata; receives results; may grant extra attempts" },
+      { "service": "DevLab", "role": "two-way coding/theoretical questions; difficulty control; validation" },
+      { "service": "Learning Analytics", "role": "pulls complete result packages" },
+      { "service": "Reporting & HR", "role": "pulls summarized compliance data" },
+      { "service": "RAG (Chatbot)", "role": "forwards incidents; Assessment decides continue/retake" },
+      { "service": "Protocol Camera", "role": "streams proctoring events; integrity summary" }
+    ],
+    "user_flows": {
+      "baseline_exam": [
+        "Receive learner + skills + passing_grade",
+        "Fetch passing_grade if needed from Directory",
+        "Generate medium difficulty questions via DevLab",
+        "AI evaluate; persist PostgreSQL + MongoDB",
+        "Send results to Skills Engine; Analytics on request"
+      ],
+      "post_course_exam": [
+        "Receive learner, course, coverage map",
+        "Fetch passing_grade + max_attempts from Directory",
+        "Generate questions by coverage map",
+        "Apply attempt rules; evaluate and persist",
+        "Send completion to Directory; results to Course Builder, Skills Engine, HR; Analytics on request"
+      ]
+    },
+    "ai_components": [
+      "Question Generation",
+      "AI Evaluation",
+      "AI Feedback",
+      "AI Audit Trail"
+    ],
+    "governance": [
+      "Append-only data",
+      "Encryption at rest and in transit",
+      "Row-Level Security per learner",
+      "AI lineage tracking"
+    ],
+    "tech_stack": {
+      "backend": "Node.js (Express REST API)",
+      "frontend": "React / Next.js",
+      "databases": ["PostgreSQL", "MongoDB"],
+      "ai_layer": "OpenAI GPT-4o-mini",
+      "deployment": { "backend": "Railway", "frontend": "Vercel" }
+    }
+  },
+  "user_input": {},
+  "ai_decision": {
+    "summary": "Baseline requirements derived from README v4.3.1 and templates v4.0.",
+    "rationale": "Enable immediate initialization of artifacts and ROADMAP linking without waiting for stakeholder dialogue."
+  },
+  "links": {
+    "readme": "README.md",
+    "roadmap": "artifacts/ROADMAP.json",
+    "clarifications": "artifacts/ClarificationsAndRefinements.md",
+    "feature_backlog": "artifacts/Feature_Backlog.json"
+  }
+}
+
+

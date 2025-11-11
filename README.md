@@ -174,3 +174,12 @@ Save this as your **project root README.md**, then run Courser, initialize templ
 pgsql
 Copy code
 to link it with your SDLC tracker before proceeding to **Phase 07.4 (API & Integration Layer)**.
+
+---
+
+## 📦 Artifacts (Baseline – v4.3.1)
+
+- Requirements: `artifacts/Requirements.json`
+- Roadmap: `artifacts/ROADMAP.json`
+- Clarifications & Refinements: `artifacts/ClarificationsAndRefinements.md`
+- Feature Backlog: `artifacts/Feature_Backlog.json`
