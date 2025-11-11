@@ -1,0 +1,25 @@
+{
+  "version": "v4.3.1",
+  "phase": "02",
+  "title": "User Dialogue & Requirements Analysis",
+  "source_template": "templates/02-User_Dialogue_And_Requirements.md",
+  "timestamp": "2025-11-11T00:00:00Z",
+  "inputs": [
+    "artifacts/Requirements.json"
+  ],
+  "process": {
+    "summary": "Elicit and structure requirements; prepare stakeholder artifacts per template."
+  },
+  "outputs": [
+    "artifacts/Feature_Backlog.json"
+  ],
+  "exit_criteria": [
+    "Requirements mapped to features",
+    "Stakeholder coverage modeled (baseline)"
+  ],
+  "links": {
+    "clarifications": "artifacts/ClarificationsAndRefinements.md"
+  }
+}
+
+

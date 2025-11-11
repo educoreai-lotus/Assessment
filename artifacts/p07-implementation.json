@@ -1,0 +1,25 @@
+{
+  "version": "v4.3.1",
+  "phase": "07",
+  "title": "Implementation",
+  "source_template": "templates/07-Implementation.md",
+  "timestamp": "2025-11-11T00:00:00Z",
+  "inputs": [
+    "artifacts/system-architecture.json",
+    "artifacts/ai-integration-plan.json"
+  ],
+  "process": {
+    "summary": "Implement code per Onion Architecture; connect PostgreSQL and MongoDB; integrate external services."
+  },
+  "outputs": [
+    "artifacts/code-implementation-roadmap.json",
+    "artifacts/ci-cd-config.p07.json"
+  ],
+  "exit_criteria": [
+    "DB connections verified",
+    "External integrations tested",
+    "Coverage thresholds targeted"
+  ]
+}
+
+

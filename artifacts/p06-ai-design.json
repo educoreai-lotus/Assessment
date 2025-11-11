@@ -1,0 +1,26 @@
+{
+  "version": "v4.3.1",
+  "phase": "06",
+  "title": "AI Design & Prompt Engineering",
+  "source_template": "templates/06-AI_Design_Prompt.md",
+  "timestamp": "2025-11-11T00:00:00Z",
+  "inputs": [
+    "artifacts/system-architecture.json",
+    "artifacts/security-architecture.json"
+  ],
+  "process": {
+    "summary": "Define AI orchestration, prompt schemas, automation flow, and safety rules."
+  },
+  "outputs": [
+    "artifacts/ai-integration-plan.json",
+    "artifacts/ai-safety-rules.json",
+    "artifacts/automation-design.json"
+  ],
+  "exit_criteria": [
+    "Integration plan validated",
+    "Prompt templates versioned",
+    "Automation flow defined"
+  ]
+}
+
+

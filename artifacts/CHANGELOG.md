@@ -1,5 +1,30 @@
 # Changelog
 
+## v4.3.1 - SDLC Template Execution (Phases 01–09) (2025-11-11)
+- Executed Main Project Development Flow (v4.0) sequentially for phases 01–09.
+- Generated one artifact JSON per phase:
+  - `artifacts/p01-initial-setup.json`
+  - `artifacts/p02-user-requirements.json`
+  - `artifacts/p03-feature-planning.json`
+  - `artifacts/p04-design-architecture.json`
+  - `artifacts/p05-security-compliance.json`
+  - `artifacts/p06-ai-design.json`
+  - `artifacts/p07-implementation.json`
+  - `artifacts/p08-testing-verification.json`
+  - `artifacts/p09-code-review-deployment.json`
+- Updated `artifacts/ROADMAP.json` with versioned phase_updates (v4.3.1-p01 through v4.3.1-p09).
+- Linked baseline artifacts in `README.md` (v4.3.1).
+
+## v4.3.1 - Phase 07.3: Database Schema Construction (2025-11-11)
+- Hardened `backend/db/init.sql` with enum synchronization and attempt number validation to keep Postgres aligned with `templates/Database_Schema_Spec.md`.
+- Tightened MongoDB models in `backend/models/` with required attempt linkage, default metadata shells, and additional indexing for query readiness.
+- Extended `/health/postgres` and `/health/mongo` in `backend/server.js` to verify enum contents and observed collections for double-database observability.
+
+## v4.3.0 - Phase 07.3: Database Schema Construction (2025-11-11)
+- Synced `backend/db/init.sql` with `templates/Database_Schema_Spec.md` to provision users, exams, attempts, skills, and outbox tables.
+- Refactored MongoDB models in `backend/models/` to match schema field naming and ensure collection readiness.
+- Validated `/health/postgres` and `/health/mongo` endpoints via `backend/server.js` to confirm database availability.
+
 ## v4.2.0 - Phase 07.2: MongoDB Integration (2025-11-10)
 - Connected backend to MongoDB Atlas via Mongoose and exposed `/health/mongo` for runtime verification.
 - Commit: 5f08e0a58891ad8bc1bf1969691809ef4e08f629

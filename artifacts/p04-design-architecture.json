@@ -1,0 +1,25 @@
+{
+  "version": "v4.3.1",
+  "phase": "04",
+  "title": "Design & Architecture",
+  "source_template": "templates/04-Design_And_Architecture.md",
+  "timestamp": "2025-11-11T00:00:00Z",
+  "inputs": [
+    "artifacts/Feature_Backlog.json"
+  ],
+  "process": {
+    "summary": "Define system architecture, components, data models, and integration points aligned with README v4.3.1."
+  },
+  "outputs": [
+    "artifacts/system-architecture.json",
+    "artifacts/api-specifications.json",
+    "artifacts/integration-specifications.json"
+  ],
+  "exit_criteria": [
+    "Interfaces outlined",
+    "Performance budgets defined",
+    "Security controls mapped (to Phase 05)"
+  ]
+}
+
+

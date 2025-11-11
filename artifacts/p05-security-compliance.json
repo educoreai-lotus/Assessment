@@ -1,0 +1,25 @@
+{
+  "version": "v4.3.1",
+  "phase": "05",
+  "title": "Security & Compliance Planning",
+  "source_template": "templates/05-Security_Compliance.md",
+  "timestamp": "2025-11-11T00:00:00Z",
+  "inputs": [
+    "artifacts/system-architecture.json"
+  ],
+  "process": {
+    "summary": "Establish security requirements, threats, and controls; map compliance."
+  },
+  "outputs": [
+    "artifacts/security-architecture.json",
+    "artifacts/risk-register.json",
+    "artifacts/compliance-controls.json"
+  ],
+  "exit_criteria": [
+    "Threat model documented",
+    "Controls mapped to standards",
+    "Incident response planned"
+  ]
+}
+
+
