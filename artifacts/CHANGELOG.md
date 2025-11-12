@@ -14,6 +14,22 @@
   - /health/mongo: error (MongoDB health check failed)
 - Next: Begin Phase 07.5 – Frontend Service Adapters
 
+## v4.3.1-p076 - Phase 07.6: Frontend UI Components (2025-11-12)
+- Initialized production-ready Vite + React app in `/frontend` with Tailwind (darkMode: 'class'), Framer Motion, Recharts, and axios.
+- Added `.env` variable `VITE_API_BASE_URL` (fallback coded to production URL if env unavailable in runtime).
+- Pages:
+  - `HomePage.jsx` with hero, gradient text, and 3 feature cards + CTAs
+  - `exam/BaselineExam.jsx` (loads questions, progress, submit)
+  - `exam/PostCourseExam.jsx` (shows course_id, coverage_map, attempt; renders questions; submit)
+  - `results/ResultsDashboard.jsx` (per-skill cards + Recharts bar/pie; final grade + pass/fail)
+  - `dev/Health.jsx` (calls `/health`, `/health/postgres`, `/health/mongo` and shows HTTP status + payload)
+- Components:
+  - `Navbar.jsx`, `QuestionCard.jsx`, `CodingPanel.jsx`, `ProctoringLog.jsx`, `IncidentViewer.jsx`, `shared/LoadingSpinner.jsx`
+- Routing: `/`, `/exam/baseline`, `/exam/postcourse`, `/results`, `/dev/health`
+- Styling: Dark-Emerald theme, gradient cards, soft shadows, responsive grid, hover lift, route transitions.
+- API wiring (axios baseURL = `import.meta.env.VITE_API_BASE_URL` with production fallback).
+- Commit: included in main branch; see ROADMAP entry `v4.3.1-p076`.
+
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:
