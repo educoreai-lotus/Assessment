@@ -218,3 +218,11 @@
   - Styling: Light mode uses `bg-white text-gray-800`; Dark mode uses `bg-slate-900 text-emerald-300`; cards styled with Tailwind dark variants while retaining Dark Emerald gradients/shadows
   - Rationale: Simpler, framework-native theming with predictable composition and fewer global overrides
 
+## Phase 07.6.3 – Navbar & Logo Fix (Tailwind Consistency and Asset Resolution)
+
+- [2025-11-12] Fixed Navbar positioning and logo resolution
+  - Phase: 07.6.3
+  - Traceability ID: phase-07-6-3-navbar-logo-fix
+  - Changes: Navbar is fixed at top with Tailwind-native backgrounds and shadow; page content padded to avoid overlap; logo rendering uses Vite public root paths with correct casing and transitions
+  - Rationale: Ensure consistent visual alignment and reliable branding assets across themes
+

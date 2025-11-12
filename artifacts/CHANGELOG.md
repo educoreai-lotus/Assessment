@@ -50,6 +50,12 @@
 - Adjusted global styles: light mode `bg-white text-gray-800`; dark mode `bg-slate-900 text-emerald-300`.
 - Preserved Dark Emerald gradients/shadows; cards now adapt per mode via Tailwind classes.
 - Commit: 49d91c087ab6a65a8495cadfc4284971299bc395
+
+## v4.3.1-p0763 - Phase 07.6.3: Navbar & Logo Fix (2025-11-12)
+- Navbar fixed at top using Tailwind-native backgrounds: `bg-white dark:bg-slate-900 shadow-md transition-colors`, and content padded (`pt-24`) to prevent overlap.
+- Logo rendering uses Vite public paths with correct extension casing: `/logo-day.jpeg` (light) and `/logo-night.jpeg` (dark); smooth transition on toggle.
+- Backgrounds unified between Navbar and body; Dark Emerald palette and animations preserved.
+- Commit: 26f739c1a239bafc88e08deefe4db808b80f36fc
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:
