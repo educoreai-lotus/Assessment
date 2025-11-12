@@ -35,10 +35,10 @@ export default function Navbar() {
   }
 
   const logoSrc = useMemo(() => {
-    if (theme === 'light') return '/logo-day.jpeg';
-    if (theme === 'dark') return '/logo-night.jpeg';
+    if (theme === 'light') return '/logo-day.png';
+    if (theme === 'dark') return '/logo-night.png';
     // default follow current DOM
-    return document.documentElement.classList.contains('dark') ? '/logo-night.jpeg' : '/logo-day.jpeg';
+    return document.documentElement.classList.contains('dark') ? '/logo-night.png' : '/logo-day.png';
   }, [theme]);
 
   return (
