@@ -23,3 +23,193 @@ body {
 .container-safe {
   @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
 }
+
+/* ===== Phase 07.6.0a – Theme Variable Injection (Non-Destructive) ===== */
+:root {
+  /* Dark Emerald Color Palette - Rich & Elegant */
+  --primary-blue: #065f46;
+  --primary-purple: #047857;
+  --primary-cyan: #0f766e;
+  --accent-gold: #d97706;
+  --accent-green: #047857;
+  --accent-orange: #f59e0b;
+
+  /* Neutral Colors - Bright & Modern */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #e2e8f0;
+  --bg-tertiary: #cbd5e1;
+  --bg-card: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-accent: #334155;
+
+  /* Gradients - Dark Emerald Elegance */
+  --gradient-primary: linear-gradient(135deg, #065f46, #047857);
+  --gradient-secondary: linear-gradient(135deg, #0f766e, #047857);
+  --gradient-accent: linear-gradient(135deg, #d97706, #f59e0b);
+  --gradient-card: linear-gradient(145deg, #ffffff, #f0fdfa);
+
+  /* Shadows - Dark Emerald Glow Effects */
+  --shadow-glow: 0 0 30px rgba(6, 95, 70, 0.3);
+  --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.1);
+  --shadow-hover: 0 20px 60px rgba(6, 95, 70, 0.2);
+
+  /* Spacing */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 1rem;
+  --spacing-md: 1.5rem;
+  --spacing-lg: 2rem;
+  --spacing-xl: 3rem;
+  --spacing-2xl: 4rem;
+
+  /* Gamification Colors */
+  --xp-color: #f59e0b;
+  --level-color: #047857;
+  --badge-color: #10b981;
+  --streak-color: #ef4444;
+}
+
+/* Night Mode Theme */
+.night-mode {
+  /* Night Mode Colors - Dark & Elegant */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-card: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-accent: #e2e8f0;
+
+  /* Night Mode Gradients */
+  --gradient-primary: linear-gradient(135deg, #0d9488, #059669);
+  --gradient-secondary: linear-gradient(135deg, #14b8a6, #10b981);
+  --gradient-accent: linear-gradient(135deg, #d97706, #f59e0b);
+  --gradient-card: linear-gradient(145deg, #1e293b, #334155);
+
+  /* Night Mode Shadows */
+  --shadow-glow: 0 0 30px rgba(13, 148, 136, 0.4);
+  --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.6);
+  --shadow-hover: 0 20px 60px rgba(13, 148, 136, 0.3);
+}
+
+/* Day Mode Theme (Default) */
+.day-mode {
+  /* Day Mode Colors - Bright & Clean */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #e2e8f0;
+  --bg-tertiary: #cbd5e1;
+  --bg-card: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-accent: #334155;
+
+  /* Day Mode Gradients */
+  --gradient-primary: linear-gradient(135deg, #065f46, #047857);
+  --gradient-secondary: linear-gradient(135deg, #0f766e, #047857);
+  --gradient-accent: linear-gradient(135deg, #d97706, #f59e0b);
+  --gradient-card: linear-gradient(145deg, #ffffff, #f0fdfa);
+
+  /* Day Mode Shadows */
+  --shadow-glow: 0 0 30px rgba(6, 95, 70, 0.3);
+  --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.1);
+  --shadow-hover: 0 20px 60px rgba(6, 95, 70, 0.2);
+}
+
+/* Theme Transition */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Accessibility Variants */
+.colorblind-friendly {
+  --primary-blue: #065f46;
+  --primary-purple: #047857;
+  --primary-cyan: #0f766e;
+  --accent-gold: #d97706;
+  --accent-green: #047857;
+  --accent-orange: #f59e0b;
+}
+
+.high-contrast {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f1f5f9;
+  --bg-tertiary: #e2e8f0;
+  --text-primary: #000000;
+  --text-secondary: #1e293b;
+  --text-muted: #b0b0b0;
+  --primary-blue: #065f46;
+  --primary-purple: #047857;
+  --primary-cyan: #0f766e;
+  --accent-gold: #d97706;
+  --accent-green: #047857;
+  --accent-orange: #f59e0b;
+}
+
+.large-font {
+  --spacing-xs: 0.75rem;
+  --spacing-sm: 1.25rem;
+  --spacing-md: 1.75rem;
+  --spacing-lg: 2.25rem;
+  --spacing-xl: 3.25rem;
+  --spacing-2xl: 4.25rem;
+}
+
+.large-font body { font-size: 1.1rem; }
+.large-font h1 { font-size: 4rem !important; }
+.large-font h2 { font-size: 2.5rem !important; }
+.large-font h3 { font-size: 1.8rem !important; }
+.large-font .btn { font-size: 1.1rem; padding: var(--spacing-sm) var(--spacing-lg); }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.btn:focus,
+.user-card:focus,
+.microservice-card:focus,
+.chatbot-toggle:focus,
+.accessibility-controls button:focus {
+  outline: 3px solid var(--primary-cyan);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.3);
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--primary-blue);
+  color: white;
+  padding: 8px;
+  text-decoration: none;
+  border-radius: 4px;
+  z-index: 10000;
+}
+.skip-link:focus { top: 6px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.aria-live {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
