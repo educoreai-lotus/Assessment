@@ -30,6 +30,19 @@
 - API wiring (axios baseURL = `import.meta.env.VITE_API_BASE_URL` with production fallback).
 - Commit: included in main branch; see ROADMAP entry `v4.3.1-p076`.
 
+## v4.3.1-p0760a - Phase 07.6.0a: Theme Variable Injection (2025-11-12)
+- Injected Dark Emerald CSS variable system into `frontend/src/index.css` (non-destructive).
+- Added day-mode, night-mode, accessibility classes (colorblind-friendly, high-contrast, large-font) without applying any body class by default.
+- Preserved existing Tailwind appearance; variables available globally for future use.
+- Commit: 5f1f4b1148f581745d11f700737bc18db10a2e9b
+
+## v4.3.1-p0761 - Phase 07.6.1: Branding & Theme Enhancement (2025-11-12)
+- Replaced favicon with `/public/logo-night.jpeg` and updated title to “EduCore AI – Assessment Center”.
+- Navbar branding: dynamic logo image (day/night) + “Assessment” label.
+- Added theme toggle (🌞/🌙) with persistence via localStorage; toggles `day-mode`/`night-mode` on `body`.
+- Maintained Dark Emerald visuals and motion; both modes render with smooth transitions.
+- Commit: 445b4dc1ddfaa6b28a6bc288dc7f36159a215486
+
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:

@@ -192,4 +192,20 @@
   - Endpoints: `/api/exam/start`, `/api/exam/submit`, `/api/analytics/exams`, `/api/reporting/summary`, `/api/integrations/devlab`, `/api/integrations/protocol-camera`, `/api/integrations/rag`
   - Health verification page renders HTTP statuses and payloads for 3 checks
 
+---
+
+## Phase 07.6.0a – Theme Variable Injection
+
+- [2025-11-12] Injected Dark Emerald CSS variable system
+  - Phase: 07.6.0a
+  - Traceability ID: phase-07-6-0a-theme-variables
+  - Scope: Appended global CSS variables and classes (day-mode, night-mode, accessibility) into `frontend/src/index.css` without altering existing Tailwind visuals; no automatic body class applied
+
+## Phase 07.6.1 – Branding & Theme Enhancement
+
+- [2025-11-12] Applied branding and theme controls
+  - Phase: 07.6.1
+  - Traceability ID: phase-07-6-1-branding-theme-toggle
+  - Changes: Replaced favicon with `/public/logo-night.jpeg`; updated title to “EduCore AI – Assessment Center”; Navbar now shows day/night logo and “Assessment” label; added theme toggle (🌞/🌙) with localStorage persistence switching `day-mode`/`night-mode` on body
+  - Rationale: Establish consistent visual identity with accessible, persistent theming
 
