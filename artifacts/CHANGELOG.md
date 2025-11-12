@@ -67,6 +67,11 @@
 - Replaced JPEG logos with PNG assets (`/public/logo-day.png`, `/public/logo-night.png`) and updated references in `Navbar.jsx` and favicon in `index.html`.
 - Cleared local Vite cache and built production bundle to verify resolution prior to deployment.
 - Commit: b0acaff2d44fd98ff30738021587be81ba99ca37
+
+## v4.3.1-p0766 - Phase 07.6.6: Forced CDN purge and redeploy for logo asset resolution (2025-11-12)
+- Triggered clean build and push to main to force Vercel cache invalidation for `/logo-day.png` and `/logo-night.png`.
+- Appended verification notes to `artifacts/Validation_Report_Phase08.md` confirming expected 200 responses and UI behavior across themes.
+- Commit: artifacts-only (see ROADMAP and Validation report updates)
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:

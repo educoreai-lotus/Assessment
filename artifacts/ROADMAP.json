@@ -692,6 +692,26 @@
         ],
         "timestamps": { "completed": "2025-11-12T00:00:00Z" }
       }
+    ,
+      {
+        "version": "v4.3.1-p0766",
+        "traceability_id": "phase-07-6-6-cdn-purge-redeploy",
+        "phase": "07.6.6",
+        "title": "Static Asset Cache Purge and Redeploy",
+        "status_after": "Done",
+        "artifacts": {
+          "frontend": [
+            "frontend/dist/index.html"
+          ],
+          "validation": [
+            "artifacts/Validation_Report_Phase08.md"
+          ]
+        },
+        "notes": [
+          "Forced clean build and redeploy to invalidate CDN cache for /logo-day.png and /logo-night.png"
+        ],
+        "timestamps": { "completed": "2025-11-12T00:00:00Z" }
+      }
       {
         "version": "v4.3.1-p0760a",
         "traceability_id": "phase-07-6-0a-theme-variables",

@@ -242,3 +242,11 @@
   - Rule: Prefer `.png` for favicon/branding images to avoid cross-environment decoding issues; update absolute `/public` references and clear local build cache before deployment
   - Validation: Cleared local Vite cache, rebuilt, and prepared for Vercel redeploy
 
+## Phase 07.6.6 – Static Asset Cache Purge and Redeploy
+
+- [2025-11-12] Forced CDN refresh via clean build and push
+  - Phase: 07.6.6
+  - Traceability ID: phase-07-6-6-cdn-purge-redeploy
+  - Guidance: Pushing to a Vercel-connected `main` branch triggers a fresh deployment which invalidates stale CDN entries for updated public assets (e.g., `/logo-day.png`, `/logo-night.png`); alternatively, use Vercel CLI `--force` deploy with a non-interactive token in CI
+  - Validation: Logged expected 200 responses and UI theme behavior in `artifacts/Validation_Report_Phase08.md`
+
