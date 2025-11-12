@@ -258,3 +258,10 @@
   - Rule: Always explicitly track critical `/public` assets in Git to guarantee their presence in Vercel builds; reference them via absolute paths (e.g., `/logo-day.png`) to avoid bundler path rewrites
   - Validation: Forced add/commit of PNG assets and push to `main`; verification appended in `artifacts/Validation_Report_Phase08.md`
 
+## Phase 07.6.8 – Logo Sizing & Alignment Adjustment
+
+- [2025-11-12] Standardized responsive logo sizing and alignment
+  - Phase: 07.6.8
+  - Traceability ID: phase-07-6-8-logo-sizing-alignment
+  - Behavior: Branding uses `flex items-center gap-2` with hover scale; logo sizes `h-8 sm:h-10 md:h-12 w-auto object-contain mr-2` to maintain balance alongside the “Assessment” label across breakpoints
+

@@ -77,6 +77,11 @@
 - Explicitly added `frontend/public/logo-day.png` and `frontend/public/logo-night.png` to Git to guarantee inclusion in Vercel build.
 - Pushed to `main` to trigger deployment; verification appended in `Validation_Report_Phase08.md` (expected 200 for both assets).
 - Commit: cf7ed07bec92cd8bd181e90a71c2893feaad505f
+
+## v4.3.1-p0768 - Phase 07.6.8: Navbar logo resized and aligned for full visibility (2025-11-12)
+- Adjusted Navbar branding container to `flex items-center gap-2` with hover scale.
+- Logo now uses responsive sizing `h-8 sm:h-10 md:h-12 w-auto object-contain mr-2` for balanced visibility.
+- Commit: 6691d2d4bd3cb177fcc0c5fd05784f6a6a8d3174
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:
