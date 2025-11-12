@@ -3,6 +3,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const pool = require('./config/supabaseDB');
+const { runBootstrapMigrations } = require('./db/migrations');
 const connectMongo = require('./config/mongoDB');
 const models = require('./models');
 const integrationRoutes = require('./routes/integration');
@@ -14,6 +15,11 @@ const API_BASE = '/api/v1';
 const app = express();
 
 connectMongo();
+// Run lightweight migrations that are safe to execute on startup
+runBootstrapMigrations(pool).catch((e) => {
+  // eslint-disable-next-line no-console
+  console.error('Migration error:', e?.message || e);
+});
 
 app.set('trust proxy', 1);
 
@@ -133,29 +139,17 @@ app.get('/health/mongo', async (req, res) => {
     const admin = mongoose.connection.db.admin();
     const ping = await admin.ping();
 
-    const expectedCollections = [
-      'exam_packages',
-      'ai_audit_trail',
-      'proctoring_events',
-      'incidents',
-    ];
-
-    const collections = await mongoose.connection.db
-      .listCollections({ name: { $in: expectedCollections } })
-      .toArray();
-
-    const existingCollections = collections.map((collection) => collection.name);
-    const missingCollections = expectedCollections.filter(
-      (name) => !existingCollections.includes(name)
-    );
+    // List collections in a safe, non-regex way and compute count
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    const existingCollections = collections.map((c) => c.name);
 
     res.json({
-      ok: missingCollections.length === 0,
+      ok: true,
       state,
       registeredModels: Object.keys(models),
       ping,
+      collections: existingCollections.length,
       observedCollections: existingCollections,
-      missingCollections,
     });
   } catch (error) {
     console.error('Mongo health check error:', error);

@@ -12,10 +12,7 @@ const connectMongo = async () => {
       console.warn('⚠️ No MongoDB URI found in MONGO_DB_URI or MONGO_URI');
       return;
     }
-    await mongoose.connect(mongoUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(mongoUri);
     console.log('✅ Connected to MongoDB Atlas');
   } catch (error) {
     console.error('❌ MongoDB connection error:', error.message);
