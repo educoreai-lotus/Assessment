@@ -265,3 +265,13 @@
   - Traceability ID: phase-07-6-8-logo-sizing-alignment
   - Behavior: Branding uses `flex items-center gap-2` with hover scale; logo sizes `h-8 sm:h-10 md:h-12 w-auto object-contain mr-2` to maintain balance alongside the “Assessment” label across breakpoints
 
+## Phase 08.1 – Database Connectivity Restoration (Railway)
+
+- [2025-11-12] Environment variable mapping for DBs on Railway
+  - Phase: 08.1
+  - Traceability ID: phase-08-1-db-connectivity-restoration
+  - Rule: Accept multiple env names to accommodate platform defaults
+    - Postgres: `SUPABASE_DB_URL || POSTGRES_URL || DATABASE_URL`
+    - Mongo: `MONGO_DB_URI || MONGO_URI`
+  - Guidance: Ensure values are valid connection strings (postgres://..., mongodb+srv://...) and set in Railway project variables
+

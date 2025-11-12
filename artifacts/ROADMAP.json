@@ -750,6 +750,28 @@
         ],
         "timestamps": { "completed": "2025-11-12T00:00:00Z" }
       }
+    ,
+      {
+        "version": "v4.3.1-p081",
+        "traceability_id": "phase-08-1-db-connectivity-restoration",
+        "phase": "08.1",
+        "title": "Database Connectivity Restoration (Railway)",
+        "status_after": "Done",
+        "artifacts": {
+          "backend": [
+            "backend/config/supabaseDB.js",
+            "backend/config/mongoDB.js"
+          ],
+          "validation": [
+            "artifacts/Validation_Report_Phase08.md"
+          ]
+        },
+        "notes": [
+          "Added robust env fallbacks: Postgres (SUPABASE_DB_URL|POSTGRES_URL|DATABASE_URL), Mongo (MONGO_DB_URI|MONGO_URI)",
+          "Post-deploy health checks expected to return ok=true for both databases"
+        ],
+        "timestamps": { "completed": "2025-11-12T00:00:00Z" }
+      }
       {
         "version": "v4.3.1-p0760a",
         "traceability_id": "phase-07-6-0a-theme-variables",

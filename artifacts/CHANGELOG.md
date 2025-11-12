@@ -82,6 +82,14 @@
 - Adjusted Navbar branding container to `flex items-center gap-2` with hover scale.
 - Logo now uses responsive sizing `h-8 sm:h-10 md:h-12 w-auto object-contain mr-2` for balanced visibility.
 - Commit: 6691d2d4bd3cb177fcc0c5fd05784f6a6a8d3174
+
+## v4.3.1-p081 - Phase 08.1: Database connectivity restored (Postgres + Mongo) (2025-11-12)
+- Backend DB configuration updated to support Railway variable names:
+  - Postgres: `SUPABASE_DB_URL || POSTGRES_URL || DATABASE_URL`
+  - Mongo: `MONGO_DB_URI || MONGO_URI`
+- Post-deploy health endpoints expected to return 200 with `{ ok: true }`:
+  - `/health`, `/health/postgres`, `/health/mongo`
+- Commits: ad9feeeb6925d1145c3f128b8f30a1dc2b57f444
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:
