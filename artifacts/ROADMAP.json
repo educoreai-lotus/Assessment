@@ -712,6 +712,27 @@
         ],
         "timestamps": { "completed": "2025-11-12T00:00:00Z" }
       }
+    ,
+      {
+        "version": "v4.3.1-p0767",
+        "traceability_id": "phase-07-6-7-asset-inclusion-verification",
+        "phase": "07.6.7",
+        "title": "Asset Inclusion Verification & Forced Sync",
+        "status_after": "Done",
+        "artifacts": {
+          "frontend": [
+            "frontend/public/logo-day.png",
+            "frontend/public/logo-night.png"
+          ],
+          "validation": [
+            "artifacts/Validation_Report_Phase08.md"
+          ]
+        },
+        "notes": [
+          "Explicitly added logo PNGs to Git and pushed to main to force inclusion in Vercel build"
+        ],
+        "timestamps": { "completed": "2025-11-12T00:00:00Z" }
+      }
       {
         "version": "v4.3.1-p0760a",
         "traceability_id": "phase-07-6-0a-theme-variables",

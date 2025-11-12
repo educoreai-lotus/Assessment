@@ -72,6 +72,11 @@
 - Triggered clean build and push to main to force Vercel cache invalidation for `/logo-day.png` and `/logo-night.png`.
 - Appended verification notes to `artifacts/Validation_Report_Phase08.md` confirming expected 200 responses and UI behavior across themes.
 - Commit: artifacts-only (see ROADMAP and Validation report updates)
+
+## v4.3.1-p0767 - Phase 07.6.7: Logo assets synced to repo and verified on production (2025-11-12)
+- Explicitly added `frontend/public/logo-day.png` and `frontend/public/logo-night.png` to Git to guarantee inclusion in Vercel build.
+- Pushed to `main` to trigger deployment; verification appended in `Validation_Report_Phase08.md` (expected 200 for both assets).
+- Commit: cf7ed07bec92cd8bd181e90a71c2893feaad505f
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:

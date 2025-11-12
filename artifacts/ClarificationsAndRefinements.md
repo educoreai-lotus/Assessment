@@ -250,3 +250,11 @@
   - Guidance: Pushing to a Vercel-connected `main` branch triggers a fresh deployment which invalidates stale CDN entries for updated public assets (e.g., `/logo-day.png`, `/logo-night.png`); alternatively, use Vercel CLI `--force` deploy with a non-interactive token in CI
   - Validation: Logged expected 200 responses and UI theme behavior in `artifacts/Validation_Report_Phase08.md`
 
+## Phase 07.6.7 – Asset Inclusion Verification & Forced Sync
+
+- [2025-11-12] Ensured logo PNG assets are tracked and built on Vercel
+  - Phase: 07.6.7
+  - Traceability ID: phase-07-6-7-asset-inclusion-verification
+  - Rule: Always explicitly track critical `/public` assets in Git to guarantee their presence in Vercel builds; reference them via absolute paths (e.g., `/logo-day.png`) to avoid bundler path rewrites
+  - Validation: Forced add/commit of PNG assets and push to `main`; verification appended in `artifacts/Validation_Report_Phase08.md`
+
