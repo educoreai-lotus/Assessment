@@ -44,8 +44,12 @@ export default function Navbar() {
   return (
     <header className="fixed top-0 left-0 w-full z-50 bg-white dark:bg-slate-900 shadow-md transition-colors">
       <div className="container-safe flex items-center justify-between py-3">
-        <div className="flex items-center gap-3">
-          <img src={logoSrc} alt="EduCore logo" className="h-8 w-auto rounded-md shadow-soft transition-opacity duration-300" />
+        <div className="flex items-center gap-2 transition-transform hover:scale-105">
+          <img
+            src={logoSrc}
+            alt="EduCore logo"
+            className="h-8 sm:h-10 md:h-12 w-auto object-contain mr-2 rounded-md shadow-soft transition-opacity duration-300"
+          />
           <span className="font-semibold text-gray-900 dark:text-white">Assessment</span>
         </div>
         <nav className="flex items-center gap-1">
