@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark Emerald AI base */
+html { -webkit-text-size-adjust: 100%; }
+body {
+  @apply bg-neutral-950 text-neutral-100 antialiased;
+}
+
+.gradient-text {
+  @apply bg-gradient-primary bg-clip-text text-transparent;
+}
+
+.card {
+  @apply rounded-2xl bg-neutral-900/60 backdrop-blur border border-emeraldbrand-800/30 shadow-soft hover:shadow-glow transition-all;
+}
+
+.btn-emerald {
+  @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-medium bg-emeraldbrand-600 hover:bg-emeraldbrand-500 text-white shadow-soft transition-transform hover:-translate-y-0.5;
+}
+
+.container-safe {
+  @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+}

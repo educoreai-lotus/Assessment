@@ -54,8 +54,8 @@ It manages **baseline** and **post-course** assessments, generates **AI-based qu
    - **Directory** → completion metadata.
    - **Course Builder** → passing_grade, final_grade, passed.
    - **Skills Engine** → per-skill results **+ coverage map + final status**.
-   - **Reporting & HR** → summarized data.
-   - **Learning Analytics** → detailed payload (on request).
+   - **Managmenet (HR)** → fetch summarized data when requested (pull model).
+   - **Learning Analytics** → fetch detailed data when requested (pull model).
 
 ---
 
@@ -127,10 +127,18 @@ Encrypted in transit and at rest
 Row-Level Security per learner (user_id)
 AI lineage tracking (model version + prompt metadata)
 
+### 📡 Data Access Model
+
+- **Push:** Skills Engine (Baseline + Post-Course), Course Builder (Post-Course)  
+- **Pull:** Learning Analytics and Reporting & HR (fetch data via GET endpoints)  
+- **Endpoints:**  
+  - `/api/analytics/exams` – detailed results  
+  - `/api/reporting/summary` – summarized metrics  
+
 🧱 Tech Stack
 Layer Technology
 Backend Node.js (Express REST API)
-Frontend React / Next.js
+Frontend React 
 Databases PostgreSQL + MongoDB
 AI Layer OpenAI GPT-4o-mini
 Deployment Railway (backend) + Vercel (frontend)
