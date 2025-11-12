@@ -1,9 +1,18 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
+function resolveMongoUri() {
+  return process.env.MONGO_DB_URI || process.env.MONGO_URI;
+}
+
 const connectMongo = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_DB_URI, {
+    const mongoUri = resolveMongoUri();
+    if (!mongoUri) {
+      console.warn('⚠️ No MongoDB URI found in MONGO_DB_URI or MONGO_URI');
+      return;
+    }
+    await mongoose.connect(mongoUri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
