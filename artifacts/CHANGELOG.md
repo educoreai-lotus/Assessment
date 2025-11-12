@@ -56,6 +56,12 @@
 - Logo rendering uses Vite public paths with correct extension casing: `/logo-day.jpeg` (light) and `/logo-night.jpeg` (dark); smooth transition on toggle.
 - Backgrounds unified between Navbar and body; Dark Emerald palette and animations preserved.
 - Commit: 26f739c1a239bafc88e08deefe4db808b80f36fc
+
+## v4.3.1-p0764 - Phase 07.6.4: Logo Path Correction and Verification (2025-11-12)
+- Verified Vite public assets exist: `frontend/public/logo-day.jpeg`, `frontend/public/logo-night.jpeg`.
+- Ensured `Navbar.jsx` references absolute public paths: `src={theme === 'dark' ? '/logo-night.jpeg' : '/logo-day.jpeg'}`.
+- Built production bundle to validate asset resolution; Vercel redeploy will be triggered via push to `main`.
+- Commit: no code change required beyond verification; artifacts updated for completion.
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:

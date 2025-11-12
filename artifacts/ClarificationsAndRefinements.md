@@ -226,3 +226,11 @@
   - Changes: Navbar is fixed at top with Tailwind-native backgrounds and shadow; page content padded to avoid overlap; logo rendering uses Vite public root paths with correct casing and transitions
   - Rationale: Ensure consistent visual alignment and reliable branding assets across themes
 
+## Phase 07.6.4 – Logo Path Correction and Verification
+
+- [2025-11-12] Verified and enforced Vite public asset references
+  - Phase: 07.6.4
+  - Traceability ID: phase-07-6-4-logo-path-correction
+  - Rule: All static branding assets in Vite should be referenced via absolute public paths (e.g., `/logo-day.jpeg`, `/logo-night.jpeg`) with exact filename casing as committed under `frontend/public/`
+  - Validation: Confirmed files exist, ensured `Navbar.jsx` uses absolute paths, and built the app to verify resolution
+

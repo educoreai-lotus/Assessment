@@ -743,6 +743,29 @@
         ],
         "timestamps": { "completed": "2025-11-12T00:00:00Z" }
       }
+    ,
+      {
+        "version": "v4.3.1-p0764",
+        "traceability_id": "phase-07-6-4-logo-path-correction",
+        "phase": "07.6.4",
+        "title": "Logo Path Correction and Verification",
+        "status_after": "Done",
+        "artifacts": {
+          "frontend": [
+            "frontend/public/logo-day.jpeg",
+            "frontend/public/logo-night.jpeg",
+            "frontend/src/components/layout/Navbar.jsx"
+          ],
+          "build": [
+            "frontend/dist/index.html"
+          ]
+        },
+        "validation": {
+          "asset_paths": ["/logo-day.jpeg", "/logo-night.jpeg"],
+          "themes": ["light", "dark"]
+        },
+        "timestamps": { "completed": "2025-11-12T00:00:00Z" }
+      }
       {
         "version": "v3.1.3",
         "traceability_id": "p09-update-0001",
