@@ -393,6 +393,17 @@ The audit trail covers every decision, code change, and rollback.
 
 ---
 
+## ♻️ Template Reuse Policy
+
+- These templates are project-agnostic. Replace concrete names with placeholders:
+  - `<Project_Name>`, `<Feature_Name>`, `<Backend_Framework>`, `<Frontend_Framework>`, `<Primary_Database>`, `<Deployment_Target>`
+- Do not hardcode vendor names; reference them via placeholders or examples in parentheses only.
+- Keep outputs, artifacts, and sections aligned with `Main-Project-Development-Flow.md` and `API_Documentation_Template.md`.
+- When tailoring to a project, define placeholder bindings in phase 01 and record them in `Requirements.json` and `ROADMAP.json`.
+- All edits must remain append-only; never destructively overwrite template guidance.
+
+---
+
 ### 🧾 Minimal `Audit_Log.json` Entry
 ```
 json

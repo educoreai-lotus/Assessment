@@ -68,10 +68,10 @@ Every implementation step — from source generation to integration — follows 
 ### 1️⃣ Environment & Pipeline Setup
 
 **Real SDLC Environment Context:**
-- **Database Connections:** PostgreSQL (primary relational) and MongoDB (logs/audit) configured with connection pooling.
-- **External Integrations:** REST APIs for external services, gRPC for internal microservice communication (DevLab, Course Builder).
-- **Frontend:** React (JavaScript + ES6) on Vercel — hybrid SSR + SPA.
-- **Backend:** Node.js (JavaScript + ES6) on Railway — REST API + AI hooks.
+- **Database Connections:** <Primary_Database> (primary) and optional secondary databases configured with connection pooling.
+- **External Integrations:** REST/gRPC services as required by <Feature_Name> integrations.
+- **Frontend:** <Frontend_Framework> on <Deployment_Target> — deployment/runtime per project needs.
+- **Backend:** <Backend_Framework> on <Deployment_Target> — API and service hooks.
 - **Environment Variables:** Database credentials, API keys, and service URLs managed via `.env` and secrets management.
 
 **Tasks:**
@@ -85,7 +85,7 @@ Every implementation step — from source generation to integration — follows 
 8. Store results in `ci-cd/config.json` and environment configuration in `artifacts/environment-spec.json`.
 
 **Clarification Requirements:**
-- **Ask user:** Which PostgreSQL and MongoDB hosting services? (e.g., AWS RDS, MongoDB Atlas, Supabase, Railway)
+- **Ask user:** Which database hosting services? (e.g., <Primary_Database> managed service, secondary DB provider)
 - **Ask user:** What external APIs need to be integrated? (e.g., authentication services, payment gateways, third-party APIs)
 - **Ask user:** What environment variable naming convention should be used?
 

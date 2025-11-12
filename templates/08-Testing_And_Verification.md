@@ -144,8 +144,8 @@ It ensures the system is **production-ready**, with verified stability, quality,
 - Employ **mocking/stubbing** for isolated module testing.  
 - Maintain **traceability matrix** linking requirements ↔ tests.  
 
-### Test Execution
-- Keep environments reproducible via Docker/Supabase snapshots.  
+-### Test Execution
+- Keep environments reproducible via Docker/<Primary_Database> snapshots.  
 - Maintain **test data versioning** for regression tracking.  
 - Use **parallel execution** for scalability.  
 - Auto-publish results to `/docs/testing/` and `ROADMAP.json`.

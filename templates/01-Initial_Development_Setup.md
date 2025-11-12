@@ -67,7 +67,7 @@ It defines the **ground truth for all subsequent phases**, ensuring consistency,
 ### 3. 🧱 Project Configuration
 3.1 Configure build system (e.g., Webpack, Vite, or Next).  
 3.2 Initialize testing framework (Jest / Mocha / PyTest).  
-3.3 Create base CI/CD workflow (GitHub Actions / Railway).  
+3.3 Create base CI/CD workflow (GitHub Actions / <Deployment_Target>).  
 3.4 **Database & Environment Configuration:**
    - Define `.env` schema with database connection strings (PostgreSQL, MongoDB).
    - Configure environment variables for API keys, external service URLs.
