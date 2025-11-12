@@ -100,6 +100,12 @@
 - Added startup migration to ensure `exam_type` enum exists and contains `baseline`, `postcourse`, verified via `SELECT unnest(enum_range(NULL::exam_type))`.
 - Updated `/health/mongo` to use `listCollections().toArray()` and include collection count; removed deprecated `mongoose.connect` options.
 - Commits: 54c2cce6ba9e6f8901577464dc92c2e894e11665
+
+## v4.3.1-p0832 - Phase 08.3.2: Backend stability upgrade (2025-11-12)
+- Backed up server to `backend/server_legacy_backup.js` and confirmed stable `server.js` with:
+  - Safe MongoDB health route (no regex filter)
+  - `runBootstrapMigrations(pool)` for enum/schema verification
+- Commit: ccde5f5b9b7a27c7805726dcc51f05e095d6a779
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:

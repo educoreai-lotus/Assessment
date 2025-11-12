@@ -292,3 +292,10 @@
     - Use Mongo `listCollections().toArray()` for health safety; include collection count in payload
     - Drop deprecated `mongoose.connect` options to suppress warnings
 
+## Phase 08.3.2 – Backend Stability Upgrade
+
+- [2025-11-12] Added migration safety and stabilized Mongo health
+  - Phase: 08.3.2
+  - Traceability ID: phase-08-3-2-backend-stability-upgrade
+  - Notes: Startup migrations verify enums/schemas; health checks simplified to reduce failure modes; previous server version backed up for audit
+

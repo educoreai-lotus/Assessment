@@ -811,6 +811,25 @@
         ],
         "timestamps": { "completed": "2025-11-12T00:00:00Z" }
       }
+    ,
+      {
+        "version": "v4.3.1-p0832",
+        "traceability_id": "phase-08-3-2-backend-stability-upgrade",
+        "phase": "08.3.2",
+        "title": "Backend Stability Upgrade",
+        "status_after": "Done",
+        "artifacts": {
+          "backend": [
+            "backend/server.js",
+            "backend/server_legacy_backup.js"
+          ]
+        },
+        "notes": [
+          "Safe MongoDB health route (no regex filter)",
+          "Automatic enum/schema verification via runBootstrapMigrations(pool)"
+        ],
+        "timestamps": { "completed": "2025-11-12T00:00:00Z" }
+      }
       {
         "version": "v4.3.1-p0760a",
         "traceability_id": "phase-07-6-0a-theme-variables",
