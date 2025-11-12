@@ -705,6 +705,25 @@
         },
         "timestamps": { "completed": "2025-11-12T00:00:00Z" }
       }
+    ,
+      {
+        "version": "v4.3.1-p0762",
+        "traceability_id": "phase-07-6-2-tailwind-native-theme",
+        "phase": "07.6.2",
+        "title": "Tailwind-Native Theme Toggle & Logo Fix",
+        "status_after": "Done",
+        "artifacts": {
+          "frontend": [
+            "frontend/src/index.css",
+            "frontend/src/components/layout/Navbar.jsx"
+          ]
+        },
+        "notes": [
+          "Dropped dependency on custom CSS day/night variables; use Tailwind dark class globally",
+          "Dynamic logo switching (day/night) and theme persistence via localStorage"
+        ],
+        "timestamps": { "completed": "2025-11-12T00:00:00Z" }
+      }
       {
         "version": "v3.1.3",
         "traceability_id": "p09-update-0001",

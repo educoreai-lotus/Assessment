@@ -43,6 +43,13 @@
 - Maintained Dark Emerald visuals and motion; both modes render with smooth transitions.
 - Commit: 445b4dc1ddfaa6b28a6bc288dc7f36159a215486
 
+## v4.3.1-p0762 - Phase 07.6.2: Tailwind-Native Theme Toggle & Logo Fix (2025-11-12)
+- Replaced CSS-variable day/night system with Tailwind-native dark mode using the `dark` class.
+- Updated `Navbar.jsx` to toggle `document.documentElement.classList` and persist theme (localStorage).
+- Dynamic branding: `/public/logo-day.jpeg` (light) and `/public/logo-night.jpeg` (dark) switch reactively.
+- Adjusted global styles: light mode `bg-white text-gray-800`; dark mode `bg-slate-900 text-emerald-300`.
+- Preserved Dark Emerald gradients/shadows; cards now adapt per mode via Tailwind classes.
+- Commit: 49d91c087ab6a65a8495cadfc4284971299bc395
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:

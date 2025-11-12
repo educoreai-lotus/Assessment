@@ -209,3 +209,12 @@
   - Changes: Replaced favicon with `/public/logo-night.jpeg`; updated title to “EduCore AI – Assessment Center”; Navbar now shows day/night logo and “Assessment” label; added theme toggle (🌞/🌙) with localStorage persistence switching `day-mode`/`night-mode` on body
   - Rationale: Establish consistent visual identity with accessible, persistent theming
 
+## Phase 07.6.2 – Tailwind-Native Theme Toggle & Logo Fix
+
+- [2025-11-12] Migrated to Tailwind-native dark/light theming
+  - Phase: 07.6.2
+  - Traceability ID: phase-07-6-2-tailwind-native-theme
+  - Changes: Removed reliance on custom CSS day/night variables for toggling; now using Tailwind `dark` class on `<html>` for global control; Navbar toggle updates `localStorage('theme')` and switches logos (`logo-day.jpeg`/`logo-night.jpeg`) reactively
+  - Styling: Light mode uses `bg-white text-gray-800`; Dark mode uses `bg-slate-900 text-emerald-300`; cards styled with Tailwind dark variants while retaining Dark Emerald gradients/shadows
+  - Rationale: Simpler, framework-native theming with predictable composition and fewer global overrides
+
