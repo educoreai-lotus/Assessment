@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 
 const base =
-  'px-3 py-2 rounded-lg text-sm font-medium text-neutral-200 hover:text-white hover:bg-emeraldbrand-700/40 transition-colors';
-const active = 'bg-emeraldbrand-700/60 text-white shadow-soft';
+  'px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-emeraldbrand-700/10 transition-colors dark:text-neutral-200 dark:hover:text-white dark:hover:bg-emeraldbrand-700/40';
+const active = 'bg-emeraldbrand-700/20 text-gray-900 dark:bg-emeraldbrand-700/60 dark:text-white shadow-soft';
 
 export default function Navbar() {
   const [theme, setTheme] = useState(null); // 'light' | 'dark' | null
@@ -42,10 +42,10 @@ export default function Navbar() {
   }, [theme]);
 
   return (
-    <header className="sticky top-0 z-40 backdrop-blur bg-white/70 border-b border-neutral-200 dark:bg-neutral-950/70 dark:border-emeraldbrand-800/30">
+    <header className="fixed top-0 left-0 w-full z-50 bg-white dark:bg-slate-900 shadow-md transition-colors">
       <div className="container-safe flex items-center justify-between py-3">
         <div className="flex items-center gap-3">
-          <img src={logoSrc} alt="EduCore logo" className="h-8 w-auto rounded-md shadow-soft" />
+          <img src={logoSrc} alt="EduCore logo" className="h-8 w-auto rounded-md shadow-soft transition-opacity duration-300" />
           <span className="font-semibold text-gray-900 dark:text-white">Assessment</span>
         </div>
         <nav className="flex items-center gap-1">

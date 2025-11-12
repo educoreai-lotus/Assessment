@@ -6,7 +6,7 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <main className="pt-4">
+      <main className="pt-24">
         <Outlet />
       </main>
     </div>
