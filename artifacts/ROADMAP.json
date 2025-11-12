@@ -671,6 +671,28 @@
       }
     ,
       {
+        "version": "v4.3.1-p0765",
+        "traceability_id": "phase-07-6-5-logo-cache-invalidation",
+        "phase": "07.6.5",
+        "title": "Logo Asset Rebuild & Cache Invalidation",
+        "status_after": "Done",
+        "artifacts": {
+          "frontend": [
+            "frontend/public/logo-day.png",
+            "frontend/public/logo-night.png",
+            "frontend/index.html",
+            "frontend/src/components/layout/Navbar.jsx"
+          ],
+          "build": [
+            "frontend/dist/index.html"
+          ]
+        },
+        "notes": [
+          "Migrated branding assets to .png and updated references; cleared local Vite cache; built for verification"
+        ],
+        "timestamps": { "completed": "2025-11-12T00:00:00Z" }
+      }
+      {
         "version": "v4.3.1-p0760a",
         "traceability_id": "phase-07-6-0a-theme-variables",
         "phase": "07.6.0a",

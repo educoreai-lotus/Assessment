@@ -234,3 +234,11 @@
   - Rule: All static branding assets in Vite should be referenced via absolute public paths (e.g., `/logo-day.jpeg`, `/logo-night.jpeg`) with exact filename casing as committed under `frontend/public/`
   - Validation: Confirmed files exist, ensured `Navbar.jsx` uses absolute paths, and built the app to verify resolution
 
+## Phase 07.6.5 – Logo Asset Rebuild & Cache Invalidation
+
+- [2025-11-12] Migrated branding assets to PNG and enforced cache-safe references
+  - Phase: 07.6.5
+  - Traceability ID: phase-07-6-5-logo-cache-invalidation
+  - Rule: Prefer `.png` for favicon/branding images to avoid cross-environment decoding issues; update absolute `/public` references and clear local build cache before deployment
+  - Validation: Cleared local Vite cache, rebuilt, and prepared for Vercel redeploy
+

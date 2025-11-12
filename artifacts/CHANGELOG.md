@@ -62,6 +62,11 @@
 - Ensured `Navbar.jsx` references absolute public paths: `src={theme === 'dark' ? '/logo-night.jpeg' : '/logo-day.jpeg'}`.
 - Built production bundle to validate asset resolution; Vercel redeploy will be triggered via push to `main`.
 - Commit: no code change required beyond verification; artifacts updated for completion.
+
+## v4.3.1-p0765 - Phase 07.6.5: Logo cache invalidation fix (.png migration) (2025-11-12)
+- Replaced JPEG logos with PNG assets (`/public/logo-day.png`, `/public/logo-night.png`) and updated references in `Navbar.jsx` and favicon in `index.html`.
+- Cleared local Vite cache and built production bundle to verify resolution prior to deployment.
+- Commit: b0acaff2d44fd98ff30738021587be81ba99ca37
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:
