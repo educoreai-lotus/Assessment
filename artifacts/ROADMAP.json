@@ -772,6 +772,27 @@
         ],
         "timestamps": { "completed": "2025-11-12T00:00:00Z" }
       }
+    ,
+      {
+        "version": "v4.3.1-p083",
+        "traceability_id": "phase-08-3-db-schema-health-repair",
+        "phase": "08.3",
+        "title": "Database Schema and Health Route Repair",
+        "status_after": "Done",
+        "artifacts": {
+          "backend": [
+            "backend/db/migrations.js",
+            "backend/server.js"
+          ],
+          "validation": [
+            "artifacts/Validation_Report_Phase08.md"
+          ]
+        },
+        "notes": [
+          "Ensured PG enum exam_type exists and verified; simplified Mongo health listing; removed deprecated mongoose connect options"
+        ],
+        "timestamps": { "completed": "2025-11-12T00:00:00Z" }
+      }
       {
         "version": "v4.3.1-p0760a",
         "traceability_id": "phase-07-6-0a-theme-variables",

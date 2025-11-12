@@ -90,6 +90,11 @@
 - Post-deploy health endpoints expected to return 200 with `{ ok: true }`:
   - `/health`, `/health/postgres`, `/health/mongo`
 - Commits: ad9feeeb6925d1145c3f128b8f30a1dc2b57f444
+
+## v4.3.1-p083 - Phase 08.3: Database schema & health route repair (2025-11-12)
+- Added startup migration to ensure `exam_type` enum exists and contains `baseline`, `postcourse`, verified via `SELECT unnest(enum_range(NULL::exam_type))`.
+- Updated `/health/mongo` to use `listCollections().toArray()` and include collection count; removed deprecated `mongoose.connect` options.
+- Commits: 54c2cce6ba9e6f8901577464dc92c2e894e11665
 ## v4.3.1-p08 - Phase 08: Testing & Verification (deployed mode) (2025-11-11)
 - Executed API and docs tests with Jest/Supertest.
 - Results:

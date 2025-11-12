@@ -275,3 +275,13 @@
     - Mongo: `MONGO_DB_URI || MONGO_URI`
   - Guidance: Ensure values are valid connection strings (postgres://..., mongodb+srv://...) and set in Railway project variables
 
+## Phase 08.3 – Database Schema and Health Route Repair
+
+- [2025-11-12] PG enum and Mongo health adjustments
+  - Phase: 08.3
+  - Traceability ID: phase-08-3-db-schema-health-repair
+  - Decisions:
+    - Run idempotent PG enum creation at startup for `exam_type` with values `baseline`, `postcourse`
+    - Use Mongo `listCollections().toArray()` for health safety; include collection count in payload
+    - Drop deprecated `mongoose.connect` options to suppress warnings
+
