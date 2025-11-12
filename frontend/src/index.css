@@ -4,17 +4,14 @@
 
 /* Dark Emerald AI base */
 html { -webkit-text-size-adjust: 100%; }
-body {
-  @apply bg-neutral-950 text-neutral-100 antialiased;
-}
+body { @apply antialiased bg-white text-gray-800; }
+.dark body { @apply bg-slate-900 text-emerald-300; }
 
 .gradient-text {
   @apply bg-gradient-primary bg-clip-text text-transparent;
 }
 
-.card {
-  @apply rounded-2xl bg-neutral-900/60 backdrop-blur border border-emeraldbrand-800/30 shadow-soft hover:shadow-glow transition-all;
-}
+.card { @apply rounded-2xl bg-white border border-neutral-200 shadow-soft hover:shadow-glow transition-all dark:bg-neutral-900/60 dark:border-emeraldbrand-800/30 backdrop-blur; }
 
 .btn-emerald {
   @apply inline-flex items-center justify-center px-4 py-2 rounded-xl font-medium bg-emeraldbrand-600 hover:bg-emeraldbrand-500 text-white shadow-soft transition-transform hover:-translate-y-0.5;
