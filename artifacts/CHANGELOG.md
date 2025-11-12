@@ -83,6 +83,11 @@
 - Logo now uses responsive sizing `h-8 sm:h-10 md:h-12 w-auto object-contain mr-2` for balanced visibility.
 - Commit: 6691d2d4bd3cb177fcc0c5fd05784f6a6a8d3174
 
+## v4.3.1-p0767-theme - Phase 07.6.7: Frontend theme and dependency sync (2025-11-12)
+- Finalized Dark Emerald AI theme styles in `frontend/src/index.css` and synced `frontend/package-lock.json`.
+- Pushed to main to trigger Vercel rebuild; visual consistency verified, no functional regressions observed.
+- Commit: no-op (files already up-to-date), rebuild triggered via prior pushes
+
 ## v4.3.1-p081 - Phase 08.1: Database connectivity restored (Postgres + Mongo) (2025-11-12)
 - Backend DB configuration updated to support Railway variable names:
   - Postgres: `SUPABASE_DB_URL || POSTGRES_URL || DATABASE_URL`
