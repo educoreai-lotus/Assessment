@@ -1,22 +1,13 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-function resolvePostgresConnectionString() {
-  const candidates = [
-    process.env.SUPABASE_DB_URL,
-    process.env.POSTGRES_URL,
-    process.env.DATABASE_URL,
-    process.env.SUPABASE_URL, // some envs mistakenly set API URL; reject if no 'postgres' scheme
-  ].filter(Boolean);
+const connectionString = process.env.SUPABASE_DB_URL;
 
-  const firstValid = candidates.find((val) => /^postgres(ql)?:\/\//i.test(val));
-  if (firstValid) return firstValid;
-
-  console.warn('⚠️ No valid Postgres connection string found in SUPABASE_DB_URL, POSTGRES_URL, or DATABASE_URL');
-  return undefined;
+if (!connectionString) {
+  // eslint-disable-next-line no-console
+  console.error('❌ Missing SUPABASE_DB_URL');
+  process.exit(1);
 }
-
-const connectionString = resolvePostgresConnectionString();
 
 const pool = new Pool({
   connectionString,
@@ -25,7 +16,6 @@ const pool = new Pool({
 
 function maskConnectionInfo(cs) {
   try {
-    if (!cs) return '(no-connection-string)';
     const url = new URL(cs);
     const host = url.hostname;
     const db = (url.pathname || '').replace(/^\//, '');
