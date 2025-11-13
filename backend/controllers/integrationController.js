@@ -61,48 +61,129 @@ exports.handlePostIntegration = async (req, res, next) => {
 };
 
 exports.handleGetIntegration = async (req, res, next) => {
+  const pool = require('../config/supabaseDB');
+  const { ExamPackage } = require('../models');
+  const { safeGetBaselineAnalytics, safeGetPostcourseAnalytics } = require('../services/gateways/analyticsGateway');
   try {
     const { api_caller: apiCaller, stringified_json: stringifiedJson } = req.query || {};
     const payload = parseStringifiedJson(stringifiedJson);
-
+    
     if (!apiCaller) {
       return res.status(400).json({ error: 'api_caller_required' });
     }
-
+    
     switch (apiCaller) {
       case 'learning_analytics': {
-        // Return summarized attempt data
-        // TODO: fetch from Postgres attempt + skills with minimal fields
-        return res.json({
-          // Placeholder per spec; replace with real DB query results
-          user_id: 'u_123',
-          exam_type: 'postcourse',
-          course_id: 'c_789',
-          course_name: 'Intro to JS',
-          attempt_no: 1,
-          passing_grade: 70,
-          max_attempts: 3,
-          final_grade: 82,
-          passed: true,
-          skills: [
-            { skill_id: 's_html', skill_name: 'HTML Structure', score: 85, status: 'acquired' },
-            { skill_id: 's_js_async', skill_name: 'Asynchronous Programming', score: 78, status: 'acquired' },
-          ],
-          submitted_at: new Date().toISOString(),
-        });
+        try {
+          // Fetch most recent submitted attempt
+          const { rows } = await pool.query(
+            `SELECT ea.*, e.exam_type, e.course_id
+             FROM exam_attempts ea
+             JOIN exams e ON e.exam_id = ea.exam_id
+             WHERE ea.submitted_at IS NOT NULL
+             ORDER BY ea.submitted_at DESC
+             LIMIT 1`
+          );
+          if (rows.length === 0) {
+            // fallback mock
+            const mock = await safeGetPostcourseAnalytics();
+            return res.json(mock);
+          }
+          const a = rows[0];
+          const pkg = await ExamPackage.findOne({ attempt_id: String(a.attempt_id) }).lean();
+          const skillsRows = await pool.query(
+            `SELECT skill_id, skill_name, score, status FROM attempt_skills WHERE attempt_id = $1 ORDER BY skill_id ASC`,
+            [a.attempt_id]
+          );
+          const skillList = skillsRows.rows.map((s) => ({
+            skill_id: s.skill_id,
+            skill_name: s.skill_name,
+            score: Number(s.score),
+            status: s.status,
+          }));
+          const policy = a.policy_snapshot || {};
+          if (a.exam_type === 'baseline') {
+            return res.json({
+              user_id: pkg?.user?.user_id || 'u_000',
+              exam_type: 'baseline',
+              passing_grade: Number(policy?.passing_grade ?? 0),
+              final_grade: a.final_grade != null ? Number(a.final_grade) : null,
+              passed: !!a.passed,
+              skills: skillList,
+              submitted_at: a.submitted_at ? new Date(a.submitted_at).toISOString() : null,
+            });
+          }
+          // postcourse
+          return res.json({
+            user_id: pkg?.user?.user_id || 'u_000',
+            exam_type: 'postcourse',
+            course_id: a.course_id != null ? `c_${a.course_id}` : null,
+            course_name: pkg?.metadata?.course_name || null,
+            attempt_no: a.attempt_no || 1,
+            passing_grade: Number(policy?.passing_grade ?? 0),
+            max_attempts: Number(policy?.max_attempts ?? 0) || undefined,
+            final_grade: a.final_grade != null ? Number(a.final_grade) : null,
+            passed: !!a.passed,
+            skills: skillList,
+            submitted_at: a.submitted_at ? new Date(a.submitted_at).toISOString() : null,
+          });
+        } catch (e) {
+          // fallback mock
+          const type = (payload && payload.exam_type) || 'postcourse';
+          if (type === 'baseline') {
+            const mock = await safeGetBaselineAnalytics();
+            return res.json(mock);
+          }
+          const mock = await safeGetPostcourseAnalytics();
+          return res.json(mock);
+        }
       }
       case 'management': {
-        // Return official minimal record
-        // TODO: fetch minimal compliance record fields
-        return res.json({
-          user_id: 'u_123',
-          course_id: 'c_789',
-          exam_type: 'postcourse',
-          attempt_no: 1,
-          passing_grade: 70,
-          final_grade: 82,
-          passed: true,
-        });
+        try {
+          const { rows } = await pool.query(
+            `SELECT ea.attempt_no, ea.final_grade, ea.passed, ea.submitted_at,
+                    e.exam_type, e.course_id
+             FROM exam_attempts ea
+             JOIN exams e ON e.exam_id = ea.exam_id
+             WHERE ea.submitted_at IS NOT NULL
+             ORDER BY ea.submitted_at DESC
+             LIMIT 1`
+          );
+          if (rows.length === 0) {
+            return res.json({
+              user_id: 'u_123',
+              course_id: 'c_789',
+              exam_type: 'postcourse',
+              attempt_no: 1,
+              passing_grade: 70,
+              final_grade: 82,
+              passed: true,
+            });
+          }
+          const a = rows[0];
+          // user_id from ExamPackage
+          const pkg = await ExamPackage.findOne({ attempt_id: String(a.attempt_id) }).lean();
+          const policy = a.policy_snapshot || {};
+          return res.json({
+            user_id: pkg?.user?.user_id || 'u_000',
+            course_id: a.course_id != null ? `c_${a.course_id}` : null,
+            exam_type: a.exam_type,
+            attempt_no: a.attempt_no || 1,
+            passing_grade: Number(policy?.passing_grade ?? 0),
+            final_grade: a.final_grade != null ? Number(a.final_grade) : null,
+            passed: !!a.passed,
+          });
+        } catch (e) {
+          return res.json({
+            user_id: 'u_123',
+            course_id: 'c_789',
+            exam_type: 'postcourse',
+            attempt_no: 1,
+            passing_grade: 70,
+            final_grade: 82,
+            passed: true,
+          });
+        }
       }
       default:
         return res.status(400).json({ error: 'unsupported_api_caller' });

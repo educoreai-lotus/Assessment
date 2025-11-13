@@ -8,6 +8,9 @@ const { executeInitSql } = require('./db/executeInit');
 const connectMongo = require('./config/mongoDB');
 const models = require('./models');
 const integrationRoutes = require('./routes/integration');
+const examsRouter = require('./routes/exams');
+const attemptsRouter = require('./routes/attempts');
+const packagesRouter = require('./routes/packages');
 const { mountSwagger } = require('./swagger');
 
 const PORT = process.env.PORT || 4000;
@@ -170,6 +173,11 @@ app.get('/health/mongo', async (req, res) => {
 
 // Mount integration endpoints EXACTLY as per integration map (no version prefix)
 app.use('/', integrationRoutes);
+
+// New Assessment API v1 routers
+app.use('/api/exams', examsRouter);
+app.use('/api/attempts', attemptsRouter);
+app.use('/api/packages', packagesRouter);
 
 // Keep versioned base for future non-integration routes
 app.use(`${API_BASE}`, (req, res) => {
