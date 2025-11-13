@@ -228,3 +228,12 @@
 - Frontend: production build successful (Vite).
 - Artifacts: `artifacts/Validation_Report_Phase08.md`, timestamped health payloads for Railway.
 - Action before cutover: run `backend/db/init.sql` against Postgres to create required tables.
+
+## v4.4.1-db-bootstrap – Supabase PostgreSQL bootstrap executed (2025-11-13)
+- Executed `backend/db/init.sql` on Supabase via server startup bootstrap.
+- Verified `/health/postgres` returns `ok: true`; all required tables present; enum values correct.
+- Artifacts:
+  - `backend/db/init.sql`
+  - `backend/db/executeInit.js`
+  - `artifacts/health_postgres_railway_2025-11-13T11-29-44Z.json`
+  - `artifacts/Validation_Report_Phase08.md` (Phase 08.5 section)

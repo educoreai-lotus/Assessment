@@ -1202,6 +1202,25 @@
           "notes": "Proceeding to pre-release tag with action: run init.sql to create PG tables prior to enabling write flows."
         },
         "timestamps": { "completed": "2025-11-13T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.1-p085",
+        "traceability_id": "phase-08-5-db-bootstrap-execution",
+        "phase": "08.5",
+        "title": "Database Bootstrap Migration Execution",
+        "status_after": "Done",
+        "artifacts": {
+          "sql": ["backend/db/init.sql"],
+          "executor": ["backend/db/executeInit.js"],
+          "validation": [
+            "artifacts/Validation_Report_Phase08.md",
+            "artifacts/health_postgres_railway_2025-11-13T11-29-44Z.json"
+          ]
+        },
+        "summary": {
+          "postgres": { "ok": true, "enum": ["baseline","postcourse"], "missingTables": [] }
+        },
+        "timestamps": { "completed": "2025-11-13T00:00:00Z" }
       }
     ],
     "additional_updates": [

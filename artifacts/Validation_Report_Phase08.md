@@ -185,3 +185,20 @@ Key fields:
 
 Outcome: Ready for v4.4.0 pre-release tag with noted action item.
 
+
+---
+
+## 08.5 – Database Bootstrap Migration Execution
+
+- Date: 2025-11-13
+- Objective: Execute `backend/db/init.sql` against Supabase (Railway) to create required tables and enum.
+- Method: Server startup executed bootstrap via shared pg pool; duplicate enum creation tolerated.
+
+### Verification (/health/postgres)
+
+```12:12:artifacts/health_postgres_railway_2025-11-13T11-29-44Z.json
+{"ok":true,"now":"...","hasExamType":true,"missingTables":[],"examTypeValues":["baseline","postcourse"],"missingEnumValues":[]}
+```
+
+Result: ok = true; all required tables present; enum validated.
+
