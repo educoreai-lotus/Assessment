@@ -23,8 +23,20 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+function maskConnectionInfo(cs) {
+  try {
+    if (!cs) return '(no-connection-string)';
+    const url = new URL(cs);
+    const host = url.hostname;
+    const db = (url.pathname || '').replace(/^\//, '');
+    return `host=${host} db=${db}`;
+  } catch {
+    return '(unparseable-connection-string)';
+  }
+}
+
 pool.connect()
-  .then(() => console.log('✅ Connected to PostgreSQL'))
+  .then(() => console.log(`✅ Connected to PostgreSQL (${maskConnectionInfo(connectionString)})`))
   .catch((err) => console.error('❌ PostgreSQL connection error:', err?.message || err));
 
 module.exports = pool;
