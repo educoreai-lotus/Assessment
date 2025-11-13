@@ -106,6 +106,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
 
   // Insert exam row in PG (map user_id 'u_123' -> 123 for FK)
   const userInt = mapUserId(user_id);
+  console.log('createExam user mapping:', { user_id, userInt });
   const courseInt = course_id ? toIntId(course_id) : null;
 
   const insertExamText = `

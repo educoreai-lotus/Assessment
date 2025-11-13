@@ -15,8 +15,8 @@ const ExamPackageQuestionSchema = new Schema(
 const ExamPackageSchema = new Schema(
   {
     _id: {
-      type: String,
-      default: () => `pkg_${Types.ObjectId().toString()}`,
+      type: Schema.Types.ObjectId,
+      default: () => new Types.ObjectId(),
     },
     exam_id: { type: String, required: true, index: true },
     attempt_id: { type: String, required: true, index: true },

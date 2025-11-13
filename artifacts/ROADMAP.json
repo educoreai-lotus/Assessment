@@ -54,6 +54,45 @@
         "status": "Ready"
       },
       {
+        "version": "v4.4.3-p07-assessment-api-v1",
+        "traceability_id": "phase-07-assessment-api-v1",
+        "phase": "07",
+        "title": "Assessment API v1 – Exams/Attempts/Packages with Mock Fallbacks",
+        "status_after": "In Progress",
+        "artifacts": {
+          "backend": [
+            "backend/routes/exams.js",
+            "backend/routes/attempts.js",
+            "backend/routes/packages.js",
+            "backend/controllers/examsController.js",
+            "backend/controllers/attemptsController.js",
+            "backend/controllers/packagesController.js",
+            "backend/services/core/examsService.js",
+            "backend/services/core/attemptsService.js",
+            "backend/services/mocks/directoryMock.js",
+            "backend/services/mocks/skillsEngineMock.js",
+            "backend/services/mocks/devlabMock.js",
+            "backend/services/mocks/courseBuilderMock.js",
+            "backend/services/mocks/protocolCameraMock.js",
+            "backend/services/mocks/ragMock.js",
+            "backend/services/mocks/analyticsMock.js",
+            "backend/services/gateways/directoryGateway.js",
+            "backend/services/gateways/skillsEngineGateway.js",
+            "backend/services/gateways/courseBuilderGateway.js",
+            "backend/services/gateways/devlabGateway.js",
+            "backend/services/gateways/protocolCameraGateway.js",
+            "backend/services/gateways/ragGateway.js",
+            "backend/services/gateways/analyticsGateway.js",
+            "backend/controllers/integrationController.js",
+            "backend/server.js"
+          ],
+          "phase": [
+            "artifacts/p07-assessment-api-v1.json"
+          ]
+        },
+        "timestamps": { "created": "2025-11-13T00:00:00Z" }
+      },
+      {
         "id": "02",
         "title": "User Dialogue & Requirements Analysis",
         "template": "02-User_Dialogue_And_Requirements.md",
