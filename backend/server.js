@@ -4,6 +4,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const pool = require('./config/supabaseDB');
 const { runBootstrapMigrations } = require('./db/migrations');
+const { executeInitSql } = require('./db/executeInit');
 const connectMongo = require('./config/mongoDB');
 const models = require('./models');
 const integrationRoutes = require('./routes/integration');
@@ -20,6 +21,16 @@ runBootstrapMigrations(pool).catch((e) => {
   // eslint-disable-next-line no-console
   console.error('Migration error:', e?.message || e);
 });
+// Execute bootstrap DDL for Phase 08.5 (safe in production; tolerant to duplicate enum)
+executeInitSql()
+  .then(() => {
+    // eslint-disable-next-line no-console
+    console.log('✅ init.sql executed');
+  })
+  .catch((e) => {
+    // Non-fatal: log and continue server startup
+    console.error('init.sql execution error:', e?.message || e);
+  });
 
 app.set('trust proxy', 1);
 
