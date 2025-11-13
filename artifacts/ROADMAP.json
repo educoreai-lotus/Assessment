@@ -1221,6 +1221,24 @@
           "postgres": { "ok": true, "enum": ["baseline","postcourse"], "missingTables": [] }
         },
         "timestamps": { "completed": "2025-11-13T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.2-p086",
+        "traceability_id": "phase-08-6-remote-db-bootstrap",
+        "phase": "08.6",
+        "title": "Remote DB Bootstrap (Railway) & Supabase Verification",
+        "status_after": "Done",
+        "artifacts": {
+          "health": ["artifacts/health_postgres_after_bootstrap.json"],
+          "sql": [
+            "artifacts/sql_verification_phase08_6.sql",
+            "artifacts/sql_verification_phase08_6.json"
+          ]
+        },
+        "summary": {
+          "postgres": { "ok": true, "tables": ["users","exams","exam_attempts","attempt_skills","outbox_integrations"], "enumValues": ["baseline","postcourse"] }
+        },
+        "timestamps": { "completed": "2025-11-13T00:00:00Z" }
       }
     ],
     "additional_updates": [

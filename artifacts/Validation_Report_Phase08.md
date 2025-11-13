@@ -202,3 +202,59 @@ Outcome: Ready for v4.4.0 pre-release tag with noted action item.
 
 Result: ok = true; all required tables present; enum validated.
 
+
+---
+
+## 08.6 – Remote DB Bootstrap (Railway)
+
+- Date: 2025-11-13
+- Objective: Execute idempotent migrations on Railway at boot and verify against Supabase.
+
+### Deployment/Migration Confirmation
+- Server startup logs (sanitized):
+  - `✅ Connected to PostgreSQL (host=<masked-host> db=<masked-db>)`
+  - `✅ init.sql executed`
+
+### Production Health Verification
+Saved pretty JSON payload:
+```12:12:artifacts/health_postgres_after_bootstrap.json
+{"ok":true,"now":"2025-11-13T10:17:06.197Z","hasExamType":true,"missingTables":[],"examTypeValues":["baseline","postcourse"],"missingEnumValues":[]}
+```
+
+### Supabase Cross-Check (via connection string)
+- SQL used:
+
+```12:20:artifacts/sql_verification_phase08_6.sql
+-- Phase 08.6 – Remote DB Bootstrap (Railway) – Verification SQL
+
+-- 1) List public tables (expected: users, exams, exam_attempts, attempt_skills, outbox_integrations)
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+
+-- 2) Enum values for exam_type (expected: baseline, postcourse)
+SELECT unnest(enum_range(NULL::exam_type));
+```
+
+- Captured results summary:
+```12:28:artifacts/sql_verification_phase08_6.json
+{
+  "health_postgres_after_bootstrap": {
+    "ok": true,
+    "hasExamType": true,
+    "missingTables": [],
+    "examTypeValues": ["baseline", "postcourse"]
+  },
+  "expected_tables": [
+    "attempt_skills",
+    "exam_attempts",
+    "exams",
+    "outbox_integrations",
+    "users"
+  ]
+}
+```
+
+Outcome: Remote DB bootstrap verified on Railway/Supabase (ok: true; expected tables present; enum values correct).
+

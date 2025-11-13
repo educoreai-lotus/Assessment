@@ -237,3 +237,12 @@
   - `backend/db/executeInit.js`
   - `artifacts/health_postgres_railway_2025-11-13T11-29-44Z.json`
   - `artifacts/Validation_Report_Phase08.md` (Phase 08.5 section)
+
+## v4.4.2 – Remote DB bootstrap & verification (Railway + Supabase) (2025-11-13)
+- Added masked Postgres host/db logging for connection confirmation.
+- Redeployed on Railway; migrations executed on boot (idempotent).
+- Verified production `/health/postgres` (ok: true) and saved to `artifacts/health_postgres_after_bootstrap.json`.
+- Cross-checked expected tables and enum values; exported SQL and JSON verification:
+  - `artifacts/sql_verification_phase08_6.sql`
+  - `artifacts/sql_verification_phase08_6.json`
+- Documentation updated in `artifacts/Validation_Report_Phase08.md` (Phase 08.6).

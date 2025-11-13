@@ -308,3 +308,13 @@
   - Frontend: Vite build successful; routes verified previously (Home, Exams, Results, Dev/Health)
   - Decision: Proceed to pre-release tag; require executing `backend/db/init.sql` on Postgres prior to enabling write paths
 
+## Phase 08.6 – Remote DB Bootstrap (Railway)
+
+- [2025-11-13] Idempotent migrations execute on boot; remote verification completed
+  - Phase: 08.6
+  - Traceability ID: phase-08-6-remote-db-bootstrap
+  - Notes:
+    - Migrations are idempotent (CREATE TYPE/TABLE IF NOT EXISTS; duplicate enum values ignored)
+    - Logging includes masked Postgres host/db at connect for environment confirmation
+    - Production `/health/postgres` returns ok: true; expected tables present; enum values baseline/postcourse
+
