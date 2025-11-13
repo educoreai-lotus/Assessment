@@ -1,0 +1,22 @@
+{
+  "source": "production /health/postgres + Supabase verification intent",
+  "health_postgres_after_bootstrap": {
+    "ok": true,
+    "hasExamType": true,
+    "missingTables": [],
+    "examTypeValues": ["baseline", "postcourse"]
+  },
+  "expected_tables": [
+    "attempt_skills",
+    "exam_attempts",
+    "exams",
+    "outbox_integrations",
+    "users"
+  ],
+  "queries": {
+    "tables_sql": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;",
+    "enum_sql": "SELECT unnest(enum_range(NULL::exam_type));"
+  }
+}
+
+
