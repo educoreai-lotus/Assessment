@@ -6,11 +6,12 @@ function toPrefixed(id, prefix) {
   return `${prefix}_${Number(id)}`;
 }
 
+const { mapUserId } = require('./idMapper');
+
 async function getAttemptsForUser(userId) {
-  // userId is prefixed string; try to filter by numeric component where possible; if not, return empty
-  const m = String(userId || '').match(/^[a-z]+_(\d+)$/i);
-  if (!m) return [];
-  const userInt = parseInt(m[1], 10);
+  // PostgreSQL queries use numeric mapped IDs; API returns original IDs
+  const userInt = mapUserId(userId);
+  if (userInt == null || Number.isNaN(userInt)) return [];
   const { rows } = await pool.query(
     `
       SELECT ea.attempt_id, ea.attempt_no, ea.final_grade, ea.passed, ea.submitted_at,

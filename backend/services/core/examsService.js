@@ -5,6 +5,7 @@ const { safeFetchBaselineSkills, safePushAssessmentResults: safePushSkillsResult
 const { safeFetchCoverage, safePushExamResults: safePushCourseBuilderResults } = require('../gateways/courseBuilderGateway');
 const { safeGetCodingQuestions, safeRequestTheoreticalValidation } = require('../gateways/devlabGateway');
 const { safeSendSummary } = require('../gateways/protocolCameraGateway');
+const { mapUserId } = require('./idMapper');
 
 function toIntId(prefixed) {
   if (typeof prefixed !== 'string') return null;
@@ -103,8 +104,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     });
   } catch {}
 
-  // Insert exam row in PG
-  const userInt = toIntId(user_id);
+  // Insert exam row in PG (map user_id 'u_123' -> 123 for FK)
+  const userInt = mapUserId(user_id);
   const courseInt = course_id ? toIntId(course_id) : null;
 
   const insertExamText = `
