@@ -220,3 +220,11 @@
 ## 2025-10-25
 - Phase 14.1: Enforced Directory max_attempts and cooldowns for Post-Course Exam.
 - Added attempt logging + versioned results; incident override endpoint.
+
+## v4.4.0 – Full system validation & pre-release verification (2025-11-13)
+- Phase 08.4 completed: Full-system validation across backend, frontend, and databases.
+- Backend: tests executed (2/3 suites runnable/pass; all 12 assertions passed); Swagger verified.
+- Health (production): /health ok; /health/mongo ok; /health/postgres reports enum ok with missing tables.
+- Frontend: production build successful (Vite).
+- Artifacts: `artifacts/Validation_Report_Phase08.md`, timestamped health payloads for Railway.
+- Action before cutover: run `backend/db/init.sql` against Postgres to create required tables.

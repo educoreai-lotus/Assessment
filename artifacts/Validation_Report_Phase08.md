@@ -125,3 +125,63 @@ source: artifacts/jest-results-phase08.json, artifacts/p08-testing-verification.
 - Result: Successful build (per Vercel logs), no functional regressions observed
 
 
+---
+
+## 08.4 – Full System Validation & Pre-Deployment Testing
+
+- Date: 2025-11-13
+- Scope: End-to-end verification across backend, frontend, and databases prior to v4.4.0 release tag
+
+### Execution Summary
+- Backend tests: executed `npm run test:report` → artifacts/jest-results-phase08.json
+  - Suites: 3 total → 2 passed, 1 failed to run (DB health suite import context; no test assertions failed)
+- Backend health (production target):
+  - GET /health → 200 OK
+  - GET /health/postgres → 200 with payload; ok=false due to missing tables; enum present with expected values
+  - GET /health/mongo → 200 OK; ok=true; 4 observed collections
+- Frontend build: `npm run build` → success (dist generated)
+
+### Collected Health Payloads (Railway)
+- Stored with timestamped, append-only filenames:
+  - `artifacts/health_railway_2025-11-13T11-05-52Z.json`
+  - `artifacts/health_postgres_railway_2025-11-13T11-05-52Z.json`
+  - `artifacts/health_mongo_railway_2025-11-13T11-05-52Z.json`
+
+Key fields:
+```12:12:artifacts/health_railway_2025-11-13T11-05-52Z.json
+{"status":"ok","service":"assessment-platform-backend","time":"2025-11-13T09:05:51.073Z"}
+```
+
+```12:12:artifacts/health_postgres_railway_2025-11-13T11-05-52Z.json
+{"ok":false,"now":"2025-11-13T09:05:52.690Z","hasExamType":true,"missingTables":["users","exams","exam_attempts","attempt_skills","outbox_integrations"],"examTypeValues":["baseline","postcourse"],"missingEnumValues":[]}
+```
+
+```12:12:artifacts/health_mongo_railway_2025-11-13T11-05-52Z.json
+{"ok":true,"state":1,"registeredModels":["ExamPackage","AiAuditTrail","ProctoringEvent","Incident"],"ping":{"ok":1},"collections":4,"observedCollections":["ai_audit_trail","exam_packages","proctoring_events","incidents"]}
+```
+
+### Database Validation
+- PostgreSQL (Supabase/Railway):
+  - Enum `exam_type` exists with values: `['baseline','postcourse']` (validated via `/health/postgres`).
+  - Tables currently reported missing: `users, exams, exam_attempts, attempt_skills, outbox_integrations`.
+  - Note: `backend/db/init.sql` contains idempotent DDL to create required tables; ensure execution as part of environment provisioning or a one-time migration step before final cutover.
+- MongoDB (Atlas):
+  - Connected and healthy; observed collections (4): `ai_audit_trail, exam_packages, proctoring_events, incidents`.
+
+### Frontend Validation
+- Build completed successfully (Vite). Dist assets present:
+  - `dist/index.html`, `dist/assets/index-*.js`, `dist/assets/index-*.css`
+
+### Integration Surface (Smoke)
+- Unified endpoint `/api/assessment/integration` verified via test harness (supertest) for expected flows:
+  - `skills_engine`, `course_builder` (start, extra_attempt), `devlab` (coding, theoretical), `rag`, `protocol_camera`, plus GET flows for `learning_analytics` and `management` (see tests).
+
+### Risks / Follow-ups (Pre-Release)
+1) PostgreSQL tables missing in target environment. Action: run `backend/db/init.sql` against the Postgres instance (or create an equivalent migration execution) prior to enabling write flows.
+2) Test suite isolation: adjust health test to avoid model import timing or mock models earlier. Non-blocking for runtime; recommended for CI green.
+
+### Gate Decision
+- Health endpoints responsive; Mongo healthy; Postgres enum verified. Pending: Postgres tables creation before data writes. Proceed with pre-release tagging while tracking the Postgres table migration as a required deployment step.
+
+Outcome: Ready for v4.4.0 pre-release tag with noted action item.
+

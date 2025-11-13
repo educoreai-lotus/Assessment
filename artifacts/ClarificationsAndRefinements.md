@@ -299,3 +299,12 @@
   - Traceability ID: phase-08-3-2-backend-stability-upgrade
   - Notes: Startup migrations verify enums/schemas; health checks simplified to reduce failure modes; previous server version backed up for audit
 
+## Phase 08.4 – Full System Validation & Pre-Deployment Testing
+
+- [2025-11-13] End-to-end verification before tagging v4.4.0
+  - Phase: 08.4
+  - Traceability ID: phase-08-4-full-system-validation
+  - Backend: /health 200; /health/mongo ok; /health/postgres enum ok, tables pending
+  - Frontend: Vite build successful; routes verified previously (Home, Exams, Results, Dev/Health)
+  - Decision: Proceed to pre-release tag; require executing `backend/db/init.sql` on Postgres prior to enabling write paths
+
