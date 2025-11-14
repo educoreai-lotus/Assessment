@@ -244,11 +244,27 @@ async function markAttemptStarted({ attempt_id }) {
 }
 
 async function getPackageByExamId(exam_id) {
-  return ExamPackage.findOne({ exam_id: String(exam_id) }).sort({ created_at: -1 }).lean();
+  const doc = await ExamPackage.findOne({ exam_id: String(exam_id) }).sort({ created_at: -1 }).lean();
+  if (!doc) return doc;
+  if (Array.isArray(doc.questions)) {
+    doc.questions = doc.questions.map((q) => ({
+      ...q,
+      prompt: removeHintsDeep(q?.prompt),
+    }));
+  }
+  return doc;
 }
 
 async function getPackageByAttemptId(attempt_id) {
-  return ExamPackage.findOne({ attempt_id: String(attempt_id) }).sort({ created_at: -1 }).lean();
+  const doc = await ExamPackage.findOne({ attempt_id: String(attempt_id) }).sort({ created_at: -1 }).lean();
+  if (!doc) return doc;
+  if (Array.isArray(doc.questions)) {
+    doc.questions = doc.questions.map((q) => ({
+      ...q,
+      prompt: removeHintsDeep(q?.prompt),
+    }));
+  }
+  return doc;
 }
 
 async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
