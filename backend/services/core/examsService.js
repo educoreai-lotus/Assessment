@@ -109,6 +109,17 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   console.log('createExam user mapping:', { user_id, userInt });
   const courseInt = course_id ? toIntId(course_id) : null;
 
+  // Baseline exam: only one baseline exam per user is allowed
+  if (exam_type === 'baseline') {
+    const { rows: existingBaseline } = await pool.query(
+      `SELECT 1 FROM exams WHERE exam_type = $1 AND user_id = $2 LIMIT 1`,
+      ['baseline', userInt]
+    );
+    if (existingBaseline.length > 0) {
+      return { error: 'baseline_already_exists' };
+    }
+  }
+
   const insertExamText = `
     INSERT INTO exams (exam_type, user_id, course_id)
     VALUES ($1, $2, $3)
@@ -174,7 +185,45 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
 }
 
 async function markAttemptStarted({ attempt_id }) {
+  // Load attempt, exam, and policy to enforce rules
+  const { rows: attemptRows } = await pool.query(
+    `SELECT ea.attempt_id, ea.exam_id, ea.attempt_no, ea.policy_snapshot, e.exam_type
+     FROM exam_attempts ea
+     JOIN exams e ON e.exam_id = ea.exam_id
+     WHERE ea.attempt_id = $1`,
+    [attempt_id]
+  );
+  if (attemptRows.length === 0) {
+    throw new Error('attempt_not_found');
+  }
+  const attempt = attemptRows[0];
+  const examType = attempt.exam_type;
+
+  // Count existing attempts for this exam
+  const { rows: countRows } = await pool.query(
+    `SELECT COUNT(*)::int AS cnt FROM exam_attempts WHERE exam_id = $1`,
+    [attempt.exam_id]
+  );
+  const attemptsCount = countRows[0]?.cnt ?? 0;
+
+  if (examType === 'baseline') {
+    // Only one attempt allowed; block if attempt_no > 1 or attemptsCount > 1
+    if (attempt.attempt_no > 1 || attemptsCount > 1) {
+      return { error: 'baseline_attempt_not_allowed' };
+    }
+  } else if (examType === 'postcourse') {
+    const policySnapshot = attempt.policy_snapshot || {};
+    const maxAttempts = Number(policySnapshot?.max_attempts ?? 1);
+    if (Number.isFinite(maxAttempts) && maxAttempts > 0) {
+      // If attempts already equal or exceed max, block starting
+      if (attemptsCount > maxAttempts || attempt.attempt_no > maxAttempts) {
+        return { error: 'max_attempts_reached' };
+      }
+    }
+  }
+
   await pool.query(`UPDATE exam_attempts SET started_at = NOW() WHERE attempt_id = $1`, [attempt_id]);
+  return { ok: true };
 }
 
 async function getPackageByExamId(exam_id) {

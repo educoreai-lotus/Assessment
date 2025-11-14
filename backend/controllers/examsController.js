@@ -7,6 +7,9 @@ exports.createExam = async (req, res, next) => {
       return res.status(400).json({ error: 'user_id_and_exam_type_required' });
     }
     const resp = await createExam({ user_id, exam_type, course_id, course_name });
+    if (resp && resp.error) {
+      return res.status(400).json(resp);
+    }
     return res.status(201).json(resp);
   } catch (err) {
     return next(err);
@@ -20,7 +23,10 @@ exports.startExam = async (req, res, next) => {
     if (!attempt_id) {
       return res.status(400).json({ error: 'attempt_id_required' });
     }
-    await markAttemptStarted({ attempt_id });
+    const result = await markAttemptStarted({ attempt_id });
+    if (result && result.error) {
+      return res.status(400).json(result);
+    }
     const pkg = await getPackageByExamId(examId);
     if (!pkg) {
       return res.status(404).json({ error: 'package_not_found' });
