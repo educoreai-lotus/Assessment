@@ -11,11 +11,16 @@ async function safeGetCodingQuestions() {
 }
 
 async function safeRequestTheoreticalValidation(payload) {
+  // Ensure DevLab receives full theoretical content including hints and metadata
+  const forwardedPayload = {
+    ...payload,
+    question: payload && payload.question ? JSON.parse(JSON.stringify(payload.question)) : undefined,
+  };
   try {
-    return await sendTheoreticalToDevLab(payload);
+    return await sendTheoreticalToDevLab(forwardedPayload);
   } catch (err) {
     console.warn('DevLab theoretical validation failed, using mock. Reason:', err?.message || err);
-    return mockRequestTheoreticalValidation(payload);
+    return mockRequestTheoreticalValidation(forwardedPayload);
   }
 }
 

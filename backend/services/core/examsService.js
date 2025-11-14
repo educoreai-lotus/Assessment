@@ -17,6 +17,22 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function removeHintsDeep(input) {
+  if (input == null) return input;
+  if (Array.isArray(input)) {
+    return input.map((item) => removeHintsDeep(item));
+  }
+  if (typeof input === 'object') {
+    const clone = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (key === 'hints') continue;
+      clone[key] = removeHintsDeep(value);
+    }
+    return clone;
+  }
+  return input;
+}
+
 async function buildExamPackageDoc({ exam_id, attempt_id, user_id, exam_type, policy, skills, coverage_map, course_id, course_name, questions }) {
   const doc = new ExamPackage({
     exam_id: String(exam_id),
@@ -25,7 +41,8 @@ async function buildExamPackageDoc({ exam_id, attempt_id, user_id, exam_type, po
     questions: (questions || []).map((q) => ({
       question_id: q.qid || q.question_id || q.id || '',
       skill_id: q.skill_id,
-      prompt: q,
+      // Strip any hints from persisted prompt to prevent storage/exposure
+      prompt: removeHintsDeep(q),
       options: Array.isArray(q?.choices) ? q.choices : [],
       answer_key: q?.correct_answer ?? null,
       metadata: { type: q.type || 'mcq', difficulty: q.difficulty || 'medium' },
@@ -227,11 +244,27 @@ async function markAttemptStarted({ attempt_id }) {
 }
 
 async function getPackageByExamId(exam_id) {
-  return ExamPackage.findOne({ exam_id: String(exam_id) }).sort({ created_at: -1 }).lean();
+  const doc = await ExamPackage.findOne({ exam_id: String(exam_id) }).sort({ created_at: -1 }).lean();
+  if (!doc) return doc;
+  if (Array.isArray(doc.questions)) {
+    doc.questions = doc.questions.map((q) => ({
+      ...q,
+      prompt: removeHintsDeep(q?.prompt),
+    }));
+  }
+  return doc;
 }
 
 async function getPackageByAttemptId(attempt_id) {
-  return ExamPackage.findOne({ attempt_id: String(attempt_id) }).sort({ created_at: -1 }).lean();
+  const doc = await ExamPackage.findOne({ attempt_id: String(attempt_id) }).sort({ created_at: -1 }).lean();
+  if (!doc) return doc;
+  if (Array.isArray(doc.questions)) {
+    doc.questions = doc.questions.map((q) => ({
+      ...q,
+      prompt: removeHintsDeep(q?.prompt),
+    }));
+  }
+  return doc;
 }
 
 async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
