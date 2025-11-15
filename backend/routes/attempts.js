@@ -54,6 +54,23 @@ router.get('/:attemptId', attemptsController.getAttemptById);
  */
 router.get('/:attemptId/skills', attemptsController.getAttemptSkills);
 
+/**
+ * @openapi
+ * /api/attempts/{attemptId}/remaining_time:
+ *   get:
+ *     summary: Get remaining time for an attempt
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.get('/:attemptId/remaining_time', attemptsController.getRemainingTime);
+
 module.exports = router;
 
 

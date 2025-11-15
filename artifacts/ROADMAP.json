@@ -70,6 +70,14 @@
             "status": "done",
             "description": "All theoretical exam questions use medium difficulty unless explicitly requested by DevLab external API."
         }
+        ,
+        {
+            "id": "exam_timing",
+            "title": "Exam Timing & Expiration",
+            "description": "Adds duration, expiration, start/end timestamps, and blocking logic.",
+            "status": "completed",
+            "updated_at": "2025-11-15"
+        }
     ],
   
     "phases": [
@@ -1420,6 +1428,25 @@
         "phase": "07",
         "title": "Proctoring v1 added: camera activation + focus monitoring + auto-cancel.",
         "status": "delivered",
+        "date": "2025-11-15"
+      }
+    ,
+      {
+        "phase": "07",
+        "title": "Exam Timing & Expiration",
+        "status": "delivered",
+        "artifacts": [
+          "backend/services/core/examsService.js",
+          "backend/controllers/examsController.js",
+          "backend/controllers/attemptsController.js",
+          "backend/routes/attempts.js",
+          "backend/db/init.sql",
+          "templates/Architecture/ExamFlow.md",
+          "templates/Feature_Specs/AttemptRules.md",
+          "templates/Feature_Specs/Proctoring.md",
+          "templates/clarificationsAndRefinements.md"
+        ],
+        "notes": "Added duration_minutes and expires_at with lifecycle enforcement, remaining-time endpoint, and docs updates.",
         "date": "2025-11-15"
       }
     ]

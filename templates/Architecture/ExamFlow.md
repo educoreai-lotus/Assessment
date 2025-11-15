@@ -42,4 +42,25 @@ This document describes how exam start interacts with proctoring camera activati
 - Event types: `focus_lost`, `exam_canceled`.
 - Threshold: cancel on 3rd violation and block further exam starts.
 
+## Timing Lifecycle & Expiration
+1) Time allocation
+   - Baseline: `question_count = skills.length`
+   - Postcourse: `question_count = sum(coverage_map[*].skills.length)`
+   - `duration_minutes = question_count * 4`
+   - Persisted to PG `exam_attempts.duration_minutes` and Mongo `ExamPackage.metadata.time_allocated_minutes`
+
+2) Expiration
+   - `expires_at = NOW() + duration_minutes minutes`
+   - Persisted to PG `exam_attempts.expires_at` and Mongo `ExamPackage.metadata.expires_at`
+
+3) Start
+   - Controller sets `ExamPackage.metadata.start_time = now` on successful start
+   - If `now > expires_at` → `403 {"error":"exam_time_expired"}`
+
+4) Submit
+   - If expired at submission time → `{ "error": "exam_time_expired" }` (no grading)
+
+5) Remaining time
+   - `GET /api/attempts/{attempt_id}/remaining_time` → `{ remaining_seconds, expired }`
+
 

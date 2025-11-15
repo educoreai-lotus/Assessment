@@ -173,3 +173,28 @@ _Feature-specific clarifications will be appended here as features are developed
   - Phase: 07
   - Traceability ID: feat-proctoring-event-alignment
   - Rationale: Keep future event flows consistent with current data model.
+
+---
+
+## Feature: Exam Timing (Feature ID: FEAT-EXAM-TIMING)
+
+### Backend
+
+- [2025-11-15] Time allocation: 4 minutes per question; expiration enforcement
+  - Phase: 07
+  - Traceability ID: feat-exam-timing-allocation-expiry
+  - Rationale: Define deterministic duration and expiration to standardize learner experience.
+
+### Database
+
+- [2025-11-15] Added `exam_attempts.duration_minutes` and `exam_attempts.expires_at`
+  - Phase: 07
+  - Traceability ID: feat-exam-timing-pg-columns
+  - Rationale: Persist duration and absolute expiration for enforcement and reporting.
+
+### Clarification
+
+- [2025-11-15] Timing calculation: 4 minutes per question
+  - Phase: 07
+  - Traceability ID: feat-exam-timing-clarification-4min
+  - Rationale: Baseline = skills.length; Postcourse = sum of coverage_map[*].skills.length.

@@ -1,6 +1,6 @@
 const { createExam, markAttemptStarted, getPackageByExamId, submitAttempt } = require('../services/core/examsService');
 const pool = require('../config/supabaseDB');
-const { ProctoringSession } = require('../models');
+const { ProctoringSession, ExamPackage } = require('../models');
 
 exports.createExam = async (req, res, next) => {
   try {
@@ -26,6 +26,16 @@ exports.startExam = async (req, res, next) => {
       return res.status(400).json({ error: 'attempt_id_required' });
     }
 
+    // Block if attempt time expired
+    const { rows: expRows } = await pool.query(
+      `SELECT expires_at, duration_minutes, status FROM exam_attempts WHERE attempt_id = $1`,
+      [attempt_id],
+    ).catch(() => ({ rows: [] }));
+    const expAt = expRows?.[0]?.expires_at ? new Date(expRows[0].expires_at) : null;
+    if (expAt && new Date() > expAt) {
+      return res.status(403).json({ error: 'exam_time_expired' });
+    }
+
     // Block if attempt was canceled
     const { rows: statusRows } = await pool.query(
       `SELECT status FROM exam_attempts WHERE attempt_id = $1`,
@@ -46,6 +56,16 @@ exports.startExam = async (req, res, next) => {
     if (result && result.error) {
       return res.status(400).json(result);
     }
+
+    // Set ExamPackage.metadata.start_time = now (do not overwrite if already set)
+    try {
+      await ExamPackage.updateOne(
+        { attempt_id: String(attempt_id) },
+        { $setOnInsert: {}, $set: { 'metadata.start_time': new Date().toISOString() } },
+        { upsert: false }
+      );
+    } catch {}
+
     const pkg = await getPackageByExamId(examId);
     if (!pkg) {
       return res.status(404).json({ error: 'package_not_found' });
@@ -73,6 +93,8 @@ exports.startExam = async (req, res, next) => {
       skills: pkg?.metadata?.skills || [],
       coverage_map: pkg?.coverage_map || [],
       questions: pkg?.questions?.map((q) => removeHintsDeep(q.prompt)) || [],
+      time_allocated_minutes: pkg?.metadata?.time_allocated_minutes ?? null,
+      expires_at: pkg?.metadata?.expires_at ?? null,
       camera_required: true,
     });
   } catch (err) {

@@ -70,6 +70,8 @@ async function buildExamPackageDoc({
   course_id,
   course_name,
   questions,
+  time_allocated_minutes,
+  expires_at_iso,
 }) {
   const doc = new ExamPackage({
     exam_id: String(exam_id),
@@ -102,6 +104,8 @@ async function buildExamPackageDoc({
       skills,
       course_id,
       course_name,
+      time_allocated_minutes: time_allocated_minutes ?? undefined,
+      expires_at: expires_at_iso ?? undefined,
     },
   });
   await doc.save();
@@ -207,6 +211,21 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       ? coveragePayload?.course_name || course_name || null
       : null;
 
+  // Determine question count and timing
+  let questionCount = 0;
+  if (exam_type === "baseline") {
+    questionCount = Array.isArray(skillsArray) ? skillsArray.length : 0;
+  } else if (exam_type === "postcourse") {
+    const mapArray = Array.isArray(coverageMap) ? coverageMap : [];
+    questionCount = mapArray.reduce((acc, item) => {
+      const skillsInItem = Array.isArray(item?.skills) ? item.skills.length : 0;
+      return acc + skillsInItem;
+    }, 0);
+  }
+  const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
+  const expiresAtDate = durationMinutes > 0 ? new Date(Date.now() + durationMinutes * 60 * 1000) : null;
+  const expiresAtIso = expiresAtDate ? expiresAtDate.toISOString() : null;
+
   // Insert initial attempt (attempt_no = 1)
   const policySnapshot = policy || {};
   const insertAttemptText = `
@@ -223,6 +242,19 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     tempPackageRef,
   ]);
   const attemptId = attemptRows[0].attempt_id;
+
+  // Persist timing into attempt (duration_minutes, expires_at)
+  try {
+    await pool.query(
+      `
+        UPDATE exam_attempts
+        SET duration_minutes = $1,
+            expires_at = $2
+        WHERE attempt_id = $3
+      `,
+      [durationMinutes || null, expiresAtIso ? new Date(expiresAtIso) : null, attemptId],
+    );
+  } catch {}
 
   // Build ExamPackage in Mongo
   const questions = [
@@ -241,6 +273,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     course_id: resolvedCourseId,
     course_name: resolvedCourseName || undefined,
     questions,
+    time_allocated_minutes: durationMinutes || undefined,
+    expires_at_iso: expiresAtIso || undefined,
   });
 
   // Backfill package_ref in PG
@@ -265,7 +299,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
 async function markAttemptStarted({ attempt_id }) {
   // Load attempt, exam, and policy to enforce rules
   const { rows: attemptRows } = await pool.query(
-    `SELECT ea.attempt_id, ea.exam_id, ea.attempt_no, ea.policy_snapshot, e.exam_type
+    `SELECT ea.attempt_id, ea.exam_id, ea.attempt_no, ea.policy_snapshot, ea.started_at, ea.expires_at, e.exam_type
      FROM exam_attempts ea
      JOIN exams e ON e.exam_id = ea.exam_id
      WHERE ea.attempt_id = $1`,
@@ -284,6 +318,15 @@ async function markAttemptStarted({ attempt_id }) {
   );
   const attemptsCount = countRows[0]?.cnt ?? 0;
 
+  // If attempt expired, block start
+  if (attempt.expires_at) {
+    const now = new Date();
+    const exp = new Date(attempt.expires_at);
+    if (now > exp) {
+      return { error: "exam_time_expired" };
+    }
+  }
+
   if (examType === "baseline") {
     // Only one attempt allowed; block if attempt_no > 1 or attemptsCount > 1
     if (attempt.attempt_no > 1 || attemptsCount > 1) {
@@ -300,11 +343,15 @@ async function markAttemptStarted({ attempt_id }) {
     }
   }
 
-  await pool.query(
-    `UPDATE exam_attempts SET started_at = NOW() WHERE attempt_id = $1`,
-    [attempt_id],
-  );
-  return { ok: true };
+  // Do not reset timer if already started
+  if (!attempt.started_at) {
+    await pool.query(
+      `UPDATE exam_attempts SET started_at = NOW() WHERE attempt_id = $1`,
+      [attempt_id],
+    );
+    return { ok: true };
+  }
+  return { ok: true, already_started: true };
 }
 
 async function getPackageByExamId(exam_id) {
@@ -348,6 +395,15 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
   const examType = attempt.exam_type;
   const policy = attempt.policy_snapshot || {};
   const passing = Number(policy?.passing_grade ?? 0);
+
+  // Block submission if expired
+  if (attempt.expires_at) {
+    const now = new Date();
+    const exp = new Date(attempt.expires_at);
+    if (now > exp) {
+      return { error: "exam_time_expired" };
+    }
+  }
 
   // Compute final grade
   const skillScores = Array.isArray(per_skill)

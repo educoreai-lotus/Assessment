@@ -49,3 +49,7 @@ CREATE TABLE IF NOT EXISTS outbox_integrations (
   target_service TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Safe alterations for timing logic
+ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS duration_minutes INT;
+ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;

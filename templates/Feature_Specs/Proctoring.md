@@ -44,4 +44,9 @@
 - Calling `POST /api/proctoring/:attempt_id/start_camera` then `POST /api/exams/{id}/start` succeeds.
 - ProctoringSession is created on first activation and updated on subsequent calls.
 
+## Cancellation Reasons
+- Manual (future)
+- Focus violation threshold reached (existing)
+- System: Expiration reached (`now > expires_at`) — attempt is expired/blocked.
+
 
