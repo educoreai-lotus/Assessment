@@ -51,6 +51,24 @@
                 "architecture": "templates/Architecture/ProctoringFlow.md",
                 "clarifications": "templates/clarificationsAndRefinements.md"
             }
+        },
+        {
+            "id": "proctoring_camera",
+            "title": "Camera Activation at Exam Start",
+            "status": "in-progress",
+            "description": "User must allow camera before beginning the exam; ProctoringSession tracks camera state."
+        },
+        {
+            "id": "proctoring_focus_monitoring",
+            "title": "Focus-Loss Violation Tracking",
+            "status": "in-progress",
+            "description": "Tracks tab-switch and focus-loss events; cancels exam after 3 violations."
+        },
+        {
+            "id": "exam_forced_medium_difficulty",
+            "title": "Forced Medium Difficulty for Theoretical Exam Questions",
+            "status": "done",
+            "description": "All theoretical exam questions use medium difficulty unless explicitly requested by DevLab external API."
         }
     ],
   
@@ -1290,6 +1308,75 @@
           "postgres": { "ok": true, "tables": ["users","exams","exam_attempts","attempt_skills","outbox_integrations"], "enumValues": ["baseline","postcourse"] }
         },
         "timestamps": { "completed": "2025-11-13T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.3-p075-proctoring",
+        "traceability_id": "phase-07-5-proctoring-models",
+        "phase": "07.5",
+        "title": "Add Proctoring Models",
+        "status_after": "Done",
+        "artifacts": {
+          "mongo_models": [
+            "backend/models/proctoringSession.model.js",
+            "backend/models/proctoringViolation.model.js"
+          ]
+        },
+        "notes": [
+          "Introduced ProctoringSession and ProctoringViolation collections to support camera activation and focus tracking."
+        ],
+        "timestamps": { "completed": "2025-11-15T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.3-p076-proctoring",
+        "traceability_id": "phase-07-6-proctoring-routes",
+        "phase": "07.6",
+        "title": "Add Proctoring Routes",
+        "status_after": "Done",
+        "artifacts": {
+          "backend": [
+            "backend/routes/proctoring.js",
+            "backend/controllers/proctoringController.js",
+            "backend/controllers/examsController.js",
+            "backend/server.js"
+          ]
+        },
+        "notes": [
+          "Added start_camera and focus_violation endpoints; enforced camera gate and attempt cancellation on third violation."
+        ],
+        "timestamps": { "completed": "2025-11-15T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.3-p081-proctoring-tests",
+        "traceability_id": "phase-08-1-proctoring-tests",
+        "phase": "08.1",
+        "title": "Add Proctoring Tests",
+        "status_after": "Done",
+        "artifacts": {
+          "tests": [
+            "backend/tests/integration/proctoring.start_camera.test.js",
+            "backend/tests/integration/proctoring.focus_violation.test.js"
+          ]
+        },
+        "notes": [
+          "Validated camera activation gate and auto-cancel behavior on third focus violation."
+        ],
+        "timestamps": { "completed": "2025-11-15T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.3-p09-proctoring-deploy",
+        "traceability_id": "phase-09-proctoring-deployment-checklist",
+        "phase": "09",
+        "title": "Add Proctoring Deployment Checklist",
+        "status_after": "Done",
+        "artifacts": {
+          "deployment": [
+            "artifacts/proctoring/deployment-checklist.md"
+          ]
+        },
+        "notes": [
+          "Checklist includes environment variables, Mongo indexes, health checks, and alerting for proctoring services."
+        ],
+        "timestamps": { "completed": "2025-11-15T00:00:00Z" }
       }
     ],
     "additional_updates": [
@@ -1328,6 +1415,12 @@
           "artifacts/ai-evaluation/post-course-feedback.json"
         ],
         "status": "ready"
+      },
+      {
+        "phase": "07",
+        "title": "Proctoring v1 added: camera activation + focus monitoring + auto-cancel.",
+        "status": "delivered",
+        "date": "2025-11-15"
       }
     ]
   }
