@@ -1,14 +1,26 @@
-const pool = require('../../config/supabaseDB');
-const { ExamPackage, AiAuditTrail } = require('../../models');
-const { safeFetchPolicy, safePushExamResults: safePushDirectoryResults } = require('../gateways/directoryGateway');
-const { safeFetchBaselineSkills, safePushAssessmentResults: safePushSkillsResults } = require('../gateways/skillsEngineGateway');
-const { safeFetchCoverage, safePushExamResults: safePushCourseBuilderResults } = require('../gateways/courseBuilderGateway');
-const { safeGetCodingQuestions, safeRequestTheoreticalValidation } = require('../gateways/devlabGateway');
-const { safeSendSummary } = require('../gateways/protocolCameraGateway');
-const { mapUserId } = require('./idMapper');
+const pool = require("../../config/supabaseDB");
+const { ExamPackage, AiAuditTrail } = require("../../models");
+const {
+  safeFetchPolicy,
+  safePushExamResults: safePushDirectoryResults,
+} = require("../gateways/directoryGateway");
+const {
+  safeFetchBaselineSkills,
+  safePushAssessmentResults: safePushSkillsResults,
+} = require("../gateways/skillsEngineGateway");
+const {
+  safeFetchCoverage,
+  safePushExamResults: safePushCourseBuilderResults,
+} = require("../gateways/courseBuilderGateway");
+const {
+  safeGetCodingQuestions,
+  safeRequestTheoreticalValidation,
+} = require("../gateways/devlabGateway");
+const { safeSendSummary } = require("../gateways/protocolCameraGateway");
+const { mapUserId } = require("./idMapper");
 
 function toIntId(prefixed) {
-  if (typeof prefixed !== 'string') return null;
+  if (typeof prefixed !== "string") return null;
   const m = prefixed.match(/^[a-z]+_(\d+)$/i);
   return m ? parseInt(m[1], 10) : null;
 }
@@ -22,10 +34,10 @@ function removeHintsDeep(input) {
   if (Array.isArray(input)) {
     return input.map((item) => removeHintsDeep(item));
   }
-  if (typeof input === 'object') {
+  if (typeof input === "object") {
     const clone = {};
     for (const [key, value] of Object.entries(input)) {
-      if (key === 'hints') continue;
+      if (key === "hints") continue;
       clone[key] = removeHintsDeep(value);
     }
     return clone;
@@ -33,22 +45,54 @@ function removeHintsDeep(input) {
   return input;
 }
 
-async function buildExamPackageDoc({ exam_id, attempt_id, user_id, exam_type, policy, skills, coverage_map, course_id, course_name, questions }) {
+function sanitizeQuestionPromptForStorage(input) {
+  const withoutHints = removeHintsDeep(input);
+  if (withoutHints && typeof withoutHints === "object") {
+    const clone = { ...withoutHints };
+    // For theoretical questions (non-code), strip any difficulty that may have been passed through
+    const type = String(clone.type || "").toLowerCase();
+    if (type !== "code" && "difficulty" in clone) {
+      delete clone.difficulty;
+    }
+    return clone;
+  }
+  return withoutHints;
+}
+
+async function buildExamPackageDoc({
+  exam_id,
+  attempt_id,
+  user_id,
+  exam_type,
+  policy,
+  skills,
+  coverage_map,
+  course_id,
+  course_name,
+  questions,
+}) {
   const doc = new ExamPackage({
     exam_id: String(exam_id),
     attempt_id: String(attempt_id),
     user: { user_id, name: undefined, email: undefined },
-    questions: (questions || []).map((q) => ({
-      question_id: q.qid || q.question_id || q.id || '',
-      skill_id: q.skill_id,
-      // Strip any hints from persisted prompt to prevent storage/exposure
-      prompt: removeHintsDeep(q),
-      options: Array.isArray(q?.choices) ? q.choices : [],
-      answer_key: q?.correct_answer ?? null,
-      metadata: { type: q.type || 'mcq', difficulty: q.difficulty || 'medium' },
-    })),
+    questions: (questions || []).map((q) => {
+      const type = q && q.type ? String(q.type).toLowerCase() : "mcq";
+      const isCode = type === "code";
+      // Policy: Theoretical questions always have medium difficulty in exam packages.
+      // Preserve external difficulty only for coding questions (DevLab-originated).
+      const difficulty = isCode ? q.difficulty || "medium" : "medium";
+      return {
+        question_id: q.qid || q.question_id || q.id || "",
+        skill_id: q.skill_id,
+        // Strip hints everywhere; additionally strip difficulty for theoretical prompts
+        prompt: sanitizeQuestionPromptForStorage(q),
+        options: Array.isArray(q?.choices) ? q.choices : [],
+        answer_key: q?.correct_answer ?? null,
+        metadata: { type: type || "mcq", difficulty },
+      };
+    }),
     coverage_map: coverage_map || [],
-    final_status: 'draft',
+    final_status: "draft",
     lineage: {
       generation_refs: [],
     },
@@ -70,70 +114,72 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   let skillsPayload = null;
   let coveragePayload = null;
 
-  if (exam_type === 'baseline') {
+  if (exam_type === "baseline") {
     skillsPayload = await safeFetchBaselineSkills({ user_id });
     // Directory policy for baseline (may include passing_grade only; include max_attempts if provided)
-    policy = await safeFetchPolicy('baseline');
-  } else if (exam_type === 'postcourse') {
+    policy = await safeFetchPolicy("baseline");
+  } else if (exam_type === "postcourse") {
     coveragePayload = await safeFetchCoverage({
       learner_id: user_id,
       learner_name: undefined,
       course_id,
     });
-    policy = await safeFetchPolicy('postcourse');
+    policy = await safeFetchPolicy("postcourse");
   } else {
-    throw new Error('invalid_exam_type');
+    throw new Error("invalid_exam_type");
   }
 
   // Optional questions (DevLab)
   const coding = await safeGetCodingQuestions();
   const theoreticalReq = {
-    exam_id: 'ex_temp',
-    attempt_id: 'att_temp',
-    difficulty: 'hard',
+    exam_id: "ex_temp",
+    attempt_id: "att_temp",
+    difficulty: "hard",
     question: {
-      type: 'mcq',
-      stem: 'Which statement about event loop and microtasks in JavaScript is true?',
+      type: "mcq",
+      stem: "Which statement about event loop and microtasks in JavaScript is true?",
       choices: [
-        'Microtasks run before rendering and before next macrotask.',
-        'Microtasks run after each macrotask batch completes.',
-        'Microtasks run after DOM updates.',
-        'Microtasks run only during async/await functions.',
+        "Microtasks run before rendering and before next macrotask.",
+        "Microtasks run after each macrotask batch completes.",
+        "Microtasks run after DOM updates.",
+        "Microtasks run only during async/await functions.",
       ],
-      correct_answer: 'Microtasks run before rendering and before next macrotask.',
+      correct_answer:
+        "Microtasks run before rendering and before next macrotask.",
       hints: [
-        'Hint 1: Think about microtasks and macrotasks scheduling order.',
-        'Hint 2: Microtasks often come from Promises.',
-        'Hint 3: They execute before the next rendering phase.',
+        "Hint 1: Think about microtasks and macrotasks scheduling order.",
+        "Hint 2: Microtasks often come from Promises.",
+        "Hint 3: They execute before the next rendering phase.",
       ],
     },
   };
-  const theoreticalResp = await safeRequestTheoreticalValidation(theoreticalReq);
+  const theoreticalResp =
+    await safeRequestTheoreticalValidation(theoreticalReq);
   // Log AI audit if available
   try {
     await AiAuditTrail.create({
-      attempt_id: 'pending',
-      event_type: 'prompt',
-      model: { provider: 'devlab', name: 'validator', version: 'v1' },
+      attempt_id: "pending",
+      event_type: "prompt",
+      model: { provider: "devlab", name: "validator", version: "v1" },
       prompt: theoreticalReq,
       response: theoreticalResp,
-      status: 'success',
+      status: "success",
     });
   } catch {}
 
   // Insert exam row in PG (map user_id 'u_123' -> 123 for FK)
   const userInt = mapUserId(user_id);
-  console.log('createExam user mapping:', { user_id, userInt });
+  console.log("createExam user mapping:", { user_id, userInt });
   const courseInt = course_id ? toIntId(course_id) : null;
 
   // Baseline exam: only one baseline exam per user is allowed
-  if (exam_type === 'baseline') {
+  if (exam_type === "baseline") {
     const { rows: existingBaseline } = await pool.query(
       `SELECT 1 FROM exams WHERE exam_type = $1 AND user_id = $2 LIMIT 1`,
-      ['baseline', userInt]
+      ["baseline", userInt],
     );
     if (existingBaseline.length > 0) {
-      return { error: 'baseline_already_exists' };
+      return { error: "baseline_already_exists" };
     }
   }
 
@@ -142,14 +188,24 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     VALUES ($1, $2, $3)
     RETURNING exam_id
   `;
-  const { rows: examRows } = await pool.query(insertExamText, [exam_type, userInt, courseInt]);
+  const { rows: examRows } = await pool.query(insertExamText, [
+    exam_type,
+    userInt,
+    courseInt,
+  ]);
   const examId = examRows[0].exam_id;
 
   // Prepare skills and coverage map
   const skillsArray = skillsPayload?.skills || [];
   const coverageMap = coveragePayload?.coverage_map || [];
-  const resolvedCourseId = exam_type === 'postcourse' ? (coveragePayload?.course_id || course_id || null) : null;
-  const resolvedCourseName = exam_type === 'postcourse' ? (coveragePayload?.course_name || course_name || null) : null;
+  const resolvedCourseId =
+    exam_type === "postcourse"
+      ? coveragePayload?.course_id || course_id || null
+      : null;
+  const resolvedCourseName =
+    exam_type === "postcourse"
+      ? coveragePayload?.course_name || course_name || null
+      : null;
 
   // Insert initial attempt (attempt_no = 1)
   const policySnapshot = policy || {};
@@ -160,7 +216,12 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   `;
   // Temporarily set package_ref after creating package
   const tempPackageRef = null;
-  const { rows: attemptRows } = await pool.query(insertAttemptText, [examId, 1, JSON.stringify(policySnapshot), tempPackageRef]);
+  const { rows: attemptRows } = await pool.query(insertAttemptText, [
+    examId,
+    1,
+    JSON.stringify(policySnapshot),
+    tempPackageRef,
+  ]);
   const attemptId = attemptRows[0].attempt_id;
 
   // Build ExamPackage in Mongo
@@ -185,7 +246,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   // Backfill package_ref in PG
   await pool.query(
     `UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`,
-    [pkg._id, attemptId]
+    [pkg._id, attemptId],
   );
 
   // Build API response
@@ -208,10 +269,10 @@ async function markAttemptStarted({ attempt_id }) {
      FROM exam_attempts ea
      JOIN exams e ON e.exam_id = ea.exam_id
      WHERE ea.attempt_id = $1`,
-    [attempt_id]
+    [attempt_id],
   );
   if (attemptRows.length === 0) {
-    throw new Error('attempt_not_found');
+    throw new Error("attempt_not_found");
   }
   const attempt = attemptRows[0];
   const examType = attempt.exam_type;
@@ -219,32 +280,37 @@ async function markAttemptStarted({ attempt_id }) {
   // Count existing attempts for this exam
   const { rows: countRows } = await pool.query(
     `SELECT COUNT(*)::int AS cnt FROM exam_attempts WHERE exam_id = $1`,
-    [attempt.exam_id]
+    [attempt.exam_id],
   );
   const attemptsCount = countRows[0]?.cnt ?? 0;
 
-  if (examType === 'baseline') {
+  if (examType === "baseline") {
     // Only one attempt allowed; block if attempt_no > 1 or attemptsCount > 1
     if (attempt.attempt_no > 1 || attemptsCount > 1) {
-      return { error: 'baseline_attempt_not_allowed' };
+      return { error: "baseline_attempt_not_allowed" };
     }
-  } else if (examType === 'postcourse') {
+  } else if (examType === "postcourse") {
     const policySnapshot = attempt.policy_snapshot || {};
     const maxAttempts = Number(policySnapshot?.max_attempts ?? 1);
     if (Number.isFinite(maxAttempts) && maxAttempts > 0) {
       // If attempts already equal or exceed max, block starting
       if (attemptsCount > maxAttempts || attempt.attempt_no > maxAttempts) {
-        return { error: 'max_attempts_reached' };
+        return { error: "max_attempts_reached" };
       }
     }
   }
 
-  await pool.query(`UPDATE exam_attempts SET started_at = NOW() WHERE attempt_id = $1`, [attempt_id]);
+  await pool.query(
+    `UPDATE exam_attempts SET started_at = NOW() WHERE attempt_id = $1`,
+    [attempt_id],
+  );
   return { ok: true };
 }
 
 async function getPackageByExamId(exam_id) {
-  const doc = await ExamPackage.findOne({ exam_id: String(exam_id) }).sort({ created_at: -1 }).lean();
+  const doc = await ExamPackage.findOne({ exam_id: String(exam_id) })
+    .sort({ created_at: -1 })
+    .lean();
   if (!doc) return doc;
   if (Array.isArray(doc.questions)) {
     doc.questions = doc.questions.map((q) => ({
@@ -256,7 +322,9 @@ async function getPackageByExamId(exam_id) {
 }
 
 async function getPackageByAttemptId(attempt_id) {
-  const doc = await ExamPackage.findOne({ attempt_id: String(attempt_id) }).sort({ created_at: -1 }).lean();
+  const doc = await ExamPackage.findOne({ attempt_id: String(attempt_id) })
+    .sort({ created_at: -1 })
+    .lean();
   if (!doc) return doc;
   if (Array.isArray(doc.questions)) {
     doc.questions = doc.questions.map((q) => ({
@@ -271,10 +339,10 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
   // Fetch attempt and policy snapshot
   const { rows: attemptRows } = await pool.query(
     `SELECT ea.*, e.exam_type, e.course_id FROM exam_attempts ea JOIN exams e ON e.exam_id = ea.exam_id WHERE ea.attempt_id = $1`,
-    [attempt_id]
+    [attempt_id],
   );
   if (attemptRows.length === 0) {
-    throw new Error('attempt_not_found');
+    throw new Error("attempt_not_found");
   }
   const attempt = attemptRows[0];
   const examType = attempt.exam_type;
@@ -282,9 +350,13 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
   const passing = Number(policy?.passing_grade ?? 0);
 
   // Compute final grade
-  const skillScores = Array.isArray(per_skill) ? per_skill.map((s) => Number(s.score || 0)) : [];
+  const skillScores = Array.isArray(per_skill)
+    ? per_skill.map((s) => Number(s.score || 0))
+    : [];
   const finalGrade =
-    skillScores.length > 0 ? (skillScores.reduce((a, b) => a + b, 0) / skillScores.length) : 0;
+    skillScores.length > 0
+      ? skillScores.reduce((a, b) => a + b, 0) / skillScores.length
+      : 0;
   const passed = finalGrade >= passing;
 
   // Persist attempt summary
@@ -296,7 +368,7 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
           passed = $2
       WHERE attempt_id = $3
     `,
-    [finalGrade, passed, attempt_id]
+    [finalGrade, passed, attempt_id],
   );
 
   // Upsert attempt_skills
@@ -311,7 +383,7 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
             score = EXCLUDED.score,
             status = EXCLUDED.status
         `,
-        [attempt_id, s.skill_id, s.skill_name, s.score, s.status]
+        [attempt_id, s.skill_id, s.skill_name, s.score, s.status],
       );
     }
   }
@@ -330,7 +402,7 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
   };
   await pool.query(
     `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-    ['exam_submission', JSON.stringify(payloadDirectory), 'directory']
+    ["exam_submission", JSON.stringify(payloadDirectory), "directory"],
   );
   // Try immediate push via gateway (non-blocking)
   safePushDirectoryResults(payloadDirectory).catch(() => {});
@@ -348,29 +420,37 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
       status: s.status,
     })),
   };
-  if (examType === 'postcourse') {
-    payloadSkills.course_id = attempt.course_id ? `c_${attempt.course_id}` : null;
-    payloadSkills.coverage_map = ((await getPackageByAttemptId(attempt_id))?.coverage_map || []).map((cm) => cm);
-    payloadSkills.final_status = 'completed';
+  if (examType === "postcourse") {
+    payloadSkills.course_id = attempt.course_id
+      ? `c_${attempt.course_id}`
+      : null;
+    payloadSkills.coverage_map = (
+      (await getPackageByAttemptId(attempt_id))?.coverage_map || []
+    ).map((cm) => cm);
+    payloadSkills.final_status = "completed";
   }
   await pool.query(
     `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-    ['skills_engine_results', JSON.stringify(payloadSkills), 'skills_engine']
+    ["skills_engine_results", JSON.stringify(payloadSkills), "skills_engine"],
   );
   safePushSkillsResults(payloadSkills).catch(() => {});
 
-  if (examType === 'postcourse') {
+  if (examType === "postcourse") {
     const payloadCourseBuilder = {
       user_id,
       course_id: attempt.course_id ? `c_${attempt.course_id}` : null,
-      exam_type: 'postcourse',
+      exam_type: "postcourse",
       passing_grade: Number(passing),
       final_grade: Number(finalGrade),
       passed,
     };
     await pool.query(
       `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-      ['course_builder_results', JSON.stringify(payloadCourseBuilder), 'course_builder']
+      [
+        "course_builder_results",
+        JSON.stringify(payloadCourseBuilder),
+        "course_builder",
+      ],
     );
     safePushCourseBuilderResults(payloadCourseBuilder).catch(() => {});
   }
@@ -386,7 +466,11 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
   };
   await pool.query(
     `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-    ['protocol_camera_summary', JSON.stringify(protoSummary), 'protocol_camera']
+    [
+      "protocol_camera_summary",
+      JSON.stringify(protoSummary),
+      "protocol_camera",
+    ],
   );
   safeSendSummary(protoSummary).catch(() => {});
 
@@ -416,5 +500,3 @@ module.exports = {
   getPackageByAttemptId,
   submitAttempt,
 };
-
-

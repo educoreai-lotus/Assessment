@@ -1,0 +1,26 @@
+{
+  "feature_id": "FEAT-EXAM-QUESTIONS",
+  "name": "Exam Questions – Difficulty Normalization",
+  "date": "2025-11-15",
+  "changes": [
+    "Enforce difficulty = \"medium\" for all theoretical questions stored in ExamPackage",
+    "Strip theoretical difficulty from stored prompts; retain coding difficulty",
+    "Introduce TheoreticalQuestionBuilder with allowExternalDifficulty=false by default",
+    "Honor external difficulty only for DevLab non-exam theoretical requests when explicitly allowed",
+    "Documentation updated in AI Design, Architecture, and Feature Specs",
+    "Clarifications appended under Feature: Exam Questions"
+  ],
+  "files_touched": [
+    "backend/services/core/examsService.js",
+    "backend/services/builders/TheoreticalQuestionBuilder.js",
+    "backend/tests/unit/TheoreticalQuestionBuilder.test.js",
+    "templates/06-AI_Design_Prompt.md",
+    "templates/04-Design_And_Architecture.md",
+    "templates/Feature_Specs/TheoreticalQuestions.md",
+    "templates/clarificationsAndRefinements.md"
+  ],
+  "traceability": {
+    "phase": "07",
+    "id": "feat-exam-questions-difficulty-normalization"
+  }
+}

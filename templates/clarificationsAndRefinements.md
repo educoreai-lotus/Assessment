@@ -3,6 +3,7 @@
 **Purpose:** Maintain a detailed, structured record of all clarifications, refinements, and adjustments across all phases and features.
 
 **Rules:**
+
 - Always append; never delete or modify existing entries.
 - Each refinement must be specific and actionable.
 - All templates must review relevant refinements before execution and append new ones after.
@@ -18,24 +19,28 @@ Each feature section follows this format:
 ## Feature: [Feature Name] (Feature ID: F-XXX)
 
 ### Backend
+
 - [YYYY-MM-DD] Description of clarification or refinement
   - Phase: [Phase Number]
   - Traceability ID: [UUID]
   - Rationale: [Why this change was made]
 
 ### Frontend
+
 - [YYYY-MM-DD] Description of clarification or refinement
   - Phase: [Phase Number]
   - Traceability ID: [UUID]
   - Rationale: [Why this change was made]
 
 ### Database
+
 - [YYYY-MM-DD] Description of clarification or refinement
   - Phase: [Phase Number]
   - Traceability ID: [UUID]
   - Rationale: [Why this change was made]
 
 ### Integration
+
 - [YYYY-MM-DD] Description of clarification or refinement
   - Phase: [Phase Number]
   - Traceability ID: [UUID]
@@ -47,12 +52,14 @@ Each feature section follows this format:
 ## Global Clarifications
 
 ### System Architecture
+
 - [2025-01-XX] System upgraded to real SDLC-level with production-grade database connections and API integrations
   - Phase: N/A (System-wide upgrade)
   - Traceability ID: system-upgrade-v4.0
   - Rationale: Evolve from prototype/mock-data level to production-grade SDLC framework
 
 ### Database Configuration
+
 - [2025-01-XX] PostgreSQL configured as primary relational database with connection pooling
   - Phase: 01, 04, 07
   - Traceability ID: db-config-postgres
@@ -64,6 +71,7 @@ Each feature section follows this format:
   - Rationale: Document storage for logs and audit data
 
 ### Integration Architecture
+
 - [2025-01-XX] REST APIs used for external service communication
   - Phase: 04, 07
   - Traceability ID: integration-rest
@@ -78,9 +86,39 @@ Each feature section follows this format:
 
 ## Feature-Specific Clarifications
 
-*Feature-specific clarifications will be appended here as features are developed and refined.*
+_Feature-specific clarifications will be appended here as features are developed and refined._
 
 ---
+
+## Feature: Exam Questions (Feature ID: FEAT-EXAM-QUESTIONS)
+
+### Backend
+
+- [2025-11-15] Normalize theoretical question difficulty and sanitize prompt
+  - Phase: 07
+  - Traceability ID: feat-exam-questions-difficulty-normalization
+  - Rationale: Ensure consistent learner experience and prevent upstream difficulty leakage; preserve external difficulty only for DevLab non-exam requests.
+
+### Frontend
+
+- [2025-11-15] No UI changes required (metadata normalization is backend-only)
+  - Phase: 07
+  - Traceability ID: feat-exam-questions-frontend-nop
+  - Rationale: Difficulty policy enforced at storage layer; UI consumes normalized metadata.
+
+### Database
+
+- [2025-11-15] No schema change; enforcement at service layer
+  - Phase: 07
+  - Traceability ID: feat-exam-questions-db-nop
+  - Rationale: Rule implemented via mapping and builder logic.
+
+### Integration
+
+- [2025-11-15] DevLab external theoretical requests may carry difficulty (opt-in)
+  - Phase: 07
+  - Traceability ID: feat-exam-questions-devlab-external
+  - Rationale: Allow DevLab calibration and validation scenarios without impacting exam consistency.
 
 ## Notes
 
@@ -88,4 +126,3 @@ Each feature section follows this format:
 - Each entry should reference the phase where it was made and include a traceability ID.
 - When clarifications impact multiple features, add them to both feature sections or create a shared section.
 - Questions that need user input should be marked with **[QUESTION]** prefix.
-
