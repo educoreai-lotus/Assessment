@@ -6,7 +6,7 @@
 
 ## Difficulty Policy
 
-- Exams: All theoretical questions MUST be stored with difficulty = `medium`.
+- Exams: All theoretical questions MUST be treated and stored as `difficulty = "medium"` (fixed).
 - Non-exam DevLab requests: Difficulty MAY be preserved only when explicitly allowed by the builder.
 - Coding questions: Preserve external difficulty as provided by the source (e.g., DevLab).
 
@@ -20,7 +20,7 @@
 ## Storage Mapping
 
 - `examsService.buildExamPackageDoc`:
-  - Removes `hints` from all stored prompts.
+  - Removes `hints` from all stored prompts (no hints exposed to students).
   - Additionally strips `difficulty` from theoretical prompts before persistence.
   - Assigns `metadata.difficulty = "medium"` for theoretical items, and preserves difficulty for coding items.
 

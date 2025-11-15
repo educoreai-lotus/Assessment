@@ -162,10 +162,16 @@ The goal is to design AI behaviors, API integrations, and validation logic that 
 
 ## 🎯 Theoretical Question Difficulty Policy
 
-- All theoretical questions generated for exams must have difficulty set to **"medium"**.
-- Any incoming difficulty on theoretical items from internal functions is ignored during package build.
+- All theoretical questions generated for exams must have difficulty set to **"medium"** (fixed).
+- Any incoming difficulty on theoretical items from internal functions is ignored during package build (enforced in storage mapping).
 - External DevLab requests (non-exam use) may specify difficulty, which is honored only when explicitly allowed by `allowExternalDifficulty=true` in the Theoretical Question Builder.
 - Coding questions retain externally provided difficulty.
+
+## 🚫 No-Hints-for-Students Rule
+
+- Hints are never exposed in exam packages delivered to learners.
+- Storage mapping strips `hints` from all prompts before persistence.
+- Any AI prompt or generation template must ensure hints are only included in instructor or validation contexts.
 
 Artifacts affected:
 

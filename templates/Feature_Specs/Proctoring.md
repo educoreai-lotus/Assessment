@@ -3,6 +3,7 @@
 ## Summary
 - Enforce camera activation before exam start.
 - Provide a simple proctoring session record in MongoDB.
+ - Track focus violations and auto-cancel on third event.
 
 ## API
 - POST `/api/proctoring/:attempt_id/start_camera`
@@ -32,6 +33,11 @@
   - `attempt_id` (string, unique)
   - `count` (number, default 0)
   - `events` (array of `{ type, timestamp }`)
+
+## Rules
+- Camera must be active prior to any exam content delivery.
+- Focus violation threshold is 3 (configurable via service policy in future).
+- On cancellation, attempt becomes non-startable and remains recorded in violation trail.
 
 ## Acceptance Criteria
 - Starting an exam without an active camera returns 403 with `camera_required: true`.

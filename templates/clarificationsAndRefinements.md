@@ -99,6 +99,11 @@ _Feature-specific clarifications will be appended here as features are developed
   - Traceability ID: feat-exam-questions-difficulty-normalization
   - Rationale: Ensure consistent learner experience and prevent upstream difficulty leakage; preserve external difficulty only for DevLab non-exam requests.
 
+- [2025-11-15] Enforce fixed "medium" difficulty for theoretical exam items; no hints in packages
+  - Phase: 07
+  - Traceability ID: feat-exam-questions-fixed-medium-and-no-hints
+  - Rationale: Standardize difficulty and prevent hint leakage to learners.
+
 ### Frontend
 
 - [2025-11-15] No UI changes required (metadata normalization is backend-only)

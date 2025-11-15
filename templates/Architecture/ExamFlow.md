@@ -32,4 +32,14 @@ This document describes how exam start interacts with proctoring camera activati
 - Cancellation is authoritative in PostgreSQL (`exam_attempts.status`).
 - Proctoring sessions and violations live in MongoDB for fast append and analysis.
 
+## ProctoringSession Lifecycle
+- Created or upserted by `POST /api/proctoring/:attempt_id/start_camera`.
+- Fields: `attempt_id`, `exam_id`, `start_time`, `camera_status`, `events`.
+- Camera must be `active` before allowing exam start.
+
+## Violation Logic
+- Stored in `proctoring_violations` as `attempt_id`, `count`, `events`.
+- Event types: `focus_lost`, `exam_canceled`.
+- Threshold: cancel on 3rd violation and block further exam starts.
+
 

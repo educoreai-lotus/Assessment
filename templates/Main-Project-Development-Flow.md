@@ -321,6 +321,17 @@ Each phase may include **feature-specific subsections** when they improve clarit
 - Actual API calls to external services
 - Feature-specific refinements logged in `clarificationsAndRefinements.md`
 
+**Proctoring (Camera + Focus) – Phase 07 Rules:**
+- Add `ProctoringSession` (Mongo) and require camera activation before exam start.
+- Endpoint: `POST /api/proctoring/:attempt_id/start_camera` sets `camera_status="active"`.
+- Update `POST /api/exams/{examId}/start`:
+  - Respond `403 {"error":"camera_inactive","camera_required":true}` if camera inactive.
+  - Always include `camera_required: true` in successful responses.
+- Focus violations:
+  - Endpoint: `POST /api/proctoring/:attempt_id/focus_violation` increments violations.
+  - `< 3` violations → `{ warning: <count> }`.
+  - On 3rd violation → cancel in Postgres (`exam_attempts.status='canceled'`) and return `{ cancelled: true }`.
+
 **Exit Criteria:**  
 - All tests green  
 - Coverage threshold achieved  
@@ -344,6 +355,21 @@ Each phase may include **feature-specific subsections** when they improve clarit
 **Feature Implementations:**
 - Test coverage per feature
 - Feature-specific test scenarios
+
+**Proctoring (Camera + Focus) – Phase 08 Validations:**
+- Verify camera gate:
+  - Starting without camera active returns `403` and `camera_required: true`.
+  - After camera activation, exam start succeeds.
+- Verify focus auto-cancel:
+  - 1st/2nd violations → `{ warning: 1|2 }`.
+  - 3rd violation updates `exam_attempts.status='canceled'` and returns `{ cancelled: true }`.
+  - Subsequent start attempts return `403 {"error":"attempt_canceled"}`.
+
+**States & Assertions:**
+- Postgres: `exam_attempts.status` reflects `canceled` after threshold breach.
+- Mongo:
+  - `proctoring_sessions` persists camera state and timestamps.
+  - `proctoring_violations` persists counts and event trail (`focus_lost`, `exam_canceled`).
 
 **Exit Criteria:**  
 - Zero regression confirmed  
