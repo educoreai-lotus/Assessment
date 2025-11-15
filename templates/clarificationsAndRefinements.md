@@ -126,3 +126,35 @@ _Feature-specific clarifications will be appended here as features are developed
 - Each entry should reference the phase where it was made and include a traceability ID.
 - When clarifications impact multiple features, add them to both feature sections or create a shared section.
 - Questions that need user input should be marked with **[QUESTION]** prefix.
+
+---
+
+## Feature: Proctoring (Feature ID: FEAT-PROCTORING)
+
+### Backend
+
+- [2025-11-15] Enforce camera activation prior to exam start via ProctoringSession
+  - Phase: 07
+  - Traceability ID: feat-proctoring-camera-activation
+  - Rationale: Ensure proctoring readiness; block exam start until camera is active.
+
+### Frontend
+
+- [2025-11-15] Surface camera requirement and activation flow
+  - Phase: 07
+  - Traceability ID: feat-proctoring-frontend-indicator
+  - Rationale: Inform user to activate camera before proceeding.
+
+### Database
+
+- [2025-11-15] Add Mongo collection proctoring_sessions
+  - Phase: 07
+  - Traceability ID: feat-proctoring-mongo-session
+  - Rationale: Persist camera status and basic proctoring session state for attempts.
+
+### Integration
+
+- [2025-11-15] Align proctoring event ingestion with existing ProctoringEvent model
+  - Phase: 07
+  - Traceability ID: feat-proctoring-event-alignment
+  - Rationale: Keep future event flows consistent with current data model.

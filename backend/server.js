@@ -11,6 +11,7 @@ const integrationRoutes = require('./routes/integration');
 const examsRouter = require('./routes/exams');
 const attemptsRouter = require('./routes/attempts');
 const packagesRouter = require('./routes/packages');
+const proctoringRouter = require('./routes/proctoring');
 const { mountSwagger } = require('./swagger');
 
 const PORT = process.env.PORT || 4000;
@@ -178,6 +179,7 @@ app.use('/', integrationRoutes);
 app.use('/api/exams', examsRouter);
 app.use('/api/attempts', attemptsRouter);
 app.use('/api/packages', packagesRouter);
+app.use('/api/proctoring', proctoringRouter);
 
 // Keep versioned base for future non-integration routes
 app.use(`${API_BASE}`, (req, res) => {

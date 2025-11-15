@@ -39,6 +39,18 @@
                 "template": "templates/06-AI_Design_Prompt.md",
                 "clarifications": "artifacts/ClarificationsAndRefinements.md"
             }
+        },
+        {
+            "feature_id": "FEAT-PROCTORING-CAMERA-ACTIVATION",
+            "name": "Proctoring Camera Activation",
+            "status": "Done",
+            "owner": "Assessment",
+            "phases": { "07": "Done" },
+            "links": {
+                "spec": "templates/Feature_Specs/Proctoring.md",
+                "architecture": "templates/Architecture/ProctoringFlow.md",
+                "clarifications": "templates/clarificationsAndRefinements.md"
+            }
         }
     ],
   

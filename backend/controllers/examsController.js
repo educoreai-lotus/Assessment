@@ -1,4 +1,5 @@
 const { createExam, markAttemptStarted, getPackageByExamId, submitAttempt } = require('../services/core/examsService');
+const { ProctoringSession } = require('../models');
 
 exports.createExam = async (req, res, next) => {
   try {
@@ -23,6 +24,13 @@ exports.startExam = async (req, res, next) => {
     if (!attempt_id) {
       return res.status(400).json({ error: 'attempt_id_required' });
     }
+
+    // Enforce camera activation prior to starting
+    const session = await ProctoringSession.findOne({ attempt_id: String(attempt_id) }).lean();
+    if (!session || session.camera_status !== 'active') {
+      return res.status(403).json({ error: 'camera_inactive', camera_required: true });
+    }
+
     const result = await markAttemptStarted({ attempt_id });
     if (result && result.error) {
       return res.status(400).json(result);
@@ -54,6 +62,7 @@ exports.startExam = async (req, res, next) => {
       skills: pkg?.metadata?.skills || [],
       coverage_map: pkg?.coverage_map || [],
       questions: pkg?.questions?.map((q) => removeHintsDeep(q.prompt)) || [],
+      camera_required: true,
     });
   } catch (err) {
     return next(err);
