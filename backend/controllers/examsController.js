@@ -1,4 +1,5 @@
 const { createExam, markAttemptStarted, getPackageByExamId, submitAttempt } = require('../services/core/examsService');
+const pool = require('../config/supabaseDB');
 const { ProctoringSession } = require('../models');
 
 exports.createExam = async (req, res, next) => {
@@ -23,6 +24,16 @@ exports.startExam = async (req, res, next) => {
     const { attempt_id } = req.body || {};
     if (!attempt_id) {
       return res.status(400).json({ error: 'attempt_id_required' });
+    }
+
+    // Block if attempt was canceled
+    const { rows: statusRows } = await pool.query(
+      `SELECT status FROM exam_attempts WHERE attempt_id = $1`,
+      [attempt_id],
+    ).catch(() => ({ rows: [] }));
+    const statusVal = statusRows?.[0]?.status || null;
+    if (statusVal === 'canceled') {
+      return res.status(403).json({ error: 'attempt_canceled' });
     }
 
     // Enforce camera activation prior to starting

@@ -1,5 +1,5 @@
 const pool = require('../config/supabaseDB');
-const { ProctoringSession } = require('../models');
+const { ProctoringSession, ProctoringViolation } = require('../models');
 
 exports.startCamera = async (req, res, next) => {
   try {
@@ -30,6 +30,51 @@ exports.startCamera = async (req, res, next) => {
     );
 
     return res.json({ ok: true });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+exports.reportFocusViolation = async (req, res, next) => {
+  try {
+    const { attempt_id } = req.params || {};
+    if (!attempt_id) {
+      return res.status(400).json({ error: 'attempt_id_required' });
+    }
+
+    // Load or create violation document
+    const doc =
+      (await ProctoringViolation.findOne({ attempt_id: String(attempt_id) })) ||
+      (await ProctoringViolation.create({
+        attempt_id: String(attempt_id),
+        count: 0,
+        events: [],
+      }));
+
+    // Increment count and append focus event
+    doc.count = Number(doc.count || 0) + 1;
+    doc.events.push({ type: 'focus_lost', timestamp: new Date() });
+
+    // If threshold reached, cancel attempt in Postgres and add exam_canceled event
+    if (doc.count >= 3) {
+      // Ensure status column exists; tolerate errors silently
+      try {
+        await pool.query(
+          `ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS status VARCHAR(20)`
+        );
+      } catch {}
+
+      await pool.query(
+        `UPDATE exam_attempts SET status = 'canceled' WHERE attempt_id = $1`,
+        [attempt_id],
+      );
+      doc.events.push({ type: 'exam_canceled', timestamp: new Date() });
+      await doc.save();
+      return res.json({ cancelled: true });
+    }
+
+    await doc.save();
+    return res.json({ warning: doc.count });
   } catch (err) {
     return next(err);
   }

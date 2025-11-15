@@ -138,6 +138,11 @@ _Feature-specific clarifications will be appended here as features are developed
   - Traceability ID: feat-proctoring-camera-activation
   - Rationale: Ensure proctoring readiness; block exam start until camera is active.
 
+- [2025-11-15] Auto-cancel attempt on third focus violation; block start
+  - Phase: 07
+  - Traceability ID: feat-proctoring-focus-violation-auto-cancel
+  - Rationale: Deter cheating; provide deterministic cancellation policy.
+
 ### Frontend
 
 - [2025-11-15] Surface camera requirement and activation flow
@@ -151,6 +156,11 @@ _Feature-specific clarifications will be appended here as features are developed
   - Phase: 07
   - Traceability ID: feat-proctoring-mongo-session
   - Rationale: Persist camera status and basic proctoring session state for attempts.
+
+- [2025-11-15] Add Mongo collection proctoring_violations and PG status for attempts
+  - Phase: 07
+  - Traceability ID: feat-proctoring-violations-and-pg-status
+  - Rationale: Track violations and persist cancellation in the source of truth.
 
 ### Integration
 

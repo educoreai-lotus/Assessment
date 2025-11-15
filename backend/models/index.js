@@ -3,6 +3,7 @@ module.exports = {
   AiAuditTrail: require('./aiAuditTrail.model'),
   ProctoringEvent: require('./proctoringEvent.model'),
   ProctoringSession: require('./proctoringSession.model'),
+  ProctoringViolation: require('./proctoringViolation.model'),
   Incident: require('./incident.model'),
 };
 
