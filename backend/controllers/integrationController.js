@@ -53,9 +53,55 @@ exports.handlePostIntegration = async (req, res, next) => {
       }
       case 'devlab': {
         // Ingest coding questions or request theoretical ones
-        // Identify presence of questions array vs. difficulty + skills filters
-        const mode = Array.isArray(payload?.questions) ? 'coding_questions_ingest' : 'theoretical_request';
-        return res.status(202).json({ status: 'accepted', flow: `devlab_${mode}` });
+        // Identify presence of questions array vs. wrapped theoretical request payload
+        const isCodingIngest = Array.isArray(payload?.questions);
+        const mode = isCodingIngest ? 'coding_questions_ingest' : 'theoretical_request';
+
+        // Phase 08.1 – Extract topic fields for theoretical request structure:
+        // {
+        //   requester_service: "assessment",
+        //   payload: {...},
+        //   response: { answer: "" }
+        // }
+        let normalized = undefined;
+        if (!isCodingIngest && payload && typeof payload === 'object') {
+          const nested = payload?.payload || {};
+          const topic_id =
+            nested?.topic_id != null && Number.isFinite(Number(nested.topic_id))
+              ? Number(nested.topic_id)
+              : undefined;
+          const topic_name =
+            typeof nested?.topic_name === 'string' ? nested.topic_name : undefined;
+          const humanLanguage =
+            typeof nested?.humanLanguage === 'string' && nested.humanLanguage.trim() !== ''
+              ? nested.humanLanguage
+              : undefined;
+          const questionStr =
+            typeof nested?.question === 'string' && nested.question.trim() !== ''
+              ? nested.question
+              : (typeof nested?.stem === 'string' ? nested.stem : undefined);
+          const correct_answer =
+            nested?.correct_answer != null ? String(nested.correct_answer) : undefined;
+          const hints =
+            Array.isArray(nested?.hints) ? nested.hints.map((h) => String(h)) : undefined;
+          const difficulty = 'medium'; // Enforced policy for theoretical
+
+          normalized = {
+            topic_id,
+            topic_name,
+            humanLanguage,
+            question: questionStr,
+            hints,
+            correct_answer,
+            difficulty,
+          };
+        }
+
+        return res.status(202).json({
+          status: 'accepted',
+          flow: `devlab_${mode}`,
+          normalized_theoretical: normalized,
+        });
       }
       case 'rag': {
         // RAG incident report reception

@@ -90,9 +90,36 @@ async function buildExamPackageDoc({
       // Policy: Theoretical questions always have medium difficulty in exam packages.
       // Preserve external difficulty only for coding questions (DevLab-originated).
       const difficulty = isCode ? q.difficulty || "medium" : "medium";
+      // Normalize theoretical enrichment fields (optional)
+      const normalizedTopicId =
+        !isCode && q?.topic_id != null && Number.isFinite(Number(q.topic_id))
+          ? Number(q.topic_id)
+          : undefined;
+      const normalizedLang =
+        !isCode && typeof q?.humanLanguage === "string" && q.humanLanguage.trim() !== ""
+          ? q.humanLanguage
+          : undefined;
+      // Prefer explicit question field; fallback to stem for storage convenience
+      const questionStr =
+        !isCode && typeof q?.question === "string" && q.question.trim() !== ""
+          ? q.question
+          : !isCode
+            ? (q?.stem || "")
+            : undefined;
       return {
         question_id: q.qid || q.question_id || q.id || "",
         skill_id: q.skill_id,
+        // Theoretical-only enrichment fields (optional; no-ops for coding)
+        topic_id: normalizedTopicId,
+        topic_name: !isCode && typeof q?.topic_name === "string" ? q.topic_name : undefined,
+        humanLanguage: normalizedLang,
+        question: questionStr,
+        hints: !isCode && Array.isArray(q?.hints) ? q.hints.map((h) => String(h)) : undefined,
+        correct_answer:
+          !isCode && (q?.correct_answer != null)
+            ? String(q.correct_answer)
+            : undefined,
+        difficulty: !isCode ? String(difficulty) : undefined,
         // Strip hints everywhere; additionally strip difficulty for theoretical prompts
         prompt: sanitizeQuestionPromptForStorage(q),
         options: Array.isArray(q?.choices) ? q.choices : [],
@@ -148,6 +175,11 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     difficulty: "hard",
     question: {
       type: "mcq",
+      // Phase 08.1 – carry DevLab theoretical metadata into question object
+      // Defaults used to avoid breaking existing flows
+      topic_id: 0,
+      topic_name: "General",
+      humanLanguage: "en",
       stem: "Which statement about event loop and microtasks in JavaScript is true?",
       choices: [
         "Microtasks run before rendering and before next macrotask.",

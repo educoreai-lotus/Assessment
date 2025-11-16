@@ -4,6 +4,17 @@ const ExamPackageQuestionSchema = new Schema(
   {
     question_id: { type: String, index: true },
     skill_id: String,
+    // New optional theoretical-question fields (Phase 08.1 – DevLab Integration Update)
+    // When the item represents a theoretical question, these fields may be present.
+    // They are optional to avoid breaking existing packages/documents.
+    topic_id: { type: Number, required: false },
+    topic_name: { type: String, required: false },
+    humanLanguage: { type: String, required: false },
+    // Normalized theoretical content fields (kept alongside legacy prompt/options for compatibility)
+    question: { type: String, required: false },
+    hints: { type: [String], required: false, default: undefined },
+    correct_answer: { type: String, required: false },
+    difficulty: { type: String, required: false },
     prompt: Schema.Types.Mixed,
     options: [Schema.Types.Mixed],
     answer_key: Schema.Types.Mixed,
