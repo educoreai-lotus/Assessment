@@ -112,14 +112,28 @@ exports.submitExam = async (req, res, next) => {
     }
 
     // Validate attempt exists and matches examId; check status and expiration
+    const attemptIdNum = Number(attempt_id);
+    // [submitExam-controller] diagnostic logs
+    // eslint-disable-next-line no-console
+    console.debug('[submitExam-controller] params', {
+      examId: Number(examId),
+      attempt_id_raw: attempt_id,
+      attempt_id_num: attemptIdNum,
+    });
     const { rows: attemptRows } = await pool
       .query(
         `SELECT ea.attempt_id, ea.exam_id, ea.status, ea.expires_at
          FROM exam_attempts ea
          WHERE ea.attempt_id = $1`,
-        [attempt_id],
+        [attemptIdNum],
       )
       .catch(() => ({ rows: [] }));
+
+    // eslint-disable-next-line no-console
+    console.debug('[submitExam-controller] attempt select result', {
+      length: attemptRows?.length || 0,
+      row0: attemptRows?.[0] || null,
+    });
 
     if (!attemptRows || attemptRows.length === 0) {
       return res.status(404).json({ error: 'attempt_not_found' });
@@ -148,7 +162,7 @@ exports.submitExam = async (req, res, next) => {
      // return res.status(403).json({ error: 'camera_inactive', camera_required: true });
     //}
 
-    const response = await submitAttempt({ attempt_id, answers });
+    const response = await submitAttempt({ attempt_id: attemptIdNum, answers });
 
     if (response && response.error) {
       // Map known service errors to 4xx

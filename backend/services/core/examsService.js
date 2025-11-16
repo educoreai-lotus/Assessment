@@ -385,13 +385,25 @@ async function getPackageByAttemptId(attempt_id) {
 
 async function submitAttempt({ attempt_id, answers }) {
   // 1) Load attempt + exam
+  const attemptIdNum = Number(attempt_id);
+  // [submitAttempt-service] diagnostic logs
+  // eslint-disable-next-line no-console
+  console.debug('[submitAttempt-service] input', {
+    attempt_id_raw: attempt_id,
+    attempt_id_num: attemptIdNum,
+  });
   const { rows: attemptRows } = await pool.query(
     `SELECT ea.*, e.exam_type, e.course_id, e.user_id
      FROM exam_attempts ea
      JOIN exams e ON e.exam_id = ea.exam_id
      WHERE ea.attempt_id = $1`,
-    [attempt_id],
+    [attemptIdNum],
   );
+  // eslint-disable-next-line no-console
+  console.debug('[submitAttempt-service] attempt select result', {
+    length: attemptRows?.length || 0,
+    row0: attemptRows?.[0] ? { attempt_id: attemptRows[0].attempt_id, exam_id: attemptRows[0].exam_id, status: attemptRows[0].status } : null,
+  });
   if (attemptRows.length === 0) {
     throw new Error("attempt_not_found");
   }
@@ -579,7 +591,7 @@ async function submitAttempt({ attempt_id, answers }) {
           status = CASE WHEN status = 'canceled' THEN status ELSE 'submitted' END
       WHERE attempt_id = $3
     `,
-    [finalGrade, passed, attempt_id],
+    [finalGrade, passed, attemptIdNum],
   );
 
   // 11) Upsert attempt_skills
@@ -600,7 +612,7 @@ async function submitAttempt({ attempt_id, answers }) {
   // 12) Update Mongo ExamPackage (grading block)
   try {
     await ExamPackage.updateOne(
-      { attempt_id: String(attempt_id) },
+      { attempt_id: String(attemptIdNum) },
       {
         $set: {
           grading: {
@@ -690,7 +702,7 @@ async function submitAttempt({ attempt_id, answers }) {
 
   // 3.4) Protocol Camera summary
   const protoSummary = {
-    attempt_id: `att_${attempt_id}`,
+    attempt_id: `att_${attemptIdNum}`,
     summary: {
       events_total: 5,
       violations: 1,

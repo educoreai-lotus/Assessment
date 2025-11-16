@@ -28,6 +28,29 @@
         {
             "note": "Features array initialized. Individual features will be added as they are planned and implemented. Each feature follows the unified SDLC phase structure."
         },
+      {
+        "feature_id": "FEAT-EXAM-SUBMIT-GRADING",
+        "name": "Exam Submission & Grading Pipeline",
+        "status": "Done",
+        "owner": "Assessment",
+        "phases": { "07": "Done" },
+        "links": {
+          "backend": [
+            "backend/controllers/examsController.js",
+            "backend/services/core/examsService.js"
+          ],
+          "docs": [
+            "docs/api/assessment.md"
+          ],
+          "tests": [
+            "backend/tests/integration/submitAttempt.test.js"
+          ]
+        },
+        "notes": [
+          "POST /api/exams/:examId/submit implemented end-to-end including grading, per-skill aggregation, Mongo update, and outbox inserts."
+        ],
+        "updated_at": "2025-11-16"
+      },
         {
             "feature_id": "FEAT-AI-PROMPT-ENGINE",
             "name": "AI Prompt Engine",
@@ -1408,6 +1431,35 @@
           "Checklist includes environment variables, Mongo indexes, health checks, and alerting for proctoring services."
         ],
         "timestamps": { "completed": "2025-11-15T00:00:00Z" }
+      }
+      ,
+      {
+        "version": "v4.4.3-p07-submit",
+        "traceability_id": "phase-07-submit-grading-pipeline",
+        "phase": "07",
+        "title": "Submission & Grading (POST /api/exams/:examId/submit)",
+        "status_after": "Done",
+        "artifacts": {
+          "backend": [
+            "backend/controllers/examsController.js",
+            "backend/services/core/examsService.js"
+          ],
+          "tests": [
+            "backend/tests/integration/submitAttempt.test.js"
+          ],
+          "docs": [
+            "docs/api/assessment.md"
+          ]
+        },
+        "notes": [
+          "Fix: POST /api/exams/:examId/submit attempt_not_found bug",
+          "Root cause: inconsistent ID typing at boundaries (string vs number) causing WHERE ea.attempt_id = $1 to miss rows.",
+          "Actions: Added Number() casting in controller and service; added console.debug diagnostics; unified Postgres connection source.",
+          "Files changed: controllers/examsController.js, services/core/examsService.js, config/supabaseDB.js, docs/api/assessment.md, backend/tests/integration/*",
+          "Diagnostics: Added [submitExam-controller] and [submitAttempt-service] prefixed logs for inputs and SELECT results.",
+          "DB: Connection now selected via SUPABASE_POOLER_URL || SUPABASE_DB_URL || DATABASE_URL with masked info logging."
+        ],
+        "timestamps": { "completed": "2025-11-16T00:00:00Z" }
       }
     ],
     "additional_updates": [
