@@ -25,10 +25,12 @@ function maskConnectionInfo(cs) {
     return '(unparseable-connection-string)';
   }
 }
-
+console.log("ENV PGHOST:", process.env.PGHOST);
 pool.connect()
   .then(() => console.log(`✅ Connected to PostgreSQL via ${source} (${maskConnectionInfo(connectionString)})`))
   .catch((err) => console.error('❌ PostgreSQL connection error:', err?.message || err));
+
+
 
 module.exports = pool;
 
