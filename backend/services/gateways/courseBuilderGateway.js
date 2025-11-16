@@ -39,10 +39,14 @@ async function sendCourseBuilderExamResults(payloadObj) {
       passed: false,
     }),
   };
-  const url = process.env.INTEGRATION_COURSEBUILDER_METRICS_URL;
-  if (!url) throw new Error('INTEGRATION_COURSEBUILDER_METRICS_URL not set');
-  const { data } = await axios.post(url, body, { timeout: 10000 });
-  return data;
+  const url = process.env.INTEGRATION_COURSEBUILDER_FILL_METRICS_URL;
+  if (!url) throw new Error('INTEGRATION_COURSEBUILDER_FILL_METRICS_URL not set');
+  const { data } = await axios.post(url, body, { timeout: 15000 });
+  const raw = data?.response ?? null;
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return raw; }
+  }
+  return raw;
 }
 
 // Backward-compatible safe wrapper (uses mock on failure)

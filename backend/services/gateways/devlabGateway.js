@@ -1,51 +1,51 @@
 const axios = require('axios');
 
-// Phase 08 – Unified envelope (Assessment → DevLab → Assessment)
-async function sendToDevlabEnvelope(payload, requesterService = 'Devlab') {
+function getDevlabUrl() {
 	const url = process.env.INTEGRATION_DEVLAB_DATA_REQUEST_URL;
-	if (!url) {
-		throw new Error('INTEGRATION_DEVLAB_DATA_REQUEST_URL not set');
-	}
+	if (!url) throw new Error('INTEGRATION_DEVLAB_DATA_REQUEST_URL not set');
+	return url;
+}
+
+// Global Protocol: requester_service='assessment', payload/response are stringified
+async function sendToDevlabEnvelope(payloadObj) {
+	const url = getDevlabUrl();
 	const body = {
-		requester_service: requesterService,
-		payload,
-		response: { answer: '' },
+		requester_service: 'assessment',
+		payload: JSON.stringify(payloadObj || {}),
+		response: JSON.stringify({ answer: [] }),
 	};
-	const { data } = await axios.post(url, body, { timeout: 15000 });
-	return data?.response?.answer;
+	const { data } = await axios.post(url, body, { timeout: 20000 });
+	const raw = data?.response ?? null;
+	if (typeof raw === 'string') {
+		try {
+			const parsed = JSON.parse(raw);
+			// DevLab responses often shape as { answer: [...] }
+			if (parsed && Array.isArray(parsed.answer)) return parsed.answer;
+			return parsed;
+		} catch {
+			return raw;
+		}
+	}
+	return raw;
 }
 
 async function requestCodingQuestions({ amount, skills, humanLanguage = 'en', difficulty = 'medium' }) {
-	// Phase 08.3 – Ensure requester_service='assessment' and include programming_language
-	const answer = await sendToDevlabEnvelope(
-		{
-			action: 'coding',
-			amount,
-			difficulty,
-			humanLanguage,
-			programming_language: 'javascript',
-			skills,
-		},
-		'assessment',
-	);
-	return answer;
+	const resp = await sendToDevlabEnvelope({
+		action: 'coding',
+		amount,
+		difficulty,
+		humanLanguage,
+		programming_language: 'javascript',
+		skills,
+	});
+	// Return array of questions directly if available
+	return Array.isArray(resp) ? resp : (resp?.answer || []);
 }
 
-// Phase 08.3 – Coding grading envelope (requester_service='assessment')
-async function sendCodingGradeEnvelope(payload) {
-	const url = process.env.INTEGRATION_DEVLAB_DATA_REQUEST_URL;
-	if (!url) throw new Error('INTEGRATION_DEVLAB_DATA_REQUEST_URL not set');
-	const body = {
-		requester_service: 'assessment',
-		payload,
-		response: { answer: '' },
-	};
-	const { data } = await axios.post(url, body, { timeout: 20000 });
-	return data?.response?.answer || [];
+async function sendCodingGradeEnvelope(payloadObj) {
+	const resp = await sendToDevlabEnvelope(payloadObj);
+	// Return grading array if available
+	return Array.isArray(resp) ? resp : (resp?.answer || []);
 }
 
-module.exports = {
-	sendToDevlabEnvelope,
-	requestCodingQuestions,
-	sendCodingGradeEnvelope,
-};
+module.exports = { sendToDevlabEnvelope, requestCodingQuestions, sendCodingGradeEnvelope };

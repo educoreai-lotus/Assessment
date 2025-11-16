@@ -1520,6 +1520,20 @@
         "timestamps": { "completed": "<insert timestamp>" }
       }
     ],
+
+    "phase_updates": [
+      {
+        "version": "v4.4.3-p085c",
+        "traceability_id": "phase-08-5c-integration-gateway-sync",
+        "phase": "08.5c",
+        "title": "Integration + Gateway Sync (parse/stringify + env URLs)",
+        "status_after": "Done",
+        "artifacts": [
+          "artifacts/phase-08-5c-integration-gateway-sync.json"
+        ],
+        "timestamps": { "completed": "<insert timestamp>" }
+      }
+    ],
     "additional_updates": [
       {
         "phase": "16",

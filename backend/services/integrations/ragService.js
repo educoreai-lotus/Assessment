@@ -1,16 +1,8 @@
-const axios = require('axios');
+// Phase 08.5c – Delegates to gateway; no axios/env here
+const { safePushIncidentDecision } = require('../gateways/ragGateway');
 
-function getBaseUrl() {
-  const base = process.env.RAG_BASE_URL;
-  if (!base) throw new Error('RAG_BASE_URL not set');
-  return base.replace(/\/+$/, '');
-}
-
-exports.sendIncidentDecisionToRag = async (payload) => {
-  const base = getBaseUrl();
-  const url = `${base}/api/rag/incident-response`;
-  const { data } = await axios.post(url, payload, { timeout: 10000 });
-  return data;
+exports.sendIncidentDecisionToRag = async (payloadObj) => {
+  return await safePushIncidentDecision(payloadObj || {});
 };
 
 

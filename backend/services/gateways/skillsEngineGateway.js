@@ -1,5 +1,4 @@
 const axios = require('axios');
-const { sendResultsToSkillsEngine } = require('../integrations/skillsEngineService');
 const { mockFetchBaselineSkills, mockPushAssessmentResults } = require('../mocks/skillsEngineMock');
 
 function getBaseUrl() {
@@ -26,7 +25,19 @@ async function safeFetchBaselineSkills(params) {
 
 async function safePushAssessmentResults(payload) {
   try {
-    return await sendResultsToSkillsEngine(payload);
+    const base = getBaseUrl();
+    const url = `${base}/api/skills-engine/assessment-results`;
+    const body = {
+      requester_service: 'assessment',
+      payload: JSON.stringify(payload || {}),
+      response: JSON.stringify({ status: 'accepted' }),
+    };
+    const { data } = await axios.post(url, body, { timeout: 15000 });
+    const raw = data?.response ?? null;
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw); } catch { return raw; }
+    }
+    return raw;
   } catch (err) {
     console.warn('SkillsEngine push results failed, using mock. Reason:', err?.message || err);
     return mockPushAssessmentResults(payload);

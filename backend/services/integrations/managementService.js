@@ -1,5 +1,6 @@
 const pool = require('../../config/supabaseDB');
 
+// Legacy note: ManagementReporting pulls directly via integrationController; no outbound HTTP here.
 async function fetchManagementDailyAttempts() {
 	const sql = `
 SELECT 

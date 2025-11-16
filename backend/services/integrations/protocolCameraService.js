@@ -1,16 +1,8 @@
-const axios = require('axios');
+// Phase 08.5c – Delegates to gateway; no axios/env here
+const { safeSendSummary } = require('../gateways/protocolCameraGateway');
 
-function getBaseUrl() {
-  const base = process.env.PROTOCOL_CAMERA_BASE_URL;
-  if (!base) throw new Error('PROTOCOL_CAMERA_BASE_URL not set');
-  return base.replace(/\/+$/, '');
-}
-
-exports.sendSummaryToProtocolCamera = async (payload) => {
-  const base = getBaseUrl();
-  const url = `${base}/api/protocol-camera/summary`;
-  const { data } = await axios.post(url, payload, { timeout: 10000 });
-  return data;
+exports.sendSummaryToProtocolCamera = async (payloadObj) => {
+  return await safeSendSummary(payloadObj || {});
 };
 
 

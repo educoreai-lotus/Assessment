@@ -1,23 +1,12 @@
-const axios = require('axios');
-
-function getBaseUrl() {
-  const base = process.env.DIRECTORY_BASE_URL;
-  if (!base) throw new Error('DIRECTORY_BASE_URL not set');
-  return base.replace(/\/+$/, '');
-}
+// Phase 08.5c – Delegates to gateway; no axios/env here
+const { safeFetchPolicy, safePushExamResults } = require('../gateways/directoryGateway');
 
 exports.fetchPolicy = async (examType) => {
-  const base = getBaseUrl();
-  const url = `${base}/api/directory/policy/${encodeURIComponent(examType)}`;
-  const { data } = await axios.get(url, { timeout: 10000 });
-  return data;
+  return await safeFetchPolicy(examType);
 };
 
-exports.pushExamResults = async (payload) => {
-  const base = getBaseUrl();
-  const url = `${base}/api/directory/exam-results`;
-  const { data } = await axios.post(url, payload, { timeout: 10000 });
-  return data;
+exports.pushExamResults = async (payloadObj) => {
+  return await safePushExamResults(payloadObj || {});
 };
 
 
