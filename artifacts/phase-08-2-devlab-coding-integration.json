@@ -1,0 +1,72 @@
+{
+  "traceability_id": "phase-08-2-devlab-coding-integration",
+  "phase": "08.2",
+  "owner": "Assessment",
+  "date": "2025-11-16",
+  "summary": {
+    "title": "DevLab Coding Questions Integration",
+    "description": "Implements Assessment → DevLab → Assessment flow for coding questions using unified envelope. Stores results in Mongo `exam_packages.coding_questions` with metadata."
+  },
+  "files_changed": [
+    "backend/models/examPackage.model.js",
+    "backend/services/gateways/devlabGateway.js",
+    "backend/services/integrations/devlabService.js",
+    "backend/services/core/examsService.js",
+    "backend/controllers/examsController.js"
+  ],
+  "functions_added_or_updated": [
+    {
+      "file": "backend/models/examPackage.model.js",
+      "changes": [
+        "Added ExamPackageCodingQuestionSchema",
+        "Added ExamPackageSchema.coding_questions[]"
+      ]
+    },
+    {
+      "file": "backend/services/gateways/devlabGateway.js",
+      "changes": [
+        "Added sendToDevlab(payload, requesterService)",
+        "Added requestCodingQuestions({ amount, skills, humanLanguage, difficulty })",
+        "Exported new helpers"
+      ]
+    },
+    {
+      "file": "backend/services/integrations/devlabService.js",
+      "changes": [
+        "Added buildCodingQuestionsForExam() that decorates DevLab answers with skills, humanLanguage, difficulty, requested_at"
+      ]
+    },
+    {
+      "file": "backend/services/core/examsService.js",
+      "changes": [
+        "Extended buildExamPackageDoc() to accept coding_questions",
+        "During createExam(), requested coding questions from DevLab (amount=2, difficulty=medium, language=en, skills from skills/coverage) and stored in examPackage.coding_questions"
+      ]
+    },
+    {
+      "file": "backend/controllers/examsController.js",
+      "changes": [
+        "Included coding_questions in startExam response payload"
+      ]
+    }
+  ],
+  "behavior": {
+    "request": {
+      "url_env": "INTEGRATION_DEVLAB_DATA_REQUEST_URL",
+      "envelope": {
+        "requester_service": "Devlab",
+        "payload": {
+          "action": "coding",
+          "amount": 2,
+          "difficulty": "medium",
+          "humanLanguage": "en",
+          "skills": "[from exam skills/coverage]"
+        },
+        "response": { "answer": "" }
+      }
+    },
+    "response_handling": "Uses res.data.response.answer as array of coding question objects.",
+    "storage": "MongoDB exam_packages.coding_questions[] with attached skills[], humanLanguage, difficulty, requested_at."
+  }
+}
+
