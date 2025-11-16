@@ -1,19 +1,12 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const connectionString =
-  process.env.SUPABASE_POOLER_URL ||
-  process.env.SUPABASE_DB_URL ||
-  process.env.DATABASE_URL;
-
-const source =
-  process.env.SUPABASE_POOLER_URL ? 'SUPABASE_POOLER_URL' :
-  process.env.SUPABASE_DB_URL ? 'SUPABASE_DB_URL' :
-  process.env.DATABASE_URL ? 'DATABASE_URL' : null;
+const connectionString = process.env.SUPABASE_DB_URL;
+const source = 'SUPABASE_DB_URL';
 
 if (!connectionString) {
   // eslint-disable-next-line no-console
-  console.error('❌ Missing SUPABASE connection string (SUPABASE_POOLER_URL | SUPABASE_DB_URL | DATABASE_URL)');
+  console.error('❌ Missing SUPABASE_DB_URL');
   process.exit(1);
 }
 
