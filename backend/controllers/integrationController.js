@@ -15,6 +15,7 @@ const { sendExamResultsToCourseBuilder } = require('../services/integrations/cou
 const { sendIncidentDecisionToRag } = require('../services/integrations/ragService');
 const { sendSummaryToProtocolCamera } = require('../services/integrations/protocolCameraService');
 const { normalizeToInt } = require("../services/core/idNormalizer");
+const { fetchManagementDailyAttempts } = require('../services/integrations/managementService');
 
 // This controller centralizes inbound integration handling at /api/assessment/integration
 // It dispatches by api_caller and HTTP method to the correct workflow.
@@ -113,6 +114,19 @@ exports.handlePostIntegration = async (req, res, next) => {
       default:
         return res.status(400).json({ error: 'unsupported_api_caller' });
     }
+  } catch (err) {
+    return next(err);
+  }
+};
+
+exports.getManagementDailyReport = async (req, res, next) => {
+  try {
+    const results = await fetchManagementDailyAttempts();
+    return res.json({
+      requester_name: 'ManagementReporting',
+      payload: {},
+      response: results,
+    });
   } catch (err) {
     return next(err);
   }

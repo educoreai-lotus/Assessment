@@ -45,6 +45,9 @@ const integrationController = require('../controllers/integrationController');
 router.post('/api/assessment/integration', integrationController.handlePostIntegration);
 router.get('/api/assessment/integration', integrationController.handleGetIntegration);
 
+// Phase 08.4 – ManagementReporting 24h Pull Integration
+router.get('/api/integrations/management/report', integrationController.getManagementDailyReport);
+
 module.exports = router;
 
 

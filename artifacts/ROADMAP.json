@@ -1657,6 +1657,11 @@
           "Prepared backend for Phase 08.3 coding answers grading."
         ],
         "timestamps": { "created": "2025-11-16T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.3-p084",
+        "traceability_id": "phase-08-4-management-reporting",
+        "status": "Done"
       }
     ]
   }
