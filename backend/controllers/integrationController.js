@@ -16,6 +16,13 @@ const { sendIncidentDecisionToRag } = require('../services/integrations/ragServi
 const { sendSummaryToProtocolCamera } = require('../services/integrations/protocolCameraService');
 const { normalizeToInt } = require("../services/core/idNormalizer");
 const { fetchManagementDailyAttempts } = require('../services/integrations/managementService');
+// Phase 08.6 – Universal dispatcher service imports
+const courseBuilderService = require('../services/integrations/courseBuilderService');
+const managementService = require('../services/integrations/managementService');
+const directoryService = require('../services/integrations/directoryService');
+const skillsEngineService = require('../services/integrations/skillsEngineService');
+const devlabService = require('../services/integrations/devlabService');
+const learningAnalyticsService = require('../services/integrations/learningAnalyticsService');
 
 // This controller centralizes inbound integration handling at /api/assessment/integration
 // It dispatches by api_caller and HTTP method to the correct workflow.
@@ -300,6 +307,75 @@ exports.handleCourseBuilderPreExam = async (req, res, next) => {
     return res.json(envelope);
   } catch (err) {
     return next(err);
+  }
+};
+
+// Phase 08.6 – Universal Integration Endpoint handler
+exports.universalIntegrationHandler = async (req, res) => {
+  try {
+    const { requester_service, payload, response } = req.body;
+
+    if (!requester_service || typeof payload !== 'string' || typeof response !== 'string') {
+      return res.status(400).json({
+        error: "Invalid envelope. Expected requester_service, payload (string), response (string)."
+      });
+    }
+
+    let parsedPayload = {};
+    let parsedResponse = {};
+
+    try {
+      parsedPayload = JSON.parse(payload);
+      parsedResponse = JSON.parse(response);
+    } catch (err) {
+      return res.status(400).json({
+        error: "Payload or response is not valid JSON string."
+      });
+    }
+
+    let result;
+
+    switch (String(requester_service).toLowerCase()) {
+      case 'coursebuilder':
+        result = await courseBuilderService.handleInbound(parsedPayload, parsedResponse);
+        break;
+
+      case 'management':
+        result = await managementService.handleInbound(parsedPayload, parsedResponse);
+        break;
+
+      case 'directory':
+        result = await directoryService.handleInbound(parsedPayload, parsedResponse);
+        break;
+
+      case 'skillsengine':
+        result = await skillsEngineService.handleInbound(parsedPayload, parsedResponse);
+        break;
+
+      case 'devlab':
+        result = await devlabService.handleInbound(parsedPayload, parsedResponse);
+        break;
+
+      case 'learninganalytics':
+      case 'la':
+        result = await learningAnalyticsService.handleInbound(parsedPayload, parsedResponse);
+        break;
+
+      default:
+        return res.status(400).json({
+          error: `Unknown requester_service: ${requester_service}`
+        });
+    }
+
+    return res.json({
+      requester_service,
+      payload,
+      response: JSON.stringify(result || {})
+    });
+
+  } catch (err) {
+    console.error('Error in universalIntegrationHandler:', err);
+    return res.status(500).json({ error: err.message });
   }
 };
 

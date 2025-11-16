@@ -30,6 +30,9 @@ ORDER BY ea.submitted_at DESC;
 
 module.exports = {
 	fetchManagementDailyAttempts,
+	handleInbound: async () => {
+		return await fetchManagementDailyAttempts();
+	},
 };
 
 

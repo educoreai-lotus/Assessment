@@ -1532,6 +1532,16 @@
           "artifacts/phase-08-5c-integration-gateway-sync.json"
         ],
         "timestamps": { "completed": "<insert timestamp>" }
+      },
+      {
+        "version": "v4.4.3-p086",
+        "traceability_id": "phase-08-6-universal-integration-endpoint",
+        "phase": "08.6",
+        "title": "Universal Integration Endpoint",
+        "status_after": "Done",
+        "artifacts": [
+          "artifacts/phase-08-6-universal-integration-endpoint.json"
+        ]
       }
     ],
     "additional_updates": [

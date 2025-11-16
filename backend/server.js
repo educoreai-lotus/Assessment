@@ -158,7 +158,7 @@ app.get('/health/mongo', async (req, res) => {
 });
 
 // Mount integration endpoints EXACTLY as per integration map (no version prefix)
-app.use('/', integrationRoutes);
+app.use('/api', integrationRoutes);
 
 // New Assessment API v1 routers
 app.use('/api/exams', examsRouter);
