@@ -1,3 +1,15 @@
+// IMPORTANT ARCHITECTURE NOTE
+// ---------------------------
+// PostgreSQL stores ONLY numeric IDs.
+// MongoDB stores original string IDs.
+// Incoming API can send ANY ID format.
+// normalizeToInt() extracts numeric portion for SQL usage.
+// This guarantees:
+// - strict relational integrity in PostgreSQL
+// - flexible ID formats for external microservices
+// - zero prefix collisions
+// - correct grading and attempt lookup
+
 const pool = require("../../config/supabaseDB");
 const { ExamPackage, AiAuditTrail } = require("../../models");
 const {
@@ -18,13 +30,7 @@ const {
   safeGradeCodingAnswers,
 } = require("../gateways/devlabGateway");
 const { safeSendSummary } = require("../gateways/protocolCameraGateway");
-const { mapUserId } = require("./idMapper");
-
-function toIntId(prefixed) {
-  if (typeof prefixed !== "string") return null;
-  const m = prefixed.match(/^[a-z]+_(\d+)$/i);
-  return m ? parseInt(m[1], 10) : null;
-}
+const { normalizeToInt } = require("./idNormalizer");
 
 function nowIso() {
   return new Date().toISOString();
@@ -77,7 +83,7 @@ async function buildExamPackageDoc({
   const doc = new ExamPackage({
     exam_id: String(exam_id),
     attempt_id: String(attempt_id),
-    user: { user_id, name: undefined, email: undefined },
+    user: { user_id: String(user_id), name: undefined, email: undefined },
     questions: (questions || []).map((q) => {
       const type = q && q.type ? String(q.type).toLowerCase() : "mcq";
       const isCode = type === "code";
@@ -103,7 +109,7 @@ async function buildExamPackageDoc({
       exam_type,
       policy,
       skills,
-      course_id,
+      course_id: course_id != null ? String(course_id) : null,
       course_name,
       time_allocated_minutes: time_allocated_minutes ?? undefined,
       expires_at: expires_at_iso ?? undefined,
@@ -137,8 +143,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   // Optional questions (DevLab)
   const coding = await safeGetCodingQuestions();
   const theoreticalReq = {
-    exam_id: "ex_temp",
-    attempt_id: "att_temp",
+    exam_id: "temp",
+    attempt_id: "temp",
     difficulty: "hard",
     question: {
       type: "mcq",
@@ -172,10 +178,13 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     });
   } catch {}
 
-  // Insert exam row in PG (map user_id 'u_123' -> 123 for FK)
-  const userInt = mapUserId(user_id);
+  // Insert exam row in PG (normalize any user_id -> integer for FK)
+  const userInt = normalizeToInt(user_id);
+  if (userInt == null) {
+    return { error: "invalid_user_id" };
+  }
   console.log("createExam user mapping:", { user_id, userInt });
-  const courseInt = course_id ? toIntId(course_id) : null;
+  const courseInt = normalizeToInt(course_id); // can be null for baseline
 
   // Baseline exam: only one baseline exam per user is allowed
   if (exam_type === "baseline") {
@@ -203,10 +212,6 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   // Prepare skills and coverage map
   const skillsArray = skillsPayload?.skills || [];
   const coverageMap = coveragePayload?.coverage_map || [];
-  const resolvedCourseId =
-    exam_type === "postcourse"
-      ? coveragePayload?.course_id || course_id || null
-      : null;
   const resolvedCourseName =
     exam_type === "postcourse"
       ? coveragePayload?.course_name || course_name || null
@@ -271,7 +276,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     policy: policySnapshot,
     skills: skillsArray,
     coverage_map: coverageMap,
-    course_id: resolvedCourseId,
+    course_id: course_id != null ? course_id : null,
     course_name: resolvedCourseName || undefined,
     questions,
     time_allocated_minutes: durationMinutes || undefined,
@@ -289,8 +294,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     exam_id: examId,
     attempt_id: attemptId,
     exam_type,
-    user_id,
-    course_id: resolvedCourseId || null,
+    user_id: Number(userInt),
+    course_id: courseInt != null ? Number(courseInt) : null,
     passing_grade: policySnapshot?.passing_grade ?? null,
     max_attempts: policySnapshot?.max_attempts ?? null,
     policy_snapshot: policySnapshot,
@@ -385,7 +390,10 @@ async function getPackageByAttemptId(attempt_id) {
 
 async function submitAttempt({ attempt_id, answers }) {
   // 1) Load attempt + exam
-  const attemptIdNum = Number(attempt_id);
+  const attemptIdNum = normalizeToInt(attempt_id);
+  if (attemptIdNum == null) {
+    throw new Error("invalid_attempt_id");
+  }
   // [submitAttempt-service] diagnostic logs
   // eslint-disable-next-line no-console
   console.debug('[submitAttempt-service] input', {
@@ -425,7 +433,7 @@ async function submitAttempt({ attempt_id, answers }) {
   }
 
   // 3) Load exam package from Mongo by attempt_id
-  const examPackage = await getPackageByAttemptId(attempt_id);
+  const examPackage = await getPackageByAttemptId(String(attemptIdNum));
   if (!examPackage) {
     return { error: "package_not_found" };
   }
@@ -488,7 +496,7 @@ async function submitAttempt({ attempt_id, answers }) {
         try {
           AiAuditTrail.create({
             exam_id: String(attempt.exam_id),
-            attempt_id: String(attempt_id),
+            attempt_id: String(attemptIdNum),
             event_type: "grading",
             model: { provider: "internal", name: "placeholder", version: "v1" },
             prompt: {
@@ -509,10 +517,10 @@ async function submitAttempt({ attempt_id, answers }) {
   const theoreticalGraded = gradeTheoreticalAnswers(examPackage, theoreticalAnswers);
 
   // 6) Coding grading (DevLab)
-  const userIdStr = attempt.user_id != null ? `u_${attempt.user_id}` : null;
+  const userIdStr = attempt.user_id != null ? String(attempt.user_id) : null;
   const payloadToDevLab = {
-    exam_id: attempt.exam_id != null ? `ex_${attempt.exam_id}` : null,
-    attempt_id: attempt_id != null ? `att_${attempt_id}` : null,
+    exam_id: attempt.exam_id != null ? String(attempt.exam_id) : null,
+    attempt_id: String(attemptIdNum),
     user_id: userIdStr,
     answers: codingAnswers.map((a) => ({
       question_id: String(a.question_id || ""),
@@ -605,7 +613,7 @@ async function submitAttempt({ attempt_id, answers }) {
           score = EXCLUDED.score,
           status = EXCLUDED.status
       `,
-      [attempt_id, s.skill_id, s.skill_name, s.score, s.status],
+      [attemptIdNum, s.skill_id, s.skill_name, s.score, s.status],
     );
   }
 
@@ -631,14 +639,12 @@ async function submitAttempt({ attempt_id, answers }) {
 
   // 13) Return response and enqueue/push outbox integrations
   const submittedAtIso = nowIso();
-  const userIdStrResp = attempt.user_id != null ? `u_${attempt.user_id}` : null;
-  const courseIdStr = attempt.course_id != null ? `c_${attempt.course_id}` : null;
 
   // 3.1) Directory (postcourse only)
   if (examType === "postcourse") {
     const payloadDirectory = {
-      course_id: courseIdStr,
-      user_id: userIdStrResp,
+      course_id: attempt.course_id != null ? Number(attempt.course_id) : null,
+      user_id: attempt.user_id != null ? Number(attempt.user_id) : null,
       attempt_no: attempt.attempt_no || 1,
       exam_type: examType,
       final_grade: Number(finalGrade),
@@ -655,7 +661,7 @@ async function submitAttempt({ attempt_id, answers }) {
 
   // 3.2) Skills Engine
   const payloadSkills = {
-    user_id: userIdStrResp,
+    user_id: attempt.user_id != null ? Number(attempt.user_id) : null,
     exam_type: examType,
     passing_grade: Number(passing),
     final_grade: Number(finalGrade),
@@ -668,7 +674,7 @@ async function submitAttempt({ attempt_id, answers }) {
     })),
   };
   if (examType === "postcourse") {
-    payloadSkills.course_id = courseIdStr;
+    payloadSkills.course_id = attempt.course_id != null ? Number(attempt.course_id) : null;
     payloadSkills.course_name = examPackage?.metadata?.course_name || null;
     payloadSkills.coverage_map = examPackage?.coverage_map || [];
     payloadSkills.final_status = "completed";
@@ -682,8 +688,8 @@ async function submitAttempt({ attempt_id, answers }) {
   // 3.3) Course Builder (postcourse only)
   if (examType === "postcourse") {
     const payloadCourseBuilder = {
-      user_id: userIdStrResp,
-      course_id: courseIdStr,
+      user_id: attempt.user_id != null ? Number(attempt.user_id) : null,
+      course_id: attempt.course_id != null ? Number(attempt.course_id) : null,
       exam_type: "postcourse",
       passing_grade: Number(passing),
       final_grade: Number(finalGrade),
@@ -702,7 +708,7 @@ async function submitAttempt({ attempt_id, answers }) {
 
   // 3.4) Protocol Camera summary
   const protoSummary = {
-    attempt_id: `att_${attemptIdNum}`,
+    attempt_id: attemptIdNum,
     summary: {
       events_total: 5,
       violations: 1,
@@ -720,10 +726,10 @@ async function submitAttempt({ attempt_id, answers }) {
   safeSendSummary(protoSummary).catch(() => {});
 
   return {
-    user_id: userIdStrResp,
+    user_id: attempt.user_id != null ? Number(attempt.user_id) : null,
     exam_type: examType,
-    course_id: courseIdStr,
-    attempt_id,
+    course_id: attempt.course_id != null ? Number(attempt.course_id) : null,
+    attempt_id: attemptIdNum,
     attempt_no: attempt.attempt_no || 1,
     passing_grade: Number(passing),
     final_grade: Number(finalGrade),

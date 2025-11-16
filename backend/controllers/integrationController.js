@@ -1,8 +1,21 @@
+// IMPORTANT ARCHITECTURE NOTE
+// ---------------------------
+// PostgreSQL stores ONLY numeric IDs.
+// MongoDB stores original string IDs.
+// Incoming API can send ANY ID format.
+// normalizeToInt() extracts numeric portion for SQL usage.
+// This guarantees:
+// - strict relational integrity in PostgreSQL
+// - flexible ID formats for external microservices
+// - zero prefix collisions
+// - correct grading and attempt lookup
+
 const { sendResultsToSkillsEngine } = require('../services/integrations/skillsEngineService');
 const { sendExamResultsToCourseBuilder } = require('../services/integrations/courseBuilderService');
 const { sendTheoreticalToDevLab, sendCodingResultsToDevLab } = require('../services/integrations/devlabService');
 const { sendIncidentDecisionToRag } = require('../services/integrations/ragService');
 const { sendSummaryToProtocolCamera } = require('../services/integrations/protocolCameraService');
+const { normalizeToInt } = require("../services/core/idNormalizer");
 
 // This controller centralizes inbound integration handling at /api/assessment/integration
 // It dispatches by api_caller and HTTP method to the correct workflow.
@@ -102,9 +115,10 @@ exports.handleGetIntegration = async (req, res, next) => {
             status: s.status,
           }));
           const policy = a.policy_snapshot || {};
+          const userIdNormalized = normalizeToInt(pkg?.user?.user_id);
           if (a.exam_type === 'baseline') {
             return res.json({
-              user_id: pkg?.user?.user_id || 'u_000',
+              user_id: userIdNormalized != null ? Number(userIdNormalized) : null,
               exam_type: 'baseline',
               passing_grade: Number(policy?.passing_grade ?? 0),
               final_grade: a.final_grade != null ? Number(a.final_grade) : null,
@@ -115,9 +129,9 @@ exports.handleGetIntegration = async (req, res, next) => {
           }
           // postcourse
           return res.json({
-            user_id: pkg?.user?.user_id || 'u_000',
+            user_id: userIdNormalized != null ? Number(userIdNormalized) : null,
             exam_type: 'postcourse',
-            course_id: a.course_id != null ? `c_${a.course_id}` : null,
+            course_id: a.course_id != null ? Number(a.course_id) : null,
             course_name: pkg?.metadata?.course_name || null,
             attempt_no: a.attempt_no || 1,
             passing_grade: Number(policy?.passing_grade ?? 0),
@@ -151,8 +165,8 @@ exports.handleGetIntegration = async (req, res, next) => {
           );
           if (rows.length === 0) {
             return res.json({
-              user_id: 'u_123',
-              course_id: 'c_789',
+              user_id: 123,
+              course_id: 789,
               exam_type: 'postcourse',
               attempt_no: 1,
               passing_grade: 70,
@@ -164,9 +178,10 @@ exports.handleGetIntegration = async (req, res, next) => {
           // user_id from ExamPackage
           const pkg = await ExamPackage.findOne({ attempt_id: String(a.attempt_id) }).lean();
           const policy = a.policy_snapshot || {};
+          const userIdNormalized = normalizeToInt(pkg?.user?.user_id);
           return res.json({
-            user_id: pkg?.user?.user_id || 'u_000',
-            course_id: a.course_id != null ? `c_${a.course_id}` : null,
+            user_id: userIdNormalized != null ? Number(userIdNormalized) : null,
+            course_id: a.course_id != null ? Number(a.course_id) : null,
             exam_type: a.exam_type,
             attempt_no: a.attempt_no || 1,
             passing_grade: Number(policy?.passing_grade ?? 0),
@@ -175,8 +190,8 @@ exports.handleGetIntegration = async (req, res, next) => {
           });
         } catch (e) {
           return res.json({
-            user_id: 'u_123',
-            course_id: 'c_789',
+            user_id: 123,
+            course_id: 789,
             exam_type: 'postcourse',
             attempt_no: 1,
             passing_grade: 70,

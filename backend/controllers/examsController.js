@@ -1,6 +1,19 @@
+// IMPORTANT ARCHITECTURE NOTE
+// ---------------------------
+// PostgreSQL stores ONLY numeric IDs.
+// MongoDB stores original string IDs.
+// Incoming API can send ANY ID format.
+// normalizeToInt() extracts numeric portion for SQL usage.
+// This guarantees:
+// - strict relational integrity in PostgreSQL
+// - flexible ID formats for external microservices
+// - zero prefix collisions
+// - correct grading and attempt lookup
+
 const { createExam, markAttemptStarted, getPackageByExamId, submitAttempt } = require('../services/core/examsService');
 const pool = require('../config/supabaseDB');
 const { ProctoringSession, ExamPackage } = require('../models');
+const { normalizeToInt } = require("../services/core/idNormalizer");
 
 exports.createExam = async (req, res, next) => {
   try {
@@ -26,10 +39,15 @@ exports.startExam = async (req, res, next) => {
       return res.status(400).json({ error: 'attempt_id_required' });
     }
 
+    const attemptIdNum = normalizeToInt(attempt_id);
+    if (attemptIdNum == null) {
+      return res.status(400).json({ error: "invalid_attempt_id" });
+    }
+
     // Block if attempt time expired
     const { rows: expRows } = await pool.query(
       `SELECT expires_at, duration_minutes, status FROM exam_attempts WHERE attempt_id = $1`,
-      [attempt_id],
+      [attemptIdNum],
     ).catch(() => ({ rows: [] }));
     const expAt = expRows?.[0]?.expires_at ? new Date(expRows[0].expires_at) : null;
     if (expAt && new Date() > expAt) {
@@ -39,7 +57,7 @@ exports.startExam = async (req, res, next) => {
     // Block if attempt was canceled
     const { rows: statusRows } = await pool.query(
       `SELECT status FROM exam_attempts WHERE attempt_id = $1`,
-      [attempt_id],
+      [attemptIdNum],
     ).catch(() => ({ rows: [] }));
     const statusVal = statusRows?.[0]?.status || null;
     if (statusVal === 'canceled') {
@@ -52,7 +70,7 @@ exports.startExam = async (req, res, next) => {
    //   return res.status(403).json({ error: 'camera_inactive', camera_required: true });
    // }
 
-    const result = await markAttemptStarted({ attempt_id });
+    const result = await markAttemptStarted({ attempt_id: attemptIdNum });
     if (result && result.error) {
       return res.status(400).json(result);
     }
@@ -60,7 +78,7 @@ exports.startExam = async (req, res, next) => {
     // Set ExamPackage.metadata.start_time = now (do not overwrite if already set)
     try {
       await ExamPackage.updateOne(
-        { attempt_id: String(attempt_id) },
+        { attempt_id: String(attemptIdNum) },
         { $setOnInsert: {}, $set: { 'metadata.start_time': new Date().toISOString() } },
         { upsert: false }
       );
@@ -83,12 +101,14 @@ exports.startExam = async (req, res, next) => {
       }
       return input;
     };
+    const userIntFromPkg = normalizeToInt(pkg?.user?.user_id);
+    const courseIntFromPkg = normalizeToInt(pkg?.metadata?.course_id);
     return res.json({
       exam_id: Number(pkg.exam_id),
       attempt_id: Number(pkg.attempt_id),
       exam_type: pkg?.metadata?.exam_type || null,
-      user_id: pkg?.user?.user_id || null,
-      course_id: pkg?.metadata?.course_id || null,
+      user_id: userIntFromPkg != null ? Number(userIntFromPkg) : null,
+      course_id: courseIntFromPkg != null ? Number(courseIntFromPkg) : null,
       policy: pkg?.metadata?.policy || {},
       skills: pkg?.metadata?.skills || [],
       coverage_map: pkg?.coverage_map || [],
@@ -112,7 +132,10 @@ exports.submitExam = async (req, res, next) => {
     }
 
     // Validate attempt exists and matches examId; check status and expiration
-    const attemptIdNum = Number(attempt_id);
+    const attemptIdNum = normalizeToInt(attempt_id);
+    if (attemptIdNum == null) {
+      return res.status(400).json({ error: "invalid_attempt_id" });
+    }
     // [submitExam-controller] diagnostic logs
     // eslint-disable-next-line no-console
     console.debug('[submitExam-controller] params', {
