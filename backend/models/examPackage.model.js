@@ -32,7 +32,13 @@ const ExamPackageSchema = new Schema(
     grading: {
       final_grade: Number,
       passed: Boolean,
-      rubric: Schema.Types.Mixed,
+    rubric: Schema.Types.Mixed,
+    per_skill: {
+      type: [Schema.Types.Mixed],
+      default: [],
+    },
+    engine: String,
+    completed_at: Date,
     },
     coverage_map: {
       type: [Schema.Types.Mixed],

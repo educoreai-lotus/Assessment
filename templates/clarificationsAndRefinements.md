@@ -176,6 +176,36 @@ _Feature-specific clarifications will be appended here as features are developed
 
 ---
 
+## Feature: Exams – Submission & Grading (Feature ID: FEAT-EXAMS-GRADING)
+
+### Backend
+
+- [2025-11-16] Standardize submit payload and add guard rails
+  - Phase: 07
+  - Traceability ID: feat-exams-grading-submit-standardization
+  - Rationale: Prevent cross-mismatch and enforce time/camera constraints.
+
+- [2025-11-16] Implement theoretical + coding grading pipeline with per-skill aggregation
+  - Phase: 07
+  - Traceability ID: feat-exams-grading-pipeline
+  - Rationale: Provide end-to-end automated scoring with safe external integrations.
+
+### Integration
+
+- [2025-11-16] External push shapes aligned (Directory, Skills Engine, Course Builder, Protocol Camera)
+  - Phase: 07
+  - Traceability ID: feat-exams-grading-integration-map
+  - Rationale: Ensure downstream systems receive normalized results and metadata.
+
+### Database
+
+- [2025-11-16] Extend `ExamPackage.grading` to include `per_skill`, `engine`, `completed_at`
+  - Phase: 07
+  - Traceability ID: feat-exams-grading-mongo-extension
+  - Rationale: Persist grading outcome and provenance for analytics.
+
+---
+
 ## Feature: Exam Timing (Feature ID: FEAT-EXAM-TIMING)
 
 ### Backend

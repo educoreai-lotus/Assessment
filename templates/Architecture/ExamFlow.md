@@ -63,4 +63,25 @@ This document describes how exam start interacts with proctoring camera activati
 5) Remaining time
    - `GET /api/attempts/{attempt_id}/remaining_time` → `{ remaining_seconds, expired }`
 
+## Submit Exam – Grading & Integrations
+1) Client submits `POST /api/exams/{examId}/submit` with `{ attempt_id, answers[] }`.
+2) Backend validates exam/attempt relationship, non-cancelled, not expired, camera active.
+3) Load `ExamPackage` by `attempt_id`; split theoretical vs coding answers.
+4) Theoretical grading (internal):
+   - MCQ exact compare → 100/0 score; open-ended → placeholder `pending_review` (score 0).
+5) Coding grading (DevLab):
+   - Use safe gateway with mock fallback; normalize results to scores/status per question.
+6) Aggregation:
+   - Per-skill average; status `acquired` if `>= passing_grade` else `failed`.
+   - Final grade = average of per-skill scores.
+7) Persistence:
+   - PG `exam_attempts`: `submitted_at`, `final_grade`, `passed`, `status='submitted'`.
+   - PG `attempt_skills`: upsert per-skill rows.
+   - Mongo `ExamPackage.grading`: `{ final_grade, passed, per_skill, engine: "internal+devlab", completed_at }` and `final_status='completed'`.
+8) External pushes (fire-and-forget; outbox recorded):
+   - Directory (postcourse only): governance payload with final grade summary.
+   - Skills Engine: per-skill results (+course_name, coverage_map for postcourse).
+   - Course Builder (postcourse only): postcourse summary.
+   - Protocol Camera: simple attempt summary.
+
 

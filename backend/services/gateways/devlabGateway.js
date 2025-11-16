@@ -1,5 +1,5 @@
 const { sendTheoreticalToDevLab, sendCodingResultsToDevLab } = require('../integrations/devlabService');
-const { mockGetCodingQuestions, mockRequestTheoreticalValidation } = require('../mocks/devlabMock');
+const { mockGetCodingQuestions, mockRequestTheoreticalValidation, mockGradeCodingAnswers } = require('../mocks/devlabMock');
 
 async function safeGetCodingQuestions() {
   try {
@@ -33,6 +33,22 @@ async function safeSendCodingResults(payload) {
   }
 }
 
-module.exports = { safeGetCodingQuestions, safeRequestTheoreticalValidation, safeSendCodingResults };
+async function safeGradeCodingAnswers(payload) {
+  // payload: { exam_id, attempt_id, user_id, answers: [{question_id, skill_id, code_answer}] }
+  try {
+    const resp = await sendCodingResultsToDevLab(payload);
+    // Normalize to { results: [...] }
+    if (resp && Array.isArray(resp.results)) {
+      return resp;
+    }
+    // If service returns accepted without results, fallback to mock grading
+    return await mockGradeCodingAnswers(payload);
+  } catch (err) {
+    console.warn('DevLab grading unreachable, using mock. Reason:', err?.message || err);
+    return await mockGradeCodingAnswers(payload);
+  }
+}
+
+module.exports = { safeGetCodingQuestions, safeRequestTheoreticalValidation, safeSendCodingResults, safeGradeCodingAnswers };
 
 

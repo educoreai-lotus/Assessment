@@ -15,6 +15,7 @@ const {
 const {
   safeGetCodingQuestions,
   safeRequestTheoreticalValidation,
+  safeGradeCodingAnswers,
 } = require("../gateways/devlabGateway");
 const { safeSendSummary } = require("../gateways/protocolCameraGateway");
 const { mapUserId } = require("./idMapper");
@@ -382,10 +383,13 @@ async function getPackageByAttemptId(attempt_id) {
   return doc;
 }
 
-async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
-  // Fetch attempt and policy snapshot
+async function submitAttempt({ attempt_id, answers }) {
+  // 1) Load attempt + exam
   const { rows: attemptRows } = await pool.query(
-    `SELECT ea.*, e.exam_type, e.course_id FROM exam_attempts ea JOIN exams e ON e.exam_id = ea.exam_id WHERE ea.attempt_id = $1`,
+    `SELECT ea.*, e.exam_type, e.course_id, e.user_id
+     FROM exam_attempts ea
+     JOIN exams e ON e.exam_id = ea.exam_id
+     WHERE ea.attempt_id = $1`,
     [attempt_id],
   );
   if (attemptRows.length === 0) {
@@ -396,7 +400,10 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
   const policy = attempt.policy_snapshot || {};
   const passing = Number(policy?.passing_grade ?? 0);
 
-  // Block submission if expired
+  // 2) Guard rails
+  if (attempt.status === "canceled") {
+    return { error: "attempt_canceled" };
+  }
   if (attempt.expires_at) {
     const now = new Date();
     const exp = new Date(attempt.expires_at);
@@ -405,71 +412,243 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
     }
   }
 
-  // Compute final grade
-  const skillScores = Array.isArray(per_skill)
-    ? per_skill.map((s) => Number(s.score || 0))
-    : [];
+  // 3) Load exam package from Mongo by attempt_id
+  const examPackage = await getPackageByAttemptId(attempt_id);
+  if (!examPackage) {
+    return { error: "package_not_found" };
+  }
+
+  // 4) Split answers
+  const allAnswers = Array.isArray(answers) ? answers : [];
+  const codingAnswers = allAnswers.filter(
+    (a) => String(a?.type || "").toLowerCase() === "code",
+  );
+  const theoreticalAnswers = allAnswers.filter(
+    (a) => String(a?.type || "").toLowerCase() !== "code",
+  );
+
+  // Helper: map question by id
+  const qById = new Map(
+    (Array.isArray(examPackage?.questions) ? examPackage.questions : []).map(
+      (q) => [String(q.question_id || ""), q],
+    ),
+  );
+
+  // 5) Theoretical grading (internal)
+  function gradeTheoreticalAnswers(pkg, items) {
+    const graded = [];
+    for (const ans of items) {
+      const qid = String(ans.question_id || "");
+      const q = qById.get(qid);
+      const type = String(ans.type || "").toLowerCase();
+      const rawAnswer = ans.answer != null ? String(ans.answer) : "";
+      const skillId = ans.skill_id || (q && q.skill_id) || "";
+      if (type === "mcq") {
+        // Find correct answer from prompt or answer_key
+        const correct =
+          (q && q.prompt && q.prompt.correct_answer) != null
+            ? String(q.prompt.correct_answer)
+            : q && q.answer_key != null
+              ? String(q.answer_key)
+              : "";
+        const ok = rawAnswer === correct;
+        graded.push({
+          question_id: qid,
+          skill_id: skillId,
+          type: "mcq",
+          raw_answer: rawAnswer,
+          score: ok ? 100 : 0,
+          status: ok ? "correct" : "incorrect",
+          source: "theoretical",
+        });
+      } else {
+        // open-ended placeholder
+        graded.push({
+          question_id: qid,
+          skill_id: skillId,
+          type: "open",
+          raw_answer: rawAnswer,
+          score: 0,
+          status: "pending_review",
+          source: "theoretical",
+        });
+        // optional audit trail
+        try {
+          AiAuditTrail.create({
+            exam_id: String(attempt.exam_id),
+            attempt_id: String(attempt_id),
+            event_type: "grading",
+            model: { provider: "internal", name: "placeholder", version: "v1" },
+            prompt: {
+              question_id: qid,
+              type: "open",
+              skill_id: skillId,
+              user_answer: rawAnswer,
+            },
+            response: { decision: "pending_review", score: 0 },
+            status: "success",
+          }).catch(() => {});
+        } catch {}
+      }
+    }
+    return graded;
+  }
+
+  const theoreticalGraded = gradeTheoreticalAnswers(examPackage, theoreticalAnswers);
+
+  // 6) Coding grading (DevLab)
+  const userIdStr = attempt.user_id != null ? `u_${attempt.user_id}` : null;
+  const payloadToDevLab = {
+    exam_id: attempt.exam_id != null ? `ex_${attempt.exam_id}` : null,
+    attempt_id: attempt_id != null ? `att_${attempt_id}` : null,
+    user_id: userIdStr,
+    answers: codingAnswers.map((a) => ({
+      question_id: String(a.question_id || ""),
+      skill_id: String(a.skill_id || ""),
+      code_answer: a.answer != null ? String(a.answer) : "",
+    })),
+  };
+  const devlabResp = await safeGradeCodingAnswers(payloadToDevLab);
+  const codingGraded = (Array.isArray(devlabResp?.results) ? devlabResp.results : []).map(
+    (r) => ({
+      question_id: String(r.question_id || ""),
+      skill_id: String(r.skill_id || ""),
+      type: "code",
+      raw_answer:
+        codingAnswers.find((a) => String(a.question_id) === String(r.question_id))
+          ?.answer ?? "",
+      score: Number(r.score || 0),
+      status: String(r.status || "failed"),
+      source: "devlab",
+    }),
+  );
+
+  // 7) Merge grades
+  const gradedItems = [...theoreticalGraded, ...codingGraded];
+
+  // 8) Per-skill aggregation
+  const bySkill = new Map();
+  for (const item of gradedItems) {
+    const sid = String(item.skill_id || "");
+    if (!bySkill.has(sid)) bySkill.set(sid, []);
+    bySkill.get(sid).push(item);
+  }
+  const skillsMeta =
+    (examPackage?.metadata && Array.isArray(examPackage.metadata.skills)
+      ? examPackage.metadata.skills
+      : []) || [];
+  const skillIdToName = new Map(
+    skillsMeta.map((s) => [String(s.skill_id || s.id || ""), s.skill_name || s.name || ""]),
+  );
+  const perSkill = [];
+  for (const [sid, items] of bySkill.entries()) {
+    const numericScores = items
+      .map((i) => (Number.isFinite(Number(i.score)) ? Number(i.score) : null))
+      .filter((v) => v != null);
+    const avg =
+      numericScores.length > 0
+        ? numericScores.reduce((a, b) => a + b, 0) / numericScores.length
+        : 0;
+    const status = avg >= passing ? "acquired" : "failed";
+    const name =
+      skillIdToName.get(sid) ||
+      (qById.get(String(items[0]?.question_id))?.prompt?.skill_name || sid);
+    perSkill.push({
+      skill_id: sid,
+      skill_name: name || sid,
+      score: Number(avg),
+      status,
+    });
+  }
+
+  // 9) Final grade
+  const perSkillScores = perSkill.map((s) => Number(s.score || 0));
   const finalGrade =
-    skillScores.length > 0
-      ? skillScores.reduce((a, b) => a + b, 0) / skillScores.length
+    perSkillScores.length > 0
+      ? perSkillScores.reduce((a, b) => a + b, 0) / perSkillScores.length
       : 0;
   const passed = finalGrade >= passing;
 
-  // Persist attempt summary
+  // 10) Update Postgres exam_attempts
   await pool.query(
     `
       UPDATE exam_attempts
       SET submitted_at = NOW(),
           final_grade = $1,
-          passed = $2
+          passed = $2,
+          status = CASE WHEN status = 'canceled' THEN status ELSE 'submitted' END
       WHERE attempt_id = $3
     `,
     [finalGrade, passed, attempt_id],
   );
 
-  // Upsert attempt_skills
-  if (Array.isArray(per_skill)) {
-    for (const s of per_skill) {
-      await pool.query(
-        `
-          INSERT INTO attempt_skills (attempt_id, skill_id, skill_name, score, status)
-          VALUES ($1, $2, $3, $4, $5)
-          ON CONFLICT (attempt_id, skill_id) DO UPDATE SET
-            skill_name = EXCLUDED.skill_name,
-            score = EXCLUDED.score,
-            status = EXCLUDED.status
-        `,
-        [attempt_id, s.skill_id, s.skill_name, s.score, s.status],
-      );
-    }
+  // 11) Upsert attempt_skills
+  for (const s of perSkill) {
+    await pool.query(
+      `
+        INSERT INTO attempt_skills (attempt_id, skill_id, skill_name, score, status)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (attempt_id, skill_id) DO UPDATE SET
+          skill_name = EXCLUDED.skill_name,
+          score = EXCLUDED.score,
+          status = EXCLUDED.status
+      `,
+      [attempt_id, s.skill_id, s.skill_name, s.score, s.status],
+    );
   }
 
-  // Push to outbox_integrations (Directory, Skills Engine, Course Builder, Protocol Camera summary)
-  const submittedAtIso = nowIso();
-  const payloadDirectory = {
-    course_id: attempt.course_id ? `c_${attempt.course_id}` : null,
-    user_id,
-    attempt_no: attempt.attempt_no || 1,
-    exam_type: examType,
-    final_grade: Number(finalGrade),
-    passing_grade: Number(passing),
-    passed,
-    submitted_at: submittedAtIso,
-  };
-  await pool.query(
-    `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-    ["exam_submission", JSON.stringify(payloadDirectory), "directory"],
-  );
-  // Try immediate push via gateway (non-blocking)
-  safePushDirectoryResults(payloadDirectory).catch(() => {});
+  // 12) Update Mongo ExamPackage (grading block)
+  try {
+    await ExamPackage.updateOne(
+      { attempt_id: String(attempt_id) },
+      {
+        $set: {
+          grading: {
+            final_grade: Number(finalGrade),
+            passed: !!passed,
+            per_skill: perSkill,
+            engine: "internal+devlab",
+            completed_at: new Date(),
+          },
+          final_status: "completed",
+        },
+      },
+      { upsert: false },
+    );
+  } catch {}
 
+  // 13) Return response and enqueue/push outbox integrations
+  const submittedAtIso = nowIso();
+  const userIdStrResp = attempt.user_id != null ? `u_${attempt.user_id}` : null;
+  const courseIdStr = attempt.course_id != null ? `c_${attempt.course_id}` : null;
+
+  // 3.1) Directory (postcourse only)
+  if (examType === "postcourse") {
+    const payloadDirectory = {
+      course_id: courseIdStr,
+      user_id: userIdStrResp,
+      attempt_no: attempt.attempt_no || 1,
+      exam_type: examType,
+      final_grade: Number(finalGrade),
+      passing_grade: Number(passing),
+      passed,
+      submitted_at: submittedAtIso,
+    };
+    await pool.query(
+      `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
+      ["directory_results", JSON.stringify(payloadDirectory), "directory"],
+    );
+    safePushDirectoryResults(payloadDirectory).catch(() => {});
+  }
+
+  // 3.2) Skills Engine
   const payloadSkills = {
-    user_id,
+    user_id: userIdStrResp,
     exam_type: examType,
     passing_grade: Number(passing),
     final_grade: Number(finalGrade),
     passed,
-    skills: (per_skill || []).map((s) => ({
+    skills: (perSkill || []).map((s) => ({
       skill_id: s.skill_id,
       skill_name: s.skill_name,
       score: s.score,
@@ -477,12 +656,9 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
     })),
   };
   if (examType === "postcourse") {
-    payloadSkills.course_id = attempt.course_id
-      ? `c_${attempt.course_id}`
-      : null;
-    payloadSkills.coverage_map = (
-      (await getPackageByAttemptId(attempt_id))?.coverage_map || []
-    ).map((cm) => cm);
+    payloadSkills.course_id = courseIdStr;
+    payloadSkills.course_name = examPackage?.metadata?.course_name || null;
+    payloadSkills.coverage_map = examPackage?.coverage_map || [];
     payloadSkills.final_status = "completed";
   }
   await pool.query(
@@ -491,10 +667,11 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
   );
   safePushSkillsResults(payloadSkills).catch(() => {});
 
+  // 3.3) Course Builder (postcourse only)
   if (examType === "postcourse") {
     const payloadCourseBuilder = {
-      user_id,
-      course_id: attempt.course_id ? `c_${attempt.course_id}` : null,
+      user_id: userIdStrResp,
+      course_id: courseIdStr,
       exam_type: "postcourse",
       passing_grade: Number(passing),
       final_grade: Number(finalGrade),
@@ -511,7 +688,7 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
     safePushCourseBuilderResults(payloadCourseBuilder).catch(() => {});
   }
 
-  // Protocol Camera summary
+  // 3.4) Protocol Camera summary
   const protoSummary = {
     attempt_id: `att_${attempt_id}`,
     summary: {
@@ -531,20 +708,15 @@ async function submitAttempt({ attempt_id, user_id, answers, per_skill }) {
   safeSendSummary(protoSummary).catch(() => {});
 
   return {
-    user_id,
+    user_id: userIdStrResp,
     exam_type: examType,
-    course_id: attempt.course_id ? `c_${attempt.course_id}` : null,
+    course_id: courseIdStr,
     attempt_id,
     attempt_no: attempt.attempt_no || 1,
     passing_grade: Number(passing),
     final_grade: Number(finalGrade),
     passed,
-    skills: (per_skill || []).map((s) => ({
-      skill_id: s.skill_id,
-      skill_name: s.skill_name,
-      score: s.score,
-      status: s.status,
-    })),
+    skills: perSkill,
     submitted_at: submittedAtIso,
   };
 }

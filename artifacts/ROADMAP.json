@@ -77,6 +77,29 @@
             "description": "Adds duration, expiration, start/end timestamps, and blocking logic.",
             "status": "completed",
             "updated_at": "2025-11-15"
+        },
+        {
+            "id": "exam_grading_and_integrations",
+            "title": "Exam Grading v1 + External Integrations",
+            "description": "Theoretical + coding grading, per-skill aggregation, PG/Mongo updates, and pushes to Directory, Skills Engine, Course Builder, Protocol Camera.",
+            "status": "completed",
+            "updated_at": "2025-11-16",
+            "links": {
+                "specs": [
+                    "templates/Feature_Specs/AttemptRules.md",
+                    "templates/Architecture/ExamFlow.md",
+                    "templates/Feature_Specs/Proctoring.md",
+                    "templates/clarificationsAndRefinements.md"
+                ],
+                "backend": [
+                    "backend/controllers/examsController.js",
+                    "backend/services/core/examsService.js",
+                    "backend/services/gateways/devlabGateway.js",
+                    "backend/services/mocks/devlabMock.js",
+                    "backend/models/examPackage.model.js",
+                    "backend/models/aiAuditTrail.model.js"
+                ]
+            }
         }
     ],
   
@@ -1448,6 +1471,24 @@
         ],
         "notes": "Added duration_minutes and expires_at with lifecycle enforcement, remaining-time endpoint, and docs updates.",
         "date": "2025-11-15"
+      },
+      {
+        "phase": "07",
+        "title": "Exam grading v1: theoretical + coding grading, per-skill aggregation, and external integration pushes implemented.",
+        "status": "delivered",
+        "artifacts": [
+          "backend/controllers/examsController.js",
+          "backend/services/core/examsService.js",
+          "backend/services/gateways/devlabGateway.js",
+          "backend/services/mocks/devlabMock.js",
+          "backend/models/examPackage.model.js",
+          "backend/models/aiAuditTrail.model.js",
+          "templates/Feature_Specs/AttemptRules.md",
+          "templates/Architecture/ExamFlow.md",
+          "templates/Feature_Specs/Proctoring.md",
+          "templates/clarificationsAndRefinements.md"
+        ],
+        "date": "2025-11-16"
       }
     ]
   }

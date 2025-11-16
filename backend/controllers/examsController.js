@@ -105,12 +105,62 @@ exports.startExam = async (req, res, next) => {
 exports.submitExam = async (req, res, next) => {
   try {
     const { examId } = req.params;
-    void examId; // not used directly; kept for route signature clarity
-    const { attempt_id, user_id, answers, per_skill } = req.body || {};
-    if (!attempt_id || !user_id) {
-      return res.status(400).json({ error: 'attempt_id_and_user_id_required' });
+    const { attempt_id, answers } = req.body || {};
+
+    if (!attempt_id || !Array.isArray(answers)) {
+      return res.status(400).json({ error: 'attempt_id_and_answers_required' });
     }
-    const response = await submitAttempt({ attempt_id, user_id, answers, per_skill });
+
+    // Validate attempt exists and matches examId; check status and expiration
+    const { rows: attemptRows } = await pool
+      .query(
+        `SELECT ea.attempt_id, ea.exam_id, ea.status, ea.expires_at
+         FROM exam_attempts ea
+         WHERE ea.attempt_id = $1`,
+        [attempt_id],
+      )
+      .catch(() => ({ rows: [] }));
+
+    if (!attemptRows || attemptRows.length === 0) {
+      return res.status(404).json({ error: 'attempt_not_found' });
+    }
+
+    const att = attemptRows[0];
+    if (Number(att.exam_id) !== Number(examId)) {
+      return res.status(400).json({ error: 'exam_mismatch' });
+    }
+
+    if (att.status === 'canceled') {
+      return res.status(403).json({ error: 'attempt_canceled' });
+    }
+
+    if (att.expires_at) {
+      const now = new Date();
+      const exp = new Date(att.expires_at);
+      if (now > exp) {
+        return res.status(403).json({ error: 'exam_time_expired' });
+      }
+    }
+
+    // Ensure camera is still active
+    const session = await ProctoringSession.findOne({ attempt_id: String(attempt_id) }).lean();
+    if (!session || session.camera_status !== 'active') {
+      return res.status(403).json({ error: 'camera_inactive', camera_required: true });
+    }
+
+    const response = await submitAttempt({ attempt_id, answers });
+
+    if (response && response.error) {
+      // Map known service errors to 4xx
+      if (response.error === 'exam_time_expired' || response.error === 'attempt_canceled') {
+        return res.status(403).json(response);
+      }
+      if (response.error === 'attempt_not_found') {
+        return res.status(404).json(response);
+      }
+      return res.status(400).json(response);
+    }
+
     return res.json(response);
   } catch (err) {
     return next(err);

@@ -10,7 +10,7 @@ const AiAuditTrailSchema = new Schema(
     attempt_id: { type: String, required: true, index: true },
     event_type: {
       type: String,
-      enum: ['prompt', 'rerun', 'score_adjustment', 'mitigation', 'other'],
+      enum: ['prompt', 'rerun', 'score_adjustment', 'mitigation', 'grading', 'other'],
       default: 'prompt',
     },
     model: {

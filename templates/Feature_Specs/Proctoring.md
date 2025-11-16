@@ -48,5 +48,7 @@
 - Manual (future)
 - Focus violation threshold reached (existing)
 - System: Expiration reached (`now > expires_at`) — attempt is expired/blocked.
+  - Error code on submit: `{ "error": "exam_time_expired" }`
+  - Submit is blocked; no grading or external pushes occur.
 
 

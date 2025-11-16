@@ -80,18 +80,27 @@ router.post('/:examId/start', examsController.startExam);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [attempt_id, user_id]
+ *             required: [attempt_id, answers]
  *             properties:
  *               attempt_id:
  *                 type: integer
- *               user_id:
- *                 type: string
  *               answers:
- *                 type: object
- *               per_skill:
  *                 type: array
  *                 items:
  *                   type: object
+ *                   required: [question_id, type, skill_id, answer]
+ *                   properties:
+ *                     question_id:
+ *                       type: string
+ *                     type:
+ *                       type: string
+ *                       enum: [mcq, open, code]
+ *                     skill_id:
+ *                       type: string
+ *                     answer:
+ *                       type: string
+ *                     metadata:
+ *                       type: object
  *     responses:
  *       200:
  *         description: Submission accepted
