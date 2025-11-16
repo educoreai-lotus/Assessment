@@ -24,11 +24,6 @@ const {
   safeFetchCoverage,
   safePushExamResults: safePushCourseBuilderResults,
 } = require("../gateways/courseBuilderGateway");
-const {
-  safeGetCodingQuestions,
-  safeRequestTheoreticalValidation,
-  safeGradeCodingAnswers,
-} = require("../gateways/devlabGateway");
 const devlabIntegration = require("../integrations/devlabService");
 const { safeSendSummary } = require("../gateways/protocolCameraGateway");
 const { normalizeToInt } = require("./idNormalizer");
@@ -170,8 +165,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     throw new Error("invalid_exam_type");
   }
 
-  // Optional questions (DevLab)
-  const coding = await safeGetCodingQuestions();
+  // Optional questions (DevLab) – coding handled via new integration below
   const theoreticalReq = {
     exam_id: "temp",
     attempt_id: "temp",
@@ -199,8 +193,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       ],
     },
   };
-  const theoreticalResp =
-    await safeRequestTheoreticalValidation(theoreticalReq);
+  // Phase 08.1 – internal theoretical builder; no external DevLab validation
+  const theoreticalResp = { status: "accepted", mode: "internal" };
   // Log AI audit if available
   try {
     await AiAuditTrail.create({
@@ -332,8 +326,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     });
 
   const questions = [
-    ...(coding?.questions || []),
-    // include theoretical as a "question" prompt too
+    // include theoretical as a "question" prompt only (coding stored separately)
     theoreticalReq.question,
   ];
   const pkg = await buildExamPackageDoc({
@@ -597,7 +590,11 @@ async function submitAttempt({ attempt_id, answers }) {
       code_answer: a.answer != null ? String(a.answer) : "",
     })),
   };
-  const devlabResp = await safeGradeCodingAnswers(payloadToDevLab);
+  // Phase 08.3 – placeholder (grading via DevLab envelope to be added)
+  // const gradingPayload = devlabIntegration.prepareCodingGradingPayload(payloadToDevLab);
+  // const devlabEnvelopeResp = await require("../gateways/devlabGateway").sendCodingGradeEnvelope(gradingPayload);
+  // const devlabResp = devlabIntegration.decorateDevLabResponse(devlabEnvelopeResp);
+  const devlabResp = { results: [] };
   const codingGraded = (Array.isArray(devlabResp?.results) ? devlabResp.results : []).map(
     (r) => ({
       question_id: String(r.question_id || ""),

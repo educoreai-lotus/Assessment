@@ -12,7 +12,6 @@
 
 const { sendResultsToSkillsEngine } = require('../services/integrations/skillsEngineService');
 const { sendExamResultsToCourseBuilder } = require('../services/integrations/courseBuilderService');
-const { sendTheoreticalToDevLab, sendCodingResultsToDevLab } = require('../services/integrations/devlabService');
 const { sendIncidentDecisionToRag } = require('../services/integrations/ragService');
 const { sendSummaryToProtocolCamera } = require('../services/integrations/protocolCameraService');
 const { normalizeToInt } = require("../services/core/idNormalizer");

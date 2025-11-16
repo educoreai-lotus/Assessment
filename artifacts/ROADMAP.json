@@ -1608,6 +1608,29 @@
           "Kept PostgreSQL schema unchanged; coding content is stored only in Mongo, grading will be handled in a later phase."
         ],
         "timestamps": { "created": "2025-11-16T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.3-p082b",
+        "traceability_id": "phase-08-2b-devlab-cleanup",
+        "phase": "08.2",
+        "title": "DevLab Old Endpoint Cleanup",
+        "status_after": "In Progress",
+        "artifacts": {
+          "backend": [
+            "backend/services/gateways/devlabGateway.js",
+            "backend/services/integrations/devlabService.js",
+            "backend/services/core/examsService.js"
+          ],
+          "reports": [
+            "artifacts/phase-08-2b-devlab-cleanup.json"
+          ]
+        },
+        "notes": [
+          "Removed deprecated DevLab endpoints and services.",
+          "Standardized system to use only INTEGRATION_DEVLAB_DATA_REQUEST_URL.",
+          "Prepared backend for Phase 08.3 coding answers grading."
+        ],
+        "timestamps": { "created": "2025-11-16T00:00:00Z" }
       }
     ]
   }
