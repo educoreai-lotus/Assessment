@@ -47,10 +47,10 @@ exports.startExam = async (req, res, next) => {
     }
 
     // Enforce camera activation prior to starting
-    const session = await ProctoringSession.findOne({ attempt_id: String(attempt_id) }).lean();
-    if (!session || session.camera_status !== 'active') {
-      return res.status(403).json({ error: 'camera_inactive', camera_required: true });
-    }
+   // const session = await ProctoringSession.findOne({ attempt_id: String(attempt_id) }).lean();
+   // if (!session || session.camera_status !== 'active') {
+   //   return res.status(403).json({ error: 'camera_inactive', camera_required: true });
+   // }
 
     const result = await markAttemptStarted({ attempt_id });
     if (result && result.error) {
@@ -143,10 +143,10 @@ exports.submitExam = async (req, res, next) => {
     }
 
     // Ensure camera is still active
-    const session = await ProctoringSession.findOne({ attempt_id: String(attempt_id) }).lean();
-    if (!session || session.camera_status !== 'active') {
-      return res.status(403).json({ error: 'camera_inactive', camera_required: true });
-    }
+    //const session = await ProctoringSession.findOne({ attempt_id: String(attempt_id) }).lean();
+    //if (!session || session.camera_status !== 'active') {
+     // return res.status(403).json({ error: 'camera_inactive', camera_required: true });
+    //}
 
     const response = await submitAttempt({ attempt_id, answers });
 
