@@ -1507,6 +1507,18 @@
         ],
         "timestamps": { "created": "2025-11-16T00:00:00Z" }
       }
+    ,
+      {
+        "version": "v4.4.3-p085",
+        "traceability_id": "phase-08-5-coursebuilder",
+        "phase": "08.5",
+        "title": "CourseBuilder Full Integration (Pre-Exam + Post-Exam)",
+        "status_after": "Done",
+        "artifacts": [
+          "artifacts/phase-08-5-coursebuilder.json"
+        ],
+        "timestamps": { "completed": "<insert timestamp>" }
+      }
     ],
     "additional_updates": [
       {

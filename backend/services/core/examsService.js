@@ -22,7 +22,7 @@ const {
 } = require("../gateways/skillsEngineGateway");
 const {
   safeFetchCoverage,
-  safePushExamResults: safePushCourseBuilderResults,
+  sendCourseBuilderExamResults,
 } = require("../gateways/courseBuilderGateway");
 const devlabIntegration = require("../integrations/devlabService");
 const { safeSendSummary } = require("../gateways/protocolCameraGateway");
@@ -768,8 +768,10 @@ async function submitAttempt({ attempt_id, answers }) {
   // 3.3) Course Builder (postcourse only)
   if (examType === "postcourse") {
     const payloadCourseBuilder = {
-      user_id: attempt.user_id != null ? Number(attempt.user_id) : null,
+      learner_id: attempt.user_id != null ? Number(attempt.user_id) : null,
+      learner_name: null,
       course_id: attempt.course_id != null ? Number(attempt.course_id) : null,
+      course_name: examPackage?.metadata?.course_name || "",
       exam_type: "postcourse",
       passing_grade: Number(passing),
       final_grade: Number(finalGrade),
@@ -783,7 +785,8 @@ async function submitAttempt({ attempt_id, answers }) {
         "course_builder",
       ],
     );
-    safePushCourseBuilderResults(payloadCourseBuilder).catch(() => {});
+    // Do not block main request path on failure
+    sendCourseBuilderExamResults(payloadCourseBuilder).catch(() => {});
   }
 
   // 3.4) Protocol Camera summary

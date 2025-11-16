@@ -268,3 +268,38 @@ exports.handleGetIntegration = async (req, res, next) => {
 };
 
 
+// Phase 08.5 – CourseBuilder Pre-Exam (incoming request)
+exports.handleCourseBuilderPreExam = async (req, res, next) => {
+  try {
+    const { requester_service: requesterService, payload } = req.body || {};
+
+    // Parse stringified payload safely
+    let parsed = {};
+    try {
+      parsed = typeof payload === 'string' ? JSON.parse(payload) : {};
+    } catch (e) {
+      parsed = {};
+    }
+
+    // Extract fields (for future orchestration usage)
+    const learner_id = parsed?.learner_id ?? null;
+    const learner_name = parsed?.learner_name ?? null;
+    const course_id = parsed?.course_id ?? null;
+    const course_name = parsed?.course_name ?? null;
+    const coverage_map = parsed?.coverage_map ?? null;
+    void learner_id; void learner_name; void course_id; void course_name; void coverage_map;
+
+    // Prepare protocol-compliant response envelope
+    const responseObject = { status: 'received' };
+    const envelope = {
+      requester_service: 'assessment',
+      payload: typeof payload === 'string' ? payload : JSON.stringify(parsed),
+      response: JSON.stringify(responseObject),
+    };
+
+    return res.json(envelope);
+  } catch (err) {
+    return next(err);
+  }
+};
+

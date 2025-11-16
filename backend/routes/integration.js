@@ -48,6 +48,12 @@ router.get('/api/assessment/integration', integrationController.handleGetIntegra
 // Phase 08.4 – ManagementReporting 24h Pull Integration
 router.get('/api/integrations/management/report', integrationController.getManagementDailyReport);
 
+// Phase 08.5 – CourseBuilder Pre-Exam (incoming request)
+router.post(
+	'/api/integrations/coursebuilder/pre-exam',
+	integrationController.handleCourseBuilderPreExam
+);
+
 module.exports = router;
 
 
