@@ -113,6 +113,7 @@ exports.startExam = async (req, res, next) => {
       skills: pkg?.metadata?.skills || [],
       coverage_map: pkg?.coverage_map || [],
       questions: pkg?.questions?.map((q) => removeHintsDeep(q.prompt)) || [],
+      coding_questions: pkg?.coding_questions || [],
       time_allocated_minutes: pkg?.metadata?.time_allocated_minutes ?? null,
       expires_at: pkg?.metadata?.expires_at ?? null,
       camera_required: true,

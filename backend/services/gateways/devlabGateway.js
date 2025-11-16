@@ -1,5 +1,6 @@
 const { sendTheoreticalToDevLab, sendCodingResultsToDevLab } = require('../integrations/devlabService');
 const { mockGetCodingQuestions, mockRequestTheoreticalValidation, mockGradeCodingAnswers } = require('../mocks/devlabMock');
+const axios = require('axios');
 
 async function safeGetCodingQuestions() {
   try {
@@ -49,6 +50,43 @@ async function safeGradeCodingAnswers(payload) {
   }
 }
 
-module.exports = { safeGetCodingQuestions, safeRequestTheoreticalValidation, safeSendCodingResults, safeGradeCodingAnswers };
+// Phase 08.2 – Shared envelope helpers (Assessment → DevLab → Assessment)
+async function sendToDevlab(payload, requesterService = 'Devlab') {
+  const url = process.env.INTEGRATION_DEVLAB_DATA_REQUEST_URL;
+  if (!url) {
+    throw new Error('INTEGRATION_DEVLAB_DATA_REQUEST_URL not set');
+  }
+  const body = {
+    requester_service: requesterService,
+    payload,
+    response: { answer: '' },
+  };
+  const { data } = await axios.post(url, body, { timeout: 15000 });
+  return data?.response?.answer;
+}
+
+async function requestCodingQuestions({ amount, skills, humanLanguage = 'en', difficulty = 'medium' }) {
+  const answer = await sendToDevlab(
+    {
+      action: 'coding',
+      amount,
+      difficulty,
+      humanLanguage,
+      skills,
+    },
+    'Devlab',
+  );
+  return answer;
+}
+
+module.exports = {
+  safeGetCodingQuestions,
+  safeRequestTheoreticalValidation,
+  safeSendCodingResults,
+  safeGradeCodingAnswers,
+  // new exports
+  sendToDevlab,
+  requestCodingQuestions,
+};
 
 

@@ -123,6 +123,26 @@
                     "backend/models/aiAuditTrail.model.js"
                 ]
             }
+        },
+        {
+          "feature_id": "FEAT-DEVLAB-CODING-INTEGRATION",
+          "name": "DevLab Coding Questions Integration",
+          "status": "In-Progress",
+          "owner": "Assessment",
+          "phases": { "08": "In-Progress" },
+          "links": {
+            "backend": [
+              "backend/services/gateways/devlabGateway.js",
+              "backend/services/integrations/devlabService.js",
+              "backend/models/examPackage.model.js",
+              "backend/services/core/examsService.js"
+            ]
+          },
+          "notes": [
+            "Assessment sends coding requests to DevLab via unified /api/data-request endpoint.",
+            "Coding questions are stored in examPackage.coding_questions with skills, humanLanguage, difficulty, and requested_at metadata."
+          ],
+          "updated_at": "2025-11-16"
         }
     ],
   
@@ -1564,6 +1584,30 @@
           "Builder and controller updated with safe defaults and optional fields. No PostgreSQL changes."
         ],
         "timestamps": { "completed": "2025-11-16T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.3-p082",
+        "traceability_id": "phase-08-2-devlab-coding-integration",
+        "phase": "08.2",
+        "title": "DevLab Coding Questions Integration",
+        "status_after": "In Progress",
+        "artifacts": {
+          "backend": [
+            "backend/services/gateways/devlabGateway.js",
+            "backend/services/integrations/devlabService.js",
+            "backend/services/core/examsService.js",
+            "backend/models/examPackage.model.js"
+          ],
+          "reports": [
+            "artifacts/phase-08-2-devlab-coding-integration.json"
+          ]
+        },
+        "notes": [
+          "Implemented coding question request flow using unified DevLab envelope.",
+          "Persisted DevLab coding questions into Mongo exam_package.coding_questions along with skills, humanLanguage, difficulty, and requested_at.",
+          "Kept PostgreSQL schema unchanged; coding content is stored only in Mongo, grading will be handled in a later phase."
+        ],
+        "timestamps": { "created": "2025-11-16T00:00:00Z" }
       }
     ]
   }

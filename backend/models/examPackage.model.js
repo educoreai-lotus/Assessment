@@ -23,6 +23,21 @@ const ExamPackageQuestionSchema = new Schema(
   { _id: false }
 );
 
+// Phase 08.2 – Dedicated coding questions storage (Mongo only)
+const ExamPackageCodingQuestionSchema = new Schema(
+  {
+    question: { type: String, required: true },
+    starter_code: { type: String, default: '' },
+    expected_output: { type: String, default: '' },
+    test_cases: { type: Array, default: [] },
+    humanLanguage: { type: String, default: 'en' },
+    skills: { type: [String], default: [] },
+    difficulty: { type: String, default: 'medium' },
+    requested_at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const ExamPackageSchema = new Schema(
   {
     _id: {
@@ -38,6 +53,10 @@ const ExamPackageSchema = new Schema(
     },
     questions: {
       type: [ExamPackageQuestionSchema],
+      default: [],
+    },
+    coding_questions: {
+      type: [ExamPackageCodingQuestionSchema],
       default: [],
     },
     grading: {

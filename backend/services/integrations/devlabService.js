@@ -20,4 +20,29 @@ exports.sendCodingResultsToDevLab = async (payload) => {
   return data;
 };
 
+// Phase 08.2 – Build coding questions using unified envelope via gateway
+const devlabGateway = require('../gateways/devlabGateway');
+
+exports.buildCodingQuestionsForExam = async ({
+  amount,
+  skills,
+  humanLanguage = 'en',
+  difficulty = 'medium',
+}) => {
+  const codingQuestions = await devlabGateway.requestCodingQuestions({
+    amount,
+    skills,
+    humanLanguage,
+    difficulty,
+  });
+  const now = new Date();
+  return (codingQuestions || []).map((q) => ({
+    ...q,
+    skills,
+    humanLanguage,
+    difficulty,
+    requested_at: now,
+  }));
+};
+
 

@@ -29,6 +29,7 @@ const {
   safeRequestTheoreticalValidation,
   safeGradeCodingAnswers,
 } = require("../gateways/devlabGateway");
+const devlabIntegration = require("../integrations/devlabService");
 const { safeSendSummary } = require("../gateways/protocolCameraGateway");
 const { normalizeToInt } = require("./idNormalizer");
 
@@ -77,6 +78,7 @@ async function buildExamPackageDoc({
   course_id,
   course_name,
   questions,
+  coding_questions,
   time_allocated_minutes,
   expires_at_iso,
 }) {
@@ -127,6 +129,7 @@ async function buildExamPackageDoc({
         metadata: { type: type || "mcq", difficulty },
       };
     }),
+    coding_questions: Array.isArray(coding_questions) ? coding_questions : [],
     coverage_map: coverage_map || [],
     final_status: "draft",
     lineage: {
@@ -295,6 +298,39 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   } catch {}
 
   // Build ExamPackage in Mongo
+  // Phase 08.2 – Build coding questions via DevLab envelope and store in dedicated field
+  const skillsForCoding = (() => {
+    const fromSkills = Array.isArray(skillsArray) ? skillsArray : [];
+    const primary = Array.from(
+      new Set(
+        fromSkills
+          .map((s) => s?.skill_id || s?.id || s?.skill_name || s?.name)
+          .filter((v) => typeof v === "string" && v.trim() !== "")
+          .map(String),
+      ),
+    );
+    if (primary.length > 0) return primary;
+    const fromCoverage = Array.isArray(coverageMap) ? coverageMap : [];
+    const flattened = [];
+    for (const item of fromCoverage) {
+      const arr = Array.isArray(item?.skills) ? item.skills : [];
+      for (const sk of arr) {
+        const ref = sk?.skill_id || sk?.id || sk?.skill_name || sk?.name;
+        if (typeof ref === "string" && ref.trim() !== "") {
+          flattened.push(String(ref));
+        }
+      }
+    }
+    return Array.from(new Set(flattened));
+  })();
+  const codingQuestionsDecorated =
+    await devlabIntegration.buildCodingQuestionsForExam({
+      amount: 2,
+      skills: skillsForCoding,
+      humanLanguage: "en",
+      difficulty: "medium",
+    });
+
   const questions = [
     ...(coding?.questions || []),
     // include theoretical as a "question" prompt too
@@ -311,6 +347,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     course_id: course_id != null ? course_id : null,
     course_name: resolvedCourseName || undefined,
     questions,
+    coding_questions: codingQuestionsDecorated,
     time_allocated_minutes: durationMinutes || undefined,
     expires_at_iso: expiresAtIso || undefined,
   });
