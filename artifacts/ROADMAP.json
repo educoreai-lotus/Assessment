@@ -1480,6 +1480,32 @@
           "DB: Connection now selected via SUPABASE_POOLER_URL || SUPABASE_DB_URL || DATABASE_URL with masked info logging."
         ],
         "timestamps": { "completed": "2025-11-16T00:00:00Z" }
+      },
+      {
+        "version": "v4.4.3-p083",
+        "traceability_id": "phase-08-3-devlab-coding-grading",
+        "phase": "08.3",
+        "title": "DevLab Coding Grading Integration",
+        "status_after": "In Progress",
+        "artifacts": {
+          "backend": [
+            "backend/models/examPackage.model.js",
+            "backend/services/gateways/devlabGateway.js",
+            "backend/services/integrations/devlabService.js",
+            "backend/services/core/examsService.js",
+            "backend/controllers/examsController.js"
+          ],
+          "reports": [
+            "artifacts/phase-08-3-devlab-coding-grading.json"
+          ]
+        },
+        "notes": [
+          "Integrated coding grading via DevLab using unified envelope.",
+          "Used requester_service='assessment'.",
+          "Added programming_language to coding flows.",
+          "Stored coding results in Mongo and merged into Postgres grading pipeline."
+        ],
+        "timestamps": { "created": "2025-11-16T00:00:00Z" }
       }
     ],
     "additional_updates": [

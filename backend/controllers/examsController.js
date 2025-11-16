@@ -199,7 +199,21 @@ exports.submitExam = async (req, res, next) => {
       return res.status(400).json(response);
     }
 
-    return res.json(response);
+    // Phase 08.3 – Surface coding grading results in response
+    let codingBlock = null;
+    try {
+      const pkg = await ExamPackage.findOne({ attempt_id: String(attemptIdNum) }).lean();
+      if (pkg) {
+        codingBlock = {
+          answers: Array.isArray(pkg.coding_answers) ? pkg.coding_answers : [],
+          grading: Array.isArray(pkg.coding_grading_results) ? pkg.coding_grading_results : [],
+          score_total: Number(pkg.coding_score_total || 0),
+          score_max: Number(pkg.coding_score_max || 0),
+        };
+      }
+    } catch {}
+
+    return res.json(codingBlock ? { ...response, coding_results: codingBlock } : response);
   } catch (err) {
     return next(err);
   }

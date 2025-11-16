@@ -31,6 +31,7 @@ const ExamPackageCodingQuestionSchema = new Schema(
     expected_output: { type: String, default: '' },
     test_cases: { type: Array, default: [] },
     humanLanguage: { type: String, default: 'en' },
+    programming_language: { type: String, default: 'javascript' },
     skills: { type: [String], default: [] },
     difficulty: { type: String, default: 'medium' },
     requested_at: { type: Date, default: Date.now },
@@ -59,6 +60,11 @@ const ExamPackageSchema = new Schema(
       type: [ExamPackageCodingQuestionSchema],
       default: [],
     },
+    // Phase 08.3 – Coding answers and grading persistence (Mongo only; non-breaking)
+    coding_answers: { type: Array, default: [] },
+    coding_grading_results: { type: Array, default: [] },
+    coding_score_total: { type: Number, default: 0 },
+    coding_score_max: { type: Number, default: 0 },
     grading: {
       final_grade: Number,
       passed: Boolean,

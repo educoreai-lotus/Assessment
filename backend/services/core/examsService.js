@@ -578,36 +578,50 @@ async function submitAttempt({ attempt_id, answers }) {
 
   const theoreticalGraded = gradeTheoreticalAnswers(examPackage, theoreticalAnswers);
 
-  // 6) Coding grading (DevLab)
-  const userIdStr = attempt.user_id != null ? String(attempt.user_id) : null;
-  const payloadToDevLab = {
-    exam_id: attempt.exam_id != null ? String(attempt.exam_id) : null,
-    attempt_id: String(attemptIdNum),
-    user_id: userIdStr,
-    answers: codingAnswers.map((a) => ({
-      question_id: String(a.question_id || ""),
-      skill_id: String(a.skill_id || ""),
-      code_answer: a.answer != null ? String(a.answer) : "",
-    })),
-  };
-  // Phase 08.3 – placeholder (grading via DevLab envelope to be added)
-  // const gradingPayload = devlabIntegration.prepareCodingGradingPayload(payloadToDevLab);
-  // const devlabEnvelopeResp = await require("../gateways/devlabGateway").sendCodingGradeEnvelope(gradingPayload);
-  // const devlabResp = devlabIntegration.decorateDevLabResponse(devlabEnvelopeResp);
-  const devlabResp = { results: [] };
-  const codingGraded = (Array.isArray(devlabResp?.results) ? devlabResp.results : []).map(
-    (r) => ({
+  // 6) Coding grading (DevLab via unified envelope)
+  const { gradingResults, aggregated } =
+    await devlabIntegration.gradeCodingAnswersForExam({
+      codingQuestions: Array.isArray(examPackage?.coding_questions)
+        ? examPackage.coding_questions
+        : [],
+      codingAnswers,
+    });
+  const codingGraded = (Array.isArray(gradingResults) ? gradingResults : []).map((r) => {
+    const s = typeof r.score === "number" ? r.score : 0;
+    const m = typeof r.max_score === "number" ? r.max_score : 1;
+    const scaled = m > 0 ? (s / m) * 100 : 0;
+    return {
       question_id: String(r.question_id || ""),
       skill_id: String(r.skill_id || ""),
       type: "code",
       raw_answer:
         codingAnswers.find((a) => String(a.question_id) === String(r.question_id))
           ?.answer ?? "",
-      score: Number(r.score || 0),
+      score: Number(scaled),
       status: String(r.status || "failed"),
       source: "devlab",
-    }),
-  );
+    };
+  });
+
+  // Persist coding grading details to Mongo ExamPackage
+  try {
+    const examPackageDoc = await ExamPackage.findOne({
+      attempt_id: String(attemptIdNum),
+    });
+    if (examPackageDoc) {
+      examPackageDoc.coding_answers = Array.isArray(codingAnswers) ? codingAnswers : [];
+      examPackageDoc.coding_grading_results = Array.isArray(gradingResults) ? gradingResults : [];
+      examPackageDoc.coding_score_total =
+        aggregated && Number.isFinite(Number(aggregated.score_total))
+          ? Number(aggregated.score_total)
+          : 0;
+      examPackageDoc.coding_score_max =
+        aggregated && Number.isFinite(Number(aggregated.max_total))
+          ? Number(aggregated.max_total)
+          : 0;
+      await examPackageDoc.save();
+    }
+  } catch {}
 
   // 7) Merge grades
   const gradedItems = [...theoreticalGraded, ...codingGraded];
