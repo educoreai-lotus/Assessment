@@ -44,7 +44,7 @@ export default function CameraPreview({ onReady, onError }) {
         }
       } catch {}
     };
-  }, [onReady, onError]);
+  }, []);
 
   return (
     <div className="relative w-full max-w-sm">

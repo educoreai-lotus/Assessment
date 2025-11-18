@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
@@ -275,14 +275,14 @@ export default function PostCourseExam() {
   }
 
   // Camera callbacks
-  async function handleCameraReady() {
+  const handleCameraReady = useCallback(() => {
     setCameraReady(true);
-  }
-  function handleCameraError(message) {
+  }, []);
+  const handleCameraError = useCallback((message) => {
     setCameraError(message || 'Camera access failed');
     setCameraReady(false);
     setCameraOk(false);
-  }
+  }, []);
 
   // Start proctoring once when all prerequisites are ready
   useEffect(() => {
