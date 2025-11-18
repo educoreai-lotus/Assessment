@@ -18,18 +18,16 @@ exports.startCamera = async (req, res, next) => {
     }
     const examId = rows[0].exam_id;
 
-    if (process.env.NODE_ENV !== 'test') {
-      await ProctoringSession.findOneAndUpdate(
-        { attempt_id: String(attempt_id) },
-        {
-          attempt_id: String(attempt_id),
-          exam_id: String(examId),
-          camera_status: 'active',
-          $setOnInsert: { start_time: new Date(), events: [] },
-        },
-        { new: true, upsert: true },
-      );
-    }
+    await ProctoringSession.findOneAndUpdate(
+      { attempt_id: String(attempt_id) },
+      {
+        attempt_id: String(attempt_id),
+        exam_id: String(examId),
+        camera_status: 'active',
+        $setOnInsert: { start_time: new Date(), events: [] },
+      },
+      { new: true, upsert: true },
+    );
 
     return res.json({ ok: true });
   } catch (err) {
