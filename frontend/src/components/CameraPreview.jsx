@@ -1,27 +1,50 @@
 import { useEffect, useRef } from 'react';
 
-export default function CameraPreview({ stream }) {
+export default function CameraPreview({ onReady, onError }) {
   const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (stream) {
+    let mounted = true;
+
+    async function startCamera() {
       try {
-        video.srcObject = stream;
-        video.play().catch(() => {});
-      } catch {
-        // ignore
-      }
-    } else {
-      try {
-        video.pause();
-        video.srcObject = null;
-      } catch {
-        // ignore
+        const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (!mounted) {
+          try {
+            media.getTracks().forEach((t) => t.stop());
+          } catch {}
+          return;
+        }
+        streamRef.current = media;
+        const video = videoRef.current;
+        if (video) {
+          try {
+            video.srcObject = media;
+            await video.play();
+          } catch {}
+        }
+        onReady?.();
+      } catch (e) {
+        const msg =
+          e?.name === 'NotAllowedError'
+            ? 'Camera permission denied'
+            : e?.message || 'Failed to start camera';
+        onError?.(msg);
       }
     }
-  }, [stream]);
+
+    startCamera();
+    return () => {
+      mounted = false;
+      try {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+      } catch {}
+    };
+  }, [onReady, onError]);
 
   return (
     <div className="relative w-full max-w-sm">
@@ -39,5 +62,4 @@ export default function CameraPreview({ stream }) {
     </div>
   );
 }
-
 

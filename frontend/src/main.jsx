@@ -5,9 +5,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import './index.css';
 import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
-import BaselineExam from './pages/exam/BaselineExam.jsx';
+import Baseline from './pages/Baseline.jsx';
 import PostCourseExam from './pages/exam/PostCourseExam.jsx';
 import ResultsDashboard from './pages/results/ResultsDashboard.jsx';
+import BaselineResults from './pages/BaselineResults.jsx';
 import Health from './pages/dev/Health.jsx';
 
 const routes = [
@@ -16,9 +17,11 @@ const routes = [
     element: <App />,
     children: [
       { index: true, element: withMotion(<HomePage />) },
-      { path: 'exam/baseline', element: withMotion(<BaselineExam />) },
+      { path: 'exam/baseline', element: withMotion(<Baseline />) },
       { path: 'exam/postcourse', element: withMotion(<PostCourseExam />) },
       { path: 'results', element: withMotion(<ResultsDashboard />) },
+      { path: 'results/baseline', element: withMotion(<BaselineResults />) },
+      { path: 'results/baseline/:attemptId', element: withMotion(<BaselineResults />) },
       { path: 'dev/health', element: withMotion(<Health />) },
     ],
   },
