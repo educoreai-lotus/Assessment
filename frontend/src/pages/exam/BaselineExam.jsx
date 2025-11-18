@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import { examApi } from '../../services/examApi';
 import { http } from '../../services/http';
+import CameraPreview from '../../components/CameraPreview';
 
 export default function BaselineExam() {
   const [searchParams] = useSearchParams();
@@ -22,9 +23,49 @@ export default function BaselineExam() {
   const [error, setError] = useState('');
   const [cameraOk, setCameraOk] = useState(false);
   const [attemptId, setAttemptId] = useState(null);
+  const [mediaError, setMediaError] = useState('');
+  const [starting, setStarting] = useState(true);
+  const [startingCamera, setStartingCamera] = useState(false);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const liveStreamRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
+    let currentStream = null;
+
+    async function ensureCamera(streamAttemptId) {
+      // Request camera and attach to preview
+      try {
+        setStartingCamera(true);
+        setMediaError('');
+        // Real browser camera request
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (!mounted) {
+          // Immediately stop tracks if we already unmounted
+          try {
+            stream.getTracks().forEach((t) => t.stop());
+          } catch {}
+          return false;
+        }
+        liveStreamRef.current = stream;
+        // Notify backend after acquiring local camera stream
+        await examApi.proctoringStart(streamAttemptId);
+        if (!mounted) return false;
+        setCameraOk(true);
+        return true;
+      } catch (e) {
+        const msg =
+          e?.name === 'NotAllowedError'
+            ? 'Camera permission denied'
+            : e?.message || 'Failed to start camera';
+        setMediaError(msg);
+        setCameraOk(false);
+        return false;
+      } finally {
+        setStartingCamera(false);
+      }
+    }
+
     async function bootstrapBaseline() {
       try {
         setLoading(true);
@@ -80,11 +121,14 @@ export default function BaselineExam() {
           throw new Error('Unable to resolve exam or attempt. Please try again.');
         }
 
-        // Start camera before starting the exam
-        await http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/start_camera`);
-        setCameraOk(true);
+        // Enforce camera before starting the exam
+        const cameraOkLocal = await ensureCamera(attemptId);
+        if (!cameraOkLocal) {
+          throw new Error('Camera activation required to start exam');
+        }
 
-        // Start exam with required attempt_id
+        // Start exam (requires camera active on backend)
+        setQuestionsLoading(true);
         const data = await examApi.start(resolvedExamId, { attempt_id: attemptId });
         if (!mounted) return;
         // Normalize question shape for UI, preserve meta for submit payload
@@ -115,21 +159,30 @@ export default function BaselineExam() {
         if (!mounted) return;
         setError(e?.response?.data?.error || e?.message || 'Failed to load exam');
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          setStarting(false);
+          setQuestionsLoading(false);
+        }
       }
     }
 
     bootstrapBaseline();
     return () => {
       mounted = false;
+      try {
+        if (liveStreamRef.current) {
+          liveStreamRef.current.getTracks().forEach((t) => t.stop());
+          liveStreamRef.current = null;
+        }
+      } catch {}
     };
   }, [examId]);
 
   const progress = useMemo(() => {
     if (!questions.length) return 0;
-    const answered = Object.keys(answers).length;
-    return Math.round((answered / questions.length) * 100);
-  }, [answers, questions]);
+    return Math.round(((currentIdx + 1) / questions.length) * 100);
+  }, [currentIdx, questions]);
 
   function handleAnswer(id, value) {
     setAnswers((s) => ({ ...s, [id]: value }));
@@ -163,7 +216,7 @@ export default function BaselineExam() {
     }
   }
 
-  if (loading) return <LoadingSpinner label="Loading baseline exam..." />;
+  if (loading && starting) return <LoadingSpinner label="Loading baseline exam..." />;
 
   return (
     <div className="container-safe py-8 space-y-6">
@@ -176,9 +229,20 @@ export default function BaselineExam() {
           {error}
         </div>
       )}
+      {mediaError && (
+        <div className="rounded-xl border border-yellow-900 bg-yellow-950/60 text-yellow-200 p-3">
+          {mediaError}
+        </div>
+      )}
       <div className="text-xs text-neutral-400">
-        Camera: {cameraOk ? 'active' : 'starting...'}
+        Camera: {cameraOk ? 'active' : (startingCamera ? 'starting...' : 'inactive')}
       </div>
+
+      {/* Camera preview */}
+      <div className="w-full flex justify-center">
+        <CameraPreview stream={liveStreamRef.current} />
+      </div>
+
       {questions.length > 0 && (
         <div className="space-y-5">
           <motion.div
@@ -194,22 +258,25 @@ export default function BaselineExam() {
             />
           </motion.div>
           <div className="flex items-center justify-between">
-            <button
-              className="btn-secondary"
-              onClick={goPrev}
-              disabled={currentIdx === 0}
-            >
-              Previous
-            </button>
+            <div className="min-w-[96px]">
+              {currentIdx > 0 && (
+                <button
+                  className="btn-secondary"
+                  onClick={goPrev}
+                >
+                  Previous
+                </button>
+              )}
+            </div>
             <div className="text-sm text-neutral-400">
               {currentIdx + 1} / {questions.length}
             </div>
             {currentIdx < questions.length - 1 ? (
-              <button className="btn-emerald" onClick={goNext}>
+              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading}>
                 Next
               </button>
             ) : (
-              <button className="btn-emerald" onClick={handleSubmit}>
+              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading}>
                 Submit
               </button>
             )}

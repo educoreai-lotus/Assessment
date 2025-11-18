@@ -10,6 +10,9 @@ export const examApi = {
   submit(examId, payload) {
     return http.post(`/api/exams/${encodeURIComponent(examId)}/submit`, payload).then(r => r.data);
   },
+  proctoringStart(attemptId) {
+    return http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/start_camera`).then(r => r.data);
+  },
 };
 
 
