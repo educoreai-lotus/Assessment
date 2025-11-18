@@ -1,10 +1,11 @@
-const { Schema, model, Types } = require('mongoose');
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const ProctoringEventSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `proctor_${new Types.ObjectId().toString()}`,
+      default: () => `proctor_${new mongoose.Types.ObjectId().toString()}`,
     },
     attempt_id: { type: String, required: true, index: true },
     source: {
@@ -49,5 +50,5 @@ const ProctoringEventSchema = new Schema(
 ProctoringEventSchema.index({ attempt_id: 1, detected_at: -1 });
 ProctoringEventSchema.index({ severity: 1, event_type: 1 });
 
-module.exports = model('ProctoringEvent', ProctoringEventSchema);
+module.exports = mongoose.model('ProctoringEvent', ProctoringEventSchema);
 

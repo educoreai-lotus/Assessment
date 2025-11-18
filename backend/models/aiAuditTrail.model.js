@@ -1,10 +1,11 @@
-const { Schema, model, Types } = require('mongoose');
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const AiAuditTrailSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `audit_${new Types.ObjectId().toString()}`,
+      default: () => `audit_${new mongoose.Types.ObjectId().toString()}`,
     },
     exam_id: { type: String, index: true },
     attempt_id: { type: String, required: true, index: true },
@@ -43,5 +44,5 @@ const AiAuditTrailSchema = new Schema(
 AiAuditTrailSchema.index({ attempt_id: 1, executed_at: -1 });
 AiAuditTrailSchema.index({ status: 1, executed_at: -1 });
 
-module.exports = model('AiAuditTrail', AiAuditTrailSchema);
+module.exports = mongoose.model('AiAuditTrail', AiAuditTrailSchema);
 

@@ -1,10 +1,11 @@
-const { Schema, model, Types } = require('mongoose');
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const ProctoringViolationSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `procviol_${new Types.ObjectId().toString()}`,
+      default: () => `procviol_${new mongoose.Types.ObjectId().toString()}`,
     },
     attempt_id: { type: String, required: true, index: true, unique: true },
     count: { type: Number, default: 0 },
@@ -28,6 +29,6 @@ const ProctoringViolationSchema = new Schema(
   }
 );
 
-module.exports = model('ProctoringViolation', ProctoringViolationSchema);
+module.exports = mongoose.model('ProctoringViolation', ProctoringViolationSchema);
 
 

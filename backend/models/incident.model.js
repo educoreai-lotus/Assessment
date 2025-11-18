@@ -1,10 +1,11 @@
-const { Schema, model, Types } = require('mongoose');
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const IncidentSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `incident_${new Types.ObjectId().toString()}`,
+      default: () => `incident_${new mongoose.Types.ObjectId().toString()}`,
     },
     attempt_id: { type: String, required: true, index: true },
     exam_id: { type: String, index: true },
@@ -50,5 +51,5 @@ const IncidentSchema = new Schema(
 IncidentSchema.index({ attempt_id: 1, opened_at: -1 });
 IncidentSchema.index({ severity: 1, status: 1 });
 
-module.exports = model('Incident', IncidentSchema);
+module.exports = mongoose.model('Incident', IncidentSchema);
 

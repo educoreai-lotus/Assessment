@@ -1,18 +1,28 @@
 // DevLab mock payloads per exact data contracts
 exports.mockGetCodingQuestions = async () => {
+  // Return envelope with an array of at least one valid coding question.
+  // The integration layer will decorate with language, skills, and requested_at.
   return {
     questions: [
       {
         qid: 'devlab_q42',
         type: 'code',
+        // Required by ExamPackageCodingQuestionSchema after mapping/decoration
+        question: 'Write a function that returns the sum of two numbers.',
+        starter_code: '// your code here\nfunction add(a, b) {\n  // TODO\n}',
+        expected_output: 'add(2, 3) === 5',
+        test_cases: [
+          { input: [2, 3], output: 5 },
+          { input: [-1, 1], output: 0 },
+        ],
+        // Additional metadata carried by mocks (ignored by strict schema if not declared)
+        evaluation: { type: 'text', rubric: [] },
+        metadata: {},
+        // Common fields used by mapping
         difficulty: 'medium',
-        skill_id: 's_js_async',
+        skill_id: 's_js_basics',
         lesson_id: 'L-101',
         course_name: 'Intro to JS',
-        stem: 'Write an async function that fetches data from an API and logs the result.',
-        expected_output: '{ data: ... }',
-        correct_answer:
-          'async function fetchData(url){ const res = await fetch(url); const data = await res.json(); console.log(data); }',
       },
     ],
   };
