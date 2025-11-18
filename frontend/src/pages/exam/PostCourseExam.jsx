@@ -79,21 +79,17 @@ export default function PostCourseExam() {
           course_id: courseId,
         });
         resolvedExamId = String(created?.exam_id ?? '');
-        resolvedAttemptId = created?.attempt_id ?? null;
         if (resolvedExamId) {
           localStorage.setItem('exam_postcourse_id', resolvedExamId);
         }
-
-        // If attempt not present, derive from attempts list (latest for this exam)
-        if (!resolvedAttemptId) {
-          const list = await examApi.attemptsByUser(userId);
-          const matching = Array.isArray(list)
-            ? list
-                .filter(a => a.exam_type === 'postcourse')
-                .find(a => String(a?.exam_id) === String(resolvedExamId))
-            : null;
-          resolvedAttemptId = matching?.attempt_id ?? null;
-        }
+        // Always resolve attempt_id via attempts list (created.attempt_id may be null for postcourse)
+        const list = await examApi.attemptsByUser(userId);
+        const matching = Array.isArray(list)
+          ? list
+              .filter(a => a.exam_type === 'postcourse')
+              .find(a => String(a?.exam_id) === String(resolvedExamId))
+          : null;
+        resolvedAttemptId = matching?.attempt_id ?? null;
 
         if (!resolvedExamId || !resolvedAttemptId) {
           throw new Error('Unable to resolve post-course exam or attempt.');
