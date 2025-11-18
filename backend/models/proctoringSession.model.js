@@ -28,9 +28,18 @@ const ProctoringSessionSchema = new Schema(
   }
 );
 
-module.exports =
-  process.env.NODE_ENV === 'test'
-    ? {}
-    : mongoose.model('ProctoringSession', ProctoringSessionSchema);
+// In test mode, export harmless mock methods and avoid touching mongoose.model
+if (process.env.NODE_ENV === 'test') {
+  module.exports = {
+    findOne: async () => null,
+    findOneAndUpdate: async () => null,
+    create: async () => ({}),
+    save: async () => ({}),
+  };
+  return;
+}
+
+// Non-test: export actual model
+module.exports = mongoose.model('ProctoringSession', ProctoringSessionSchema);
 
 

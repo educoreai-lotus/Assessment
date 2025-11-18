@@ -50,8 +50,17 @@ const ProctoringEventSchema = new Schema(
 ProctoringEventSchema.index({ attempt_id: 1, detected_at: -1 });
 ProctoringEventSchema.index({ severity: 1, event_type: 1 });
 
-module.exports =
-  process.env.NODE_ENV === 'test'
-    ? {}
-    : mongoose.model('ProctoringEvent', ProctoringEventSchema);
+// In test mode, export harmless mock methods and avoid touching mongoose.model
+if (process.env.NODE_ENV === 'test') {
+  module.exports = {
+    findOne: async () => null,
+    findOneAndUpdate: async () => null,
+    create: async () => ({}),
+    save: async () => ({}),
+  };
+  return;
+}
+
+// Non-test: export actual model
+module.exports = mongoose.model('ProctoringEvent', ProctoringEventSchema);
 

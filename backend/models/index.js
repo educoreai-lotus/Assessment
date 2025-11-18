@@ -1,3 +1,8 @@
+if (process.env.NODE_ENV === 'test') {
+  module.exports = {};
+  return;
+}
+
 module.exports = {
   ExamPackage: require('./examPackage.model'),
   AiAuditTrail: require('./aiAuditTrail.model'),

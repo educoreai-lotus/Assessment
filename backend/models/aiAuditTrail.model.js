@@ -44,8 +44,17 @@ const AiAuditTrailSchema = new Schema(
 AiAuditTrailSchema.index({ attempt_id: 1, executed_at: -1 });
 AiAuditTrailSchema.index({ status: 1, executed_at: -1 });
 
-module.exports =
-  process.env.NODE_ENV === 'test'
-    ? {}
-    : mongoose.model('AiAuditTrail', AiAuditTrailSchema);
+// In test mode, export harmless mock methods and avoid touching mongoose.model
+if (process.env.NODE_ENV === 'test') {
+  module.exports = {
+    findOne: async () => null,
+    findOneAndUpdate: async () => null,
+    create: async () => ({}),
+    save: async () => ({}),
+  };
+  return;
+}
+
+// Non-test: export actual model
+module.exports = mongoose.model('AiAuditTrail', AiAuditTrailSchema);
 

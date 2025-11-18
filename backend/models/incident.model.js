@@ -51,8 +51,17 @@ const IncidentSchema = new Schema(
 IncidentSchema.index({ attempt_id: 1, opened_at: -1 });
 IncidentSchema.index({ severity: 1, status: 1 });
 
-module.exports =
-  process.env.NODE_ENV === 'test'
-    ? {}
-    : mongoose.model('Incident', IncidentSchema);
+// In test mode, export harmless mock methods and avoid touching mongoose.model
+if (process.env.NODE_ENV === 'test') {
+  module.exports = {
+    findOne: async () => null,
+    findOneAndUpdate: async () => null,
+    create: async () => ({}),
+    save: async () => ({}),
+  };
+  return;
+}
+
+// Non-test: export actual model
+module.exports = mongoose.model('Incident', IncidentSchema);
 
