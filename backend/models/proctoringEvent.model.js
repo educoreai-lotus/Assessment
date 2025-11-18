@@ -4,7 +4,7 @@ const ProctoringEventSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `proctor_${Types.ObjectId().toString()}`,
+      default: () => `proctor_${new Types.ObjectId().toString()}`,
     },
     attempt_id: { type: String, required: true, index: true },
     source: {

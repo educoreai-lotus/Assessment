@@ -4,7 +4,7 @@ const IncidentSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `incident_${Types.ObjectId().toString()}`,
+      default: () => `incident_${new Types.ObjectId().toString()}`,
     },
     attempt_id: { type: String, required: true, index: true },
     exam_id: { type: String, index: true },

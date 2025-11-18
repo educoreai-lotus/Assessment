@@ -4,16 +4,31 @@ require('dotenv').config();
 const connectionString = process.env.SUPABASE_DB_URL;
 const source = 'SUPABASE_DB_URL';
 
+let pool;
 if (!connectionString) {
-  // eslint-disable-next-line no-console
-  console.error('❌ Missing SUPABASE_DB_URL');
-  process.exit(1);
+  if (process.env.NODE_ENV === 'test') {
+    // Provide a lightweight stub pool in test mode when DB URL is not set,
+    // so requiring the server does not exit the process.
+    // eslint-disable-next-line no-console
+    console.warn('⚠️ SUPABASE_DB_URL not set; using stub pool for tests');
+    pool = {
+      query: async () => {
+        throw new Error('No Postgres configured in test environment');
+      },
+      end: async () => {},
+      connect: async () => {},
+    };
+  } else {
+    // eslint-disable-next-line no-console
+    console.error('❌ Missing SUPABASE_DB_URL');
+    process.exit(1);
+  }
+} else {
+  pool = new Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+  });
 }
-
-const pool = new Pool({
-  connectionString,
-  ssl: { rejectUnauthorized: false },
-});
 
 function maskConnectionInfo(cs) {
   try {
@@ -25,7 +40,7 @@ function maskConnectionInfo(cs) {
     return '(unparseable-connection-string)';
   }
 }
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && connectionString) {
   // eslint-disable-next-line no-console
   console.log("ENV PGHOST:", process.env.PGHOST);
   pool.connect()

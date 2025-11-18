@@ -4,7 +4,7 @@ const ProctoringViolationSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `procviol_${Types.ObjectId().toString()}`,
+      default: () => `procviol_${new Types.ObjectId().toString()}`,
     },
     attempt_id: { type: String, required: true, index: true, unique: true },
     count: { type: Number, default: 0 },

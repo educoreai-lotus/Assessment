@@ -4,7 +4,7 @@ const ProctoringSessionSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `procsess_${Types.ObjectId().toString()}`,
+      default: () => `procsess_${new Types.ObjectId().toString()}`,
     },
     attempt_id: { type: String, required: true, index: true, unique: true },
     exam_id: { type: String, required: true, index: true },

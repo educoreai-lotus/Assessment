@@ -26,14 +26,23 @@ exports.buildCodingQuestionsForExam = async ({
     }
   }
   const now = new Date();
-  return (codingQuestions || []).map((q) => ({
-    ...q,
-    skills,
-    humanLanguage,
-    programming_language: 'javascript',
-    difficulty,
-    requested_at: now,
-  }));
+  return (codingQuestions || []).map((q) => {
+    const questionText =
+      (typeof q?.question === 'string' && q.question) ||
+      (typeof q?.stem === 'string' && q.stem) ||
+      'Solve the coding task as described.';
+    return {
+      ...q,
+      question: questionText,
+      expected_output: typeof q?.expected_output === 'string' ? q.expected_output : (q?.expected_output ?? ''),
+      test_cases: Array.isArray(q?.test_cases) ? q.test_cases : [],
+      skills,
+      humanLanguage,
+      programming_language: q?.programming_language || 'javascript',
+      difficulty,
+      requested_at: now,
+    };
+  });
 };
 
 // Phase 08.3 – Prepare grading payload (placeholder for upcoming implementation)
