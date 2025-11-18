@@ -5,9 +5,16 @@ const isTest = process.env.NODE_ENV === 'test';
 if (isTest) {
   module.exports = {
     ExamPackage: {
-      findOne: async () => null,
+      findOne: async () => ({
+        sort: async () => null,
+      }),
       findOneAndUpdate: async () => null,
-      create: async () => ({}),
+      create: async () => ({
+        _id: "mock123",
+        exam_id: 1,
+        theoretical_questions: [],
+        coding_questions: [],
+      }),
       save: async () => ({}),
     },
     ProctoringSession: {
