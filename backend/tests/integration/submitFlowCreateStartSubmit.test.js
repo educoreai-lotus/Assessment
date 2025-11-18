@@ -7,12 +7,12 @@ const hasLiveEnv = !!(process.env.SUPABASE_DB_URL || process.env.SUPABASE_POOLER
   jest.setTimeout(30000);
 
   it('creates exam, starts attempt, submits answers, and returns grading payload', async () => {
-    const userId = `u_${Math.floor(Math.random() * 1000000) + 1000}`; // random user
+    const user_id = 300;
     // 1) Create exam (postcourse)
     const createRes = await request(app)
       .post('/api/exams')
       .send({
-        user_id: userId,
+        user_id,
         exam_type: 'postcourse',
         course_id: 'c_555',
         course_name: 'New Test Course',
@@ -23,6 +23,12 @@ const hasLiveEnv = !!(process.env.SUPABASE_DB_URL || process.env.SUPABASE_POOLER
     const { exam_id, attempt_id } = createRes.body || {};
     expect(exam_id).toBeTruthy();
     expect(attempt_id).toBeTruthy();
+
+    // Start camera (proctoring) before starting the exam
+    const camRes = await request(app)
+      .post(`/api/proctoring/${attempt_id}/start_camera`)
+      .set('Content-Type', 'application/json');
+    expect([200]).toContain(camRes.statusCode);
 
     // 2) Start exam
     const startRes = await request(app)

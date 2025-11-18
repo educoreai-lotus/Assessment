@@ -9,8 +9,16 @@ const hasLiveEnv = !!(process.env.SUPABASE_DB_URL || process.env.SUPABASE_POOLER
   it('submits attempt and returns final grade payload', async () => {
     // These IDs reflect the known seeded data from the prompt context
     const examId = 12;
+    const attemptId = 7;
+
+    // Ensure camera is started for this attempt before submit
+    const camRes = await request(app)
+      .post(`/api/proctoring/${attemptId}/start_camera`)
+      .set('Content-Type', 'application/json');
+    expect([200, 404, 400]).toContain(camRes.statusCode); // tolerate non-existent attempt in some envs
+
     const payload = {
-      attempt_id: 7,
+      attempt_id: attemptId,
       answers: [
         {
           question_id: 'devlab_q42',

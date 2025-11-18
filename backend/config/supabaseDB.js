@@ -25,10 +25,15 @@ function maskConnectionInfo(cs) {
     return '(unparseable-connection-string)';
   }
 }
-console.log("ENV PGHOST:", process.env.PGHOST);
-pool.connect()
-  .then(() => console.log(`✅ Connected to PostgreSQL via ${source} (${maskConnectionInfo(connectionString)})`))
-  .catch((err) => console.error('❌ PostgreSQL connection error:', err?.message || err));
+if (process.env.NODE_ENV !== 'test') {
+  // eslint-disable-next-line no-console
+  console.log("ENV PGHOST:", process.env.PGHOST);
+  pool.connect()
+    // eslint-disable-next-line no-console
+    .then(() => console.log(`✅ Connected to PostgreSQL via ${source} (${maskConnectionInfo(connectionString)})`))
+    // eslint-disable-next-line no-console
+    .catch((err) => console.error('❌ PostgreSQL connection error:', err?.message || err));
+}
 
 
 

@@ -1,4 +1,5 @@
-const { Schema, model, Types } = require('mongoose');
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const ExamPackageQuestionSchema = new Schema(
   {
@@ -43,7 +44,7 @@ const ExamPackageSchema = new Schema(
   {
     _id: {
       type: Schema.Types.ObjectId,
-      default: () => new Types.ObjectId(),
+      default: () => new mongoose.Types.ObjectId(),
     },
     exam_id: { type: String, required: true, index: true },
     attempt_id: { type: String, required: true, index: true },
@@ -110,5 +111,5 @@ ExamPackageSchema.index({ exam_id: 1, attempt_id: 1 });
 ExamPackageSchema.index({ final_status: 1, 'grading.passed': 1 });
 ExamPackageSchema.index({ 'user.user_id': 1 });
 
-module.exports = model('ExamPackage', ExamPackageSchema);
+module.exports = mongoose.model('ExamPackage', ExamPackageSchema);
 
