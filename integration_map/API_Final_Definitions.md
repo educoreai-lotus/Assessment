@@ -58,11 +58,11 @@ Payload
 
 POST
 
-/api/assessment/integration
+/api/fill-content-metrics
 
 Start baseline exam
 
-{ "api_caller": "skills_engine", "stringified_json": "{\"user_id\":\"u_123\",\"user_name\":\"Jane Doe\",\"skills\":[{\"skill_id\":\"s_html\"}],\"passing_grade\":70}" }
+{ "requester_service": "skills_engine", "stringified_json": "{\"user_id\":\"u_123\",\"user_name\":\"Jane Doe\",\"skills\":[{\"skill_id\":\"s_html\"}],\"passing_grade\":70}" }
 
 
 
@@ -114,19 +114,19 @@ Payload
 
 POST
 
-/api/assessment/integration
+/api/fill-content-metrics
 
 Start post-course exam
 
-{ "api_caller":"course_builder","stringified_json":"{\"learner_id\":\"u_123\",\"learner_name\":\"Jane Doe\",\"course_id\":\"c_789\",\"course_name\":\"Intro to JS\",\"coverage_map\":[{\"lesson_id\":\"L101\",\"skills\":[\"s_js_async\",\"s_js_promises\"]}],\"passing_grade\":70,\"max_attempts\":3}" }
+{ "requester_service":"course_builder","stringified_json":"{\"learner_id\":\"u_123\",\"learner_name\":\"Jane Doe\",\"course_id\":\"c_789\",\"course_name\":\"Intro to JS\",\"coverage_map\":[{\"lesson_id\":\"L101\",\"skills\":[\"s_js_async\",\"s_js_promises\"]}],\"passing_grade\":70,\"max_attempts\":3}" }
 
 POST
 
-/api/assessment/integration
+/api/fill-content-metrics
 
 Grant one extra attempt for a learner (retry approval)
 
-{ "api_caller":"course_builder","stringified_json":"{\"learner_id\":\"u_123\",\"course_id\":\"c_789\",\"update_type\":\"extra_attempt\",\"approved_by\":\"course_builder\"}" }
+{ "requester_service":"course_builder","stringified_json":"{\"learner_id\":\"u_123\",\"course_id\":\"c_789\",\"update_type\":\"extra_attempt\",\"approved_by\":\"course_builder\"}" }
 
 
 
@@ -176,13 +176,13 @@ Payload
 
 POST
 
-/api/assessment/integration
+/api/fill-content-metrics
 
 Send coding questions or request theoretical ones
 
-Coding → { "api_caller":"devlab","stringified_json":"{\"questions\":[{\"qid\":\"devlab_q42\",\"type\":\"code\",\"difficulty\":\"medium\",\"skill_id\":\"s_js_async\",\"lesson_id\":\"L101\",\"stem\":\"Write an async function…\",\"expected_output\":\"{data:…}\",\"correct_answer\":\"async function fetchData(url){…}\"}]}" }
+Coding → { "requester_service":"devlab","stringified_json":"{\"questions\":[{\"qid\":\"devlab_q42\",\"type\":\"code\",\"difficulty\":\"medium\",\"skill_id\":\"s_js_async\",\"lesson_id\":\"L101\",\"stem\":\"Write an async function…\",\"expected_output\":\"{data:…}\",\"correct_answer\":\"async function fetchData(url){…}\"}]}" }
 
-Theoretical → { "api_caller":"devlab","stringified_json":"{\"difficulty\":\"hard\",\"nano_skills\":[\"s_html\"],\"micro_skills\":[\"s_js_async\"]}" }
+Theoretical → { "requester_service":"devlab","stringified_json":"{\"difficulty\":\"hard\",\"nano_skills\":[\"s_html\"],\"micro_skills\":[\"s_js_async\"]}" }
 
 
 
@@ -218,7 +218,7 @@ Send graded results for coding questions
 
 Purpose: Pulls summarized results (no questions / answers) for dashboards.
 
- Uses GET.
+Uses POST.
 
 Method
 
@@ -228,9 +228,11 @@ Purpose
 
 Query Example
 
-GET
+POST
 
-/api/assessment/integration?api_caller=learning_analytics&stringified_json={"attempt_id":"att_9m1x"}
+/api/fill-content-metrics
+
+Body: { "requester_service":"learning_analytics", "stringified_json":"{\"attempt_id\":\"att_9m1x\"}" }
 
 Request summarized attempt data
 
@@ -286,9 +288,11 @@ Purpose
 
 Query Example
 
-GET
+POST
 
-/api/assessment/integration?api_caller=management&stringified_json={"attempt_id":"att_9m1x"}
+/api/fill-content-metrics
+
+Body: { "requester_service":"management", "stringified_json":"{\"attempt_id\":\"att_9m1x\"}" }
 
 Request exam record for compliance
 
@@ -336,11 +340,11 @@ RAG → Assessment
 
 POST
 
-/api/assessment/integration
+/api/fill-content-metrics
 
 Report incident
 
-{ "api_caller":"rag","stringified_json":"{\"source\":\"rag_service\",\"exam_id\":\"ex_51a2\",\"attempt_id\":\"att_9m1x\",\"user_id\":\"u_123\",\"incident_type\":\"technical_error\",\"messages\":[\"page froze\"]}" }
+{ "requester_service":"rag","stringified_json":"{\"source\":\"rag_service\",\"exam_id\":\"ex_51a2\",\"attempt_id\":\"att_9m1x\",\"user_id\":\"u_123\",\"incident_type\":\"technical_error\",\"messages\":[\"page froze\"]}" }
 
 Assessment → RAG
 
@@ -372,11 +376,11 @@ Protocol Camera → Assessment
 
 POST
 
-/api/assessment/integration
+/api/fill-content-metrics
 
 Send proctoring event
 
-{ "api_caller":"protocol_camera","stringified_json":"{\"exam_id\":\"ex_51a2\",\"attempt_id\":\"att_9m1x\",\"user_id\":\"u_123\",\"event_type\":\"tab_switch\",\"timestamp\":\"2025-11-07T16:20:15Z\",\"severity_score\":2,\"resolution_status\":\"unresolved\"}" }
+{ "requester_service":"protocol_camera","stringified_json":"{\"exam_id\":\"ex_51a2\",\"attempt_id\":\"att_9m1x\",\"user_id\":\"u_123\",\"event_type\":\"tab_switch\",\"timestamp\":\"2025-11-07T16:20:15Z\",\"severity_score\":2,\"resolution_status\":\"unresolved\"}" }
 
 Assessment → Protocol Camera
 

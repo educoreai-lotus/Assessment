@@ -310,57 +310,54 @@ exports.handleCourseBuilderPreExam = async (req, res, next) => {
   }
 };
 
-// Phase 08.6 – Universal Integration Endpoint handler
+// Phase 08.6 – Universal Integration Endpoint handler (single inbound route)
 exports.universalIntegrationHandler = async (req, res) => {
   try {
-    const { requester_service, payload, response } = req.body;
+    const { requester_service, stringified_json } = req.body || {};
 
-    if (!requester_service || typeof payload !== 'string' || typeof response !== 'string') {
+    if (!requester_service || typeof stringified_json !== 'string') {
       return res.status(400).json({
-        error: "Invalid envelope. Expected requester_service, payload (string), response (string)."
+        error: "Invalid envelope. Expected requester_service and stringified_json (string)."
       });
     }
 
     let parsedPayload = {};
-    let parsedResponse = {};
-
     try {
-      parsedPayload = JSON.parse(payload);
-      parsedResponse = JSON.parse(response);
-    } catch (err) {
-      return res.status(400).json({
-        error: "Payload or response is not valid JSON string."
-      });
+      parsedPayload = JSON.parse(stringified_json);
+    } catch {
+      return res.status(400).json({ error: "stringified_json is not valid JSON" });
     }
 
     let result;
 
     switch (String(requester_service).toLowerCase()) {
       case 'coursebuilder':
-        result = await courseBuilderService.handleInbound(parsedPayload, parsedResponse);
+        result = await courseBuilderService.handleInbound(parsedPayload, {});
         break;
-
       case 'management':
-        result = await managementService.handleInbound(parsedPayload, parsedResponse);
+        result = await managementService.handleInbound(parsedPayload, {});
         break;
-
       case 'directory':
-        result = await directoryService.handleInbound(parsedPayload, parsedResponse);
+        result = await directoryService.handleInbound(parsedPayload, {});
         break;
-
       case 'skillsengine':
-        result = await skillsEngineService.handleInbound(parsedPayload, parsedResponse);
+      case 'skills_engine':
+        result = await skillsEngineService.handleInbound(parsedPayload, {});
         break;
-
       case 'devlab':
-        result = await devlabService.handleInbound(parsedPayload, parsedResponse);
+        result = await devlabService.handleInbound(parsedPayload, {});
         break;
-
       case 'learninganalytics':
+      case 'learning_analytics':
       case 'la':
-        result = await learningAnalyticsService.handleInbound(parsedPayload, parsedResponse);
+        result = await learningAnalyticsService.handleInbound(parsedPayload, {});
         break;
-
+      case 'rag':
+      case 'protocol_camera':
+      case 'protocolcamera':
+        // No-op placeholders for inbound events if needed in future
+        result = {};
+        break;
       default:
         return res.status(400).json({
           error: `Unknown requester_service: ${requester_service}`
@@ -369,7 +366,7 @@ exports.universalIntegrationHandler = async (req, res) => {
 
     return res.json({
       requester_service,
-      payload,
+      stringified_json,
       response: JSON.stringify(result || {})
     });
 
