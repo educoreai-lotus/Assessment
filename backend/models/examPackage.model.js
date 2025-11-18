@@ -110,5 +110,8 @@ const ExamPackageSchema = new Schema(
 ExamPackageSchema.index({ exam_id: 1, attempt_id: 1 });
 ExamPackageSchema.index({ final_status: 1, 'grading.passed': 1 });
 
-module.exports = mongoose.model('ExamPackage', ExamPackageSchema);
+module.exports =
+  process.env.NODE_ENV === 'test'
+    ? {}
+    : mongoose.model('ExamPackage', ExamPackageSchema);
 

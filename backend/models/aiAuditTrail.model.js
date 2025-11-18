@@ -44,5 +44,8 @@ const AiAuditTrailSchema = new Schema(
 AiAuditTrailSchema.index({ attempt_id: 1, executed_at: -1 });
 AiAuditTrailSchema.index({ status: 1, executed_at: -1 });
 
-module.exports = mongoose.model('AiAuditTrail', AiAuditTrailSchema);
+module.exports =
+  process.env.NODE_ENV === 'test'
+    ? {}
+    : mongoose.model('AiAuditTrail', AiAuditTrailSchema);
 

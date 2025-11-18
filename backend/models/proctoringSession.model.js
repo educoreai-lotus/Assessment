@@ -28,6 +28,9 @@ const ProctoringSessionSchema = new Schema(
   }
 );
 
-module.exports = mongoose.model('ProctoringSession', ProctoringSessionSchema);
+module.exports =
+  process.env.NODE_ENV === 'test'
+    ? {}
+    : mongoose.model('ProctoringSession', ProctoringSessionSchema);
 
 

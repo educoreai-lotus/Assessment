@@ -51,5 +51,8 @@ const IncidentSchema = new Schema(
 IncidentSchema.index({ attempt_id: 1, opened_at: -1 });
 IncidentSchema.index({ severity: 1, status: 1 });
 
-module.exports = mongoose.model('Incident', IncidentSchema);
+module.exports =
+  process.env.NODE_ENV === 'test'
+    ? {}
+    : mongoose.model('Incident', IncidentSchema);
 

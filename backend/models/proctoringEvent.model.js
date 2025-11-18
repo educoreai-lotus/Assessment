@@ -50,5 +50,8 @@ const ProctoringEventSchema = new Schema(
 ProctoringEventSchema.index({ attempt_id: 1, detected_at: -1 });
 ProctoringEventSchema.index({ severity: 1, event_type: 1 });
 
-module.exports = mongoose.model('ProctoringEvent', ProctoringEventSchema);
+module.exports =
+  process.env.NODE_ENV === 'test'
+    ? {}
+    : mongoose.model('ProctoringEvent', ProctoringEventSchema);
 

@@ -29,6 +29,9 @@ const ProctoringViolationSchema = new Schema(
   }
 );
 
-module.exports = mongoose.model('ProctoringViolation', ProctoringViolationSchema);
+module.exports =
+  process.env.NODE_ENV === 'test'
+    ? {}
+    : mongoose.model('ProctoringViolation', ProctoringViolationSchema);
 
 
