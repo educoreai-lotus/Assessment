@@ -4,7 +4,7 @@ const AiAuditTrailSchema = new Schema(
   {
     _id: {
       type: String,
-      default: () => `audit_${Types.ObjectId().toString()}`,
+      default: () => `audit_${new Types.ObjectId().toString()}`,
     },
     exam_id: { type: String, index: true },
     attempt_id: { type: String, required: true, index: true },
