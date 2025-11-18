@@ -37,6 +37,7 @@ jobs:
         working-directory: backend
         env:
           NODE_ENV: test
+          MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
         run: npm test --if-present
 
       # Frontend

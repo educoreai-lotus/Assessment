@@ -3,7 +3,7 @@ const pool = require('../config/supabaseDB');
 
 module.exports = async () => {
   try {
-    if (mongoose.connection.readyState === 1) {
+    if (mongoose.connection.readyState !== 0) {
       await mongoose.connection.close();
     }
   } catch (err) {

@@ -11,22 +11,120 @@
     }
   ],
   "paths": {
-    "/api/assessment/integration": {
+    "/api/attempts/user/{userId}": {
+      "get": {
+        "summary": "List attempts for a user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "u_123"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/attempts/{attemptId}": {
+      "get": {
+        "summary": "Get attempt detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attemptId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/attempts/{attemptId}/skills": {
+      "get": {
+        "summary": "Get attempt per-skill results",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attemptId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/attempts/{attemptId}/remaining_time": {
+      "get": {
+        "summary": "Get remaining time for an attempt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attemptId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/exams": {
       "post": {
-        "summary": "Unified inbound integration (POST)",
-        "description": "Handles POST integrations from Skills Engine, Course Builder, DevLab, RAG, Protocol Camera",
+        "summary": "Create exam (baseline or postcourse)",
+        "description": "Creates an exam and initial attempt, builds ExamPackage via integrations with safe mock fallbacks.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "user_id",
+                  "exam_type"
+                ],
                 "properties": {
-                  "api_caller": {
-                    "type": "string"
+                  "user_id": {
+                    "type": "string",
+                    "example": "u_123"
                   },
-                  "stringified_json": {
-                    "type": "string"
+                  "exam_type": {
+                    "type": "string",
+                    "enum": [
+                      "baseline",
+                      "postcourse"
+                    ]
+                  },
+                  "course_id": {
+                    "type": "string",
+                    "example": "c_789"
+                  },
+                  "course_name": {
+                    "type": "string",
+                    "example": "Intro to JS"
                   }
                 }
               }
@@ -34,35 +132,221 @@
           }
         },
         "responses": {
-          "202": {
-            "description": "Accepted"
+          "201": {
+            "description": "Created"
           }
         }
-      },
-      "get": {
-        "summary": "Unified inbound integration (GET)",
-        "description": "Handles GET integrations for Learning Analytics and Management",
+      }
+    },
+    "/api/exams/{examId}/start": {
+      "post": {
+        "summary": "Start an exam attempt",
+        "description": "Marks attempt as started and returns ExamPackage (policy, skills, coverage_map, questions).",
         "parameters": [
           {
-            "in": "query",
-            "name": "api_caller",
+            "in": "path",
+            "name": "examId",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
-          },
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "attempt_id"
+                ],
+                "properties": {
+                  "attempt_id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Started"
+          }
+        }
+      }
+    },
+    "/api/exams/{examId}/submit": {
+      "post": {
+        "summary": "Submit an exam attempt",
+        "description": "Grades the attempt, upserts per-skill results, and pushes outbox integration payloads.",
+        "parameters": [
           {
-            "in": "query",
-            "name": "stringified_json",
-            "required": false,
+            "in": "path",
+            "name": "examId",
+            "required": true,
             "schema": {
-              "type": "string"
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "attempt_id",
+                  "answers"
+                ],
+                "properties": {
+                  "attempt_id": {
+                    "type": "integer"
+                  },
+                  "answers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "question_id",
+                        "type",
+                        "skill_id",
+                        "answer"
+                      ],
+                      "properties": {
+                        "question_id": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "mcq",
+                            "open",
+                            "code"
+                          ]
+                        },
+                        "skill_id": {
+                          "type": "string"
+                        },
+                        "answer": {
+                          "type": "string"
+                        },
+                        "metadata": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Submission accepted"
+          }
+        }
+      }
+    },
+    "/api/fill-content-metrics": {
+      "post": {
+        "summary": "Universal inbound integration endpoint",
+        "description": "Accepts all inbound integration requests via a unified envelope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "requester_service",
+                  "stringified_json"
+                ],
+                "properties": {
+                  "requester_service": {
+                    "type": "string",
+                    "description": "The requesting service name (e.g., coursebuilder, management, directory, skillsengine, devlab, learninganalytics)"
+                  },
+                  "stringified_json": {
+                    "type": "string",
+                    "description": "Stringified JSON payload for the request"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted envelope processed"
+          },
+          "400": {
+            "description": "Invalid envelope"
+          }
+        }
+      }
+    },
+    "/api/packages/{examId}": {
+      "get": {
+        "summary": "Get ExamPackage by examId",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "examId",
+            "required": true,
+            "schema": {
+              "type": "integer"
             }
           }
         ],
         "responses": {
           "200": {
             "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/proctoring/{attempt_id}/start_camera": {
+      "post": {
+        "summary": "Activate camera and create proctoring session",
+        "description": "Creates or updates a proctoring session for the attempt and sets camera_status=active.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Camera activated"
+          }
+        }
+      }
+    },
+    "/api/proctoring/{attempt_id}/focus_violation": {
+      "post": {
+        "summary": "Report a focus violation for an attempt",
+        "description": "Increments violation count and cancels the attempt on the 3rd violation.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Violation recorded"
           }
         }
       }
