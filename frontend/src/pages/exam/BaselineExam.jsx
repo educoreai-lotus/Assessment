@@ -96,7 +96,8 @@ export default function BaselineExam() {
                 typeof p?.prompt === 'string'
                   ? p.prompt
                   : (p?.prompt?.question || p?.prompt?.stem || '');
-              const opts = Array.isArray(p?.options) ? p.options : (Array.isArray(p?.prompt?.choices) ? p.prompt.choices : []);
+              const optsRaw = Array.isArray(p?.options) ? p.options : (Array.isArray(p?.prompt?.choices) ? p.prompt.choices : []);
+              const opts = Array.isArray(optsRaw) ? optsRaw.map((o) => (typeof o === 'string' ? o : JSON.stringify(o))) : [];
               return {
                 id: p?.question_id || p?.qid || p?.id || String(idx + 1),
                 originalId: p?.question_id || p?.qid || p?.id || String(idx + 1),

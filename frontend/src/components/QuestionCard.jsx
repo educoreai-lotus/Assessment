@@ -7,11 +7,12 @@ export default function QuestionCard({ question, value, onChange }) {
     typeof question?.prompt === 'string'
       ? question.prompt
       : (question?.prompt?.question || question?.prompt?.stem || '');
+  const renderedPrompt = String(prompt || '');
 
   return (
     <div className="card p-5">
       <div className="mb-2 text-sm text-emeraldbrand-300">{question?.skill || 'General'}</div>
-      <h3 className="text-lg font-semibold mb-3">{prompt}</h3>
+      <h3 className="text-lg font-semibold mb-3">{renderedPrompt}</h3>
 
       {isMcq && (
         <div className="space-y-2">
@@ -25,7 +26,7 @@ export default function QuestionCard({ question, value, onChange }) {
                 className="accent-emeraldbrand-500"
                 onChange={(e) => onChange?.(question.id, e.target.value)}
               />
-              <span>{opt}</span>
+              <span>{String(opt)}</span>
             </label>
           ))}
         </div>
