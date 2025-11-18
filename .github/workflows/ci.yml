@@ -1,0 +1,52 @@
+name: CI – Assessment Microservice
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      INTEGRATION_DEVLAB_DATA_REQUEST_URL: ${{ secrets.INTEGRATION_DEVLAB_DATA_REQUEST_URL }}
+      INTEGRATION_COURSEBUILDER_FILL_METRICS_URL: ${{ secrets.INTEGRATION_COURSEBUILDER_FILL_METRICS_URL }}
+      INTEGRATION_LA_FILL_METRICS_URL: ${{ secrets.INTEGRATION_LA_FILL_METRICS_URL }}
+      INTEGRATION_MANG_FILL_METRICS_URL: ${{ secrets.INTEGRATION_MANG_FILL_METRICS_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: npm
+
+      # Backend
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install --no-audit --no-fund
+
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test --if-present
+
+      # Frontend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: CI complete
+        run: echo "CI pipeline finished."
+
+
