@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import { examApi } from '../../services/examApi';
+import { http } from '../../services/http';
 
 export default function BaselineExam() {
   const [searchParams] = useSearchParams();
@@ -23,15 +24,77 @@ export default function BaselineExam() {
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    examApi
-      .start(examId, { exam_type: 'baseline' })
-      .then((data) => {
+    async function bootstrapBaseline() {
+      try {
+        setLoading(true);
+        setError('');
+
+        // Resolve demo user id (persist to keep baseline uniqueness)
+        let userId = localStorage.getItem('demo_user_id');
+        if (!userId) {
+          userId = 'u_123';
+          localStorage.setItem('demo_user_id', userId);
+        }
+
+        // Ensure we have an exam_id and attempt_id
+        let resolvedExamId = examId;
+        let attemptId = null;
+
+        // If we don't have an exam id stored, create baseline exam
+        if (!resolvedExamId) {
+          try {
+            const created = await examApi.create({ user_id: userId, exam_type: 'baseline' });
+            resolvedExamId = String(created?.exam_id ?? '');
+            attemptId = created?.attempt_id ?? null;
+            if (resolvedExamId) {
+              localStorage.setItem('exam_baseline_id', resolvedExamId);
+            }
+          } catch (err) {
+            const apiErr = err?.response?.data?.error || '';
+            // If baseline already exists for this user, fetch latest baseline attempt
+            if (apiErr === 'baseline_already_exists') {
+              const list = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
+              const baseline = Array.isArray(list) ? list.find(a => a.exam_type === 'baseline') : null;
+              if (baseline) {
+                resolvedExamId = String(baseline.exam_id);
+                attemptId = baseline.attempt_id;
+                localStorage.setItem('exam_baseline_id', resolvedExamId);
+              } else {
+                throw err;
+              }
+            } else {
+              throw err;
+            }
+          }
+        }
+
+        // If attemptId still unknown, try to derive from attempts list
+        if (!attemptId) {
+          const list = await http.get(`/api/attempts/user/${encodeURIComponent(localStorage.getItem('demo_user_id') || 'u_123')}`).then(r => r.data);
+          const baseline = Array.isArray(list) ? list.find(a => String(a?.exam_id) === String(resolvedExamId)) : null;
+          attemptId = baseline?.attempt_id ?? null;
+        }
+
+        if (!resolvedExamId || !attemptId) {
+          throw new Error('Unable to resolve exam or attempt. Please try again.');
+        }
+
+        // Start camera before starting the exam
+        await http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/start_camera`);
+
+        // Start exam with required attempt_id
+        const data = await examApi.start(resolvedExamId, { attempt_id: attemptId });
         if (!mounted) return;
         setQuestions(data?.questions || []);
-      })
-      .catch((e) => setError(e?.message || 'Failed to load exam'))
-      .finally(() => setLoading(false));
+      } catch (e) {
+        if (!mounted) return;
+        setError(e?.response?.data?.error || e?.message || 'Failed to load exam');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    bootstrapBaseline();
     return () => {
       mounted = false;
     };
