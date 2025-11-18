@@ -7,10 +7,12 @@ function resolveMongoUri() {
 
 const connectMongo = async () => {
   try {
-    if (process.env.NODE_ENV === 'test') {
+    const mongoUri = resolveMongoUri();
+    // In test mode, skip only if there is no Mongo URI provided.
+    if (process.env.NODE_ENV === 'test' && !process.env.MONGO_DB_URI) {
+      console.log('🧪 Test mode with no MONGO_DB_URI → skipping Mongo connection.');
       return;
     }
-    const mongoUri = resolveMongoUri();
     if (!mongoUri) {
       console.warn('⚠️ No MongoDB URI found in MONGO_DB_URI or MONGO_URI');
       return;
