@@ -29,6 +29,31 @@
             "note": "Features array initialized. Individual features will be added as they are planned and implemented. Each feature follows the unified SDLC phase structure."
         },
       {
+        "feature_id": "FEAT-POSTCOURSE-EXAM-FLOW",
+        "name": "Post-Course Exam Flow (Camera, Proctoring, Results)",
+        "status": "Done",
+        "owner": "Assessment",
+        "phases": { "07": "Done" },
+        "links": {
+          "frontend": [
+            "frontend/src/pages/exam/PostCourseExam.jsx",
+            "frontend/src/pages/PostCourseResults.jsx",
+            "frontend/src/main.jsx"
+          ],
+          "backend": [
+            "backend/controllers/examsController.js",
+            "backend/services/core/examsService.js",
+            "backend/controllers/proctoringController.js",
+            "backend/routes/proctoring.js"
+          ]
+        },
+        "notes": [
+          "Implements stable Baseline flow for post-course: camera gating, one-question-per-page, autosave state, submit -> results.",
+          "Adds 3-strike proctoring events with incident logging and auto-cancel redirect."
+        ],
+        "updated_at": "2025-11-18"
+      },
+      {
         "feature_id": "FEAT-EXAM-SUBMIT-GRADING",
         "name": "Exam Submission & Grading Pipeline",
         "status": "Done",

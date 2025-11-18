@@ -1,92 +1,305 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
+import CameraPreview from '../../components/CameraPreview';
 import { examApi } from '../../services/examApi';
+import { http } from '../../services/http';
 
 export default function PostCourseExam() {
   const [searchParams] = useSearchParams();
-  const examId = useMemo(() => {
+  const navigate = useNavigate();
+
+  const initialExamId = useMemo(() => {
     const qp = searchParams.get('examId');
     if (qp) return qp;
     const stored = localStorage.getItem('exam_postcourse_id');
     if (stored) return stored;
-    const generated = '2001';
-    localStorage.setItem('exam_postcourse_id', generated);
-    return generated;
+    return null;
   }, [searchParams]);
+
+  const initialCourseId = useMemo(() => {
+    const qp = searchParams.get('courseId') || searchParams.get('course_id');
+    if (qp) {
+      localStorage.setItem('postcourse_course_id', qp);
+      return qp;
+    }
+    const stored = localStorage.getItem('postcourse_course_id');
+    return stored || null;
+  }, [searchParams]);
+
   const [loading, setLoading] = useState(true);
-  const [meta, setMeta] = useState({ course_id: '', coverage_map: {}, attempts: 0 });
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
+  const [questionsLoading, setQuestionsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [examId, setExamId] = useState(initialExamId);
+  const [attemptId, setAttemptId] = useState(null);
+  const [courseId, setCourseId] = useState(initialCourseId);
+
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraOk, setCameraOk] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+
+  const [questions, setQuestions] = useState([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [strikes, setStrikes] = useState(0);
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    examApi
-      .start(examId, { exam_type: 'postcourse' })
-      .then((data) => {
-        if (!mounted) return;
-        setMeta({
-          course_id: data?.course_id || '',
-          coverage_map: data?.coverage_map || {},
-          attempts: data?.attempt || 1,
+    async function bootstrap() {
+      try {
+        setLoading(true);
+        setError('');
+
+        if (!courseId) {
+          throw new Error('course_id is required for post-course exam');
+        }
+
+        // Resolve demo user id (persist across sessions)
+        let userId = localStorage.getItem('demo_user_id');
+        if (!userId) {
+          userId = 'u_123';
+          localStorage.setItem('demo_user_id', userId);
+        }
+
+        let resolvedExamId = examId;
+        let resolvedAttemptId = null;
+
+        // Create a postcourse exam (idempotent per use-case; attempts policy enforced on start)
+        const created = await examApi.create({
+          user_id: userId,
+          exam_type: 'postcourse',
+          course_id: courseId,
         });
-        setQuestions(data?.questions || []);
-      })
-      .catch((e) => setError(e?.message || 'Failed to load exam'))
-      .finally(() => setLoading(false));
+        resolvedExamId = String(created?.exam_id ?? '');
+        resolvedAttemptId = created?.attempt_id ?? null;
+        if (resolvedExamId) {
+          localStorage.setItem('exam_postcourse_id', resolvedExamId);
+        }
+
+        // If attempt not present, derive from attempts list (latest for this exam)
+        if (!resolvedAttemptId) {
+          const list = await examApi.attemptsByUser(userId);
+          const matching = Array.isArray(list)
+            ? list
+                .filter(a => a.exam_type === 'postcourse')
+                .find(a => String(a?.exam_id) === String(resolvedExamId))
+            : null;
+          resolvedAttemptId = matching?.attempt_id ?? null;
+        }
+
+        if (!resolvedExamId || !resolvedAttemptId) {
+          throw new Error('Unable to resolve post-course exam or attempt.');
+        }
+
+        if (!mounted) return;
+        setExamId(resolvedExamId);
+        setAttemptId(resolvedAttemptId);
+      } catch (e) {
+        if (!mounted) return;
+        setError(e?.response?.data?.error || e?.message || 'Failed to initialize post-course exam');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    bootstrap();
     return () => {
       mounted = false;
     };
-  }, [examId]);
+  }, [courseId, examId]);
 
-  const progress = useMemo(() => {
-    if (!questions.length) return 0;
-    const answered = Object.keys(answers).length;
-    return Math.round((answered / questions.length) * 100);
-  }, [answers, questions]);
+  useEffect(() => {
+    let cancelled = false;
+    async function startIfReady() {
+      if (!examId || !attemptId) return;
+      if (!cameraReady || !cameraOk) return;
+      try {
+        setQuestionsLoading(true);
+        const data = await examApi.start(examId, { attempt_id: attemptId });
+        if (cancelled) return;
+        const normalized = Array.isArray(data?.questions)
+          ? data.questions.map((p, idx) => {
+              const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
+              const uiType = qTypeRaw === 'open' ? 'text' : qTypeRaw;
+              const text =
+                typeof p?.prompt === 'string'
+                  ? p.prompt
+                  : (p?.prompt?.question || p?.prompt?.stem || '');
+              const optsRaw = Array.isArray(p?.options) ? p.options : (Array.isArray(p?.prompt?.choices) ? p.prompt.choices : []);
+              const opts = Array.isArray(optsRaw) ? optsRaw.map((o) => (typeof o === 'string' ? o : JSON.stringify(o))) : [];
+              return {
+                id: p?.question_id || p?.qid || p?.id || String(idx + 1),
+                originalId: p?.question_id || p?.qid || p?.id || String(idx + 1),
+                type: uiType,
+                prompt: text,
+                options: opts,
+                skill: p?.prompt?.skill_name || p?.skill_name || p?.skill || p?.skill_id || 'General',
+                skill_id: p?.skill_id || null,
+              };
+            })
+          : [];
+        setQuestions(normalized);
+        setCurrentIdx(0);
+        setAnswers({});
+      } catch (e) {
+        const apiErr = e?.response?.data?.error || e?.message || '';
+        if (apiErr === 'max_attempts_reached') {
+          // Try to redirect to the most recent attempt results for this user/course
+          try {
+            const userId = localStorage.getItem('demo_user_id') || 'u_123';
+            const list = await examApi.attemptsByUser(userId);
+            const candidates = Array.isArray(list) ? list.filter(a => a.exam_type === 'postcourse') : [];
+            // Prefer the last submitted attempt for this exam
+            const latest = candidates.find(a => String(a?.exam_id) === String(examId)) || candidates[0];
+            if (latest?.attempt_id) {
+              navigate(`/results/postcourse/${encodeURIComponent(latest.attempt_id)}`);
+              return;
+            }
+          } catch {}
+        }
+        setError(apiErr || 'Failed to start post-course exam');
+      } finally {
+        setQuestionsLoading(false);
+      }
+    }
+    startIfReady();
+    return () => { cancelled = false; };
+  }, [examId, attemptId, cameraReady, cameraOk, navigate]);
+
+  useEffect(() => {
+    if (!attemptId || !examId) return;
+    let mounted = true;
+
+    function addStrike(reason) {
+      if (!mounted) return;
+      setStrikes((prev) => {
+        const next = prev + 1;
+        try {
+          http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/incident`, {
+            type: reason,
+            strike: next,
+            timestamp: new Date().toISOString(),
+          }).catch(() => {});
+        } catch {}
+        if (next >= 3) {
+          try {
+            http.post(`/api/exams/${encodeURIComponent(examId)}/cancel`, { attempt_id: attemptId }).catch(() => {});
+          } catch {}
+          navigate('/exam/cancelled');
+        }
+        return next;
+      });
+    }
+
+    const handleBlur = () => addStrike('window-blur');
+    const handleVisibility = () => {
+      try {
+        if (document.visibilityState === 'hidden') {
+          addStrike('tab-switch');
+        }
+      } catch {}
+    };
+    const handleResize = () => {
+      try {
+        if (window.outerWidth < 300 || window.outerHeight < 300) {
+          addStrike('window-minimize');
+        }
+      } catch {}
+    };
+
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [attemptId, examId, navigate]);
 
   function handleAnswer(id, value) {
     setAnswers((s) => ({ ...s, [id]: value }));
   }
 
+  const answeredCount = useMemo(() => {
+    if (!questions.length) return 0;
+    let count = 0;
+    for (const q of questions) {
+      const v = answers[q.id];
+      if (v != null && String(v).trim() !== '') count += 1;
+    }
+    return count;
+  }, [questions, answers]);
+
+  const progress = useMemo(() => {
+    if (!questions.length) return 0;
+    return Math.round((answeredCount / questions.length) * 100);
+  }, [answeredCount, questions]);
+
+  function goPrev() {
+    setCurrentIdx((i) => Math.max(0, i - 1));
+  }
+  function goNext() {
+    setCurrentIdx((i) => Math.min(Math.max(0, questions.length - 1), i + 1));
+  }
+
   async function handleSubmit() {
     try {
       setLoading(true);
-      await examApi.submit(examId, { exam_type: 'postcourse', answers });
-      alert('Submitted! Check results.');
+      const payloadAnswers = questions.map((q) => ({
+        question_id: q.originalId,
+        type: q.type === 'text' ? 'open' : q.type,
+        skill_id: q.skill_id || '',
+        answer: answers[q.id] ?? '',
+      }));
+      const result = await examApi.submit(examId, {
+        attempt_id: attemptId,
+        answers: payloadAnswers,
+      });
+      navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
-      setError(e?.message || 'Submit failed');
+      setError(e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
       setLoading(false);
     }
   }
 
-  if (loading) return <LoadingSpinner label="Loading post-course exam..." />;
+  // Camera callbacks
+  async function handleCameraReady() {
+    setCameraReady(true);
+    try {
+      await examApi.proctoringStart(attemptId);
+      setCameraOk(true);
+    } catch (e) {
+      setCameraOk(false);
+      setCameraError(e?.response?.data?.error || e?.message || 'Failed to activate proctoring');
+    }
+  }
+  function handleCameraError(message) {
+    setCameraError(message || 'Camera access failed');
+    setCameraReady(false);
+    setCameraOk(false);
+  }
+
+  if (loading && !attemptId) return <LoadingSpinner label="Initializing post-course exam..." />;
 
   return (
     <div className="container-safe py-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Post-Course Exam</h2>
-        <div className="text-sm text-neutral-300">Progress: {progress}%</div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-4">
-          <div className="text-sm text-neutral-400 mb-1">Course</div>
-          <div className="font-medium">{meta.course_id || '—'}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-sm text-neutral-400 mb-1">Attempt</div>
-          <div className="font-medium">{meta.attempts}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-sm text-neutral-400 mb-1">Coverage</div>
-          <div className="font-medium text-emeraldbrand-300">
-            {Object.keys(meta.coverage_map || {}).length} skills
+        <div className="flex items-center gap-4">
+          <div className="text-xs text-neutral-400">
+            Camera: {cameraReady && cameraOk ? 'active' : (cameraError ? 'error' : 'starting...')}
           </div>
+          {attemptId && (
+            <div className="w-56">
+              <CameraPreview onReady={handleCameraReady} onError={handleCameraError} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -95,18 +308,60 @@ export default function PostCourseExam() {
           {error}
         </div>
       )}
+      {cameraError && (
+        <div className="rounded-xl border border-yellow-900 bg-yellow-950/60 text-yellow-200 p-3">
+          {cameraError}
+        </div>
+      )}
 
-      <div className="space-y-5">
-        {questions.map((q) => (
-          <QuestionCard key={q.id} question={q} onAnswer={handleAnswer} />
-        ))}
-      </div>
+      {questions.length > 0 && (
+        <div className="space-y-5">
+          <motion.div
+            key={questions[currentIdx].id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <QuestionCard
+              question={questions[currentIdx]}
+              value={answers[questions[currentIdx].id] || ''}
+              onChange={handleAnswer}
+            />
+          </motion.div>
+          <div className="flex items-center justify-between">
+            <div className="min-w-[96px]">
+              {currentIdx > 0 && (
+                <button
+                  className="btn-secondary"
+                  onClick={goPrev}
+                >
+                  Previous
+                </button>
+              )}
+            </div>
+            <div className="text-sm text-neutral-300">
+              Progress: {progress}% &nbsp; <span className="text-neutral-500">({answeredCount}/{questions.length} answered)</span>
+            </div>
+            {currentIdx < questions.length - 1 ? (
+              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk)}>
+                Next
+              </button>
+            ) : (
+              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !(cameraReady && cameraOk)}>
+                Submit
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
-      <div className="flex justify-end">
-        <button className="btn-emerald" onClick={handleSubmit}>Submit</button>
-      </div>
+      {questions.length === 0 && (cameraError ? (
+        <div className="text-sm text-neutral-400">
+          Camera access is required to start the exam. Please allow camera access and refresh.
+        </div>
+      ) : (
+        <LoadingSpinner label="Preparing questions..." />
+      ))}
     </div>
   );
 }
-
-
