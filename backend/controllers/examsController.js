@@ -136,8 +136,17 @@ exports.startExam = async (req, res, next) => {
       policy: pkg?.metadata?.policy || {},
       skills: pkg?.metadata?.skills || [],
       coverage_map: pkg?.coverage_map || [],
-      questions: pkg?.questions?.map((q) => removeHintsDeep(q.prompt)) || [],
-      coding_questions: pkg?.coding_questions || [],
+      questions:
+        Array.isArray(pkg?.questions)
+          ? pkg.questions.map((q) => ({
+              question_id: q?.question_id || null,
+              skill_id: q?.skill_id || null,
+              prompt: removeHintsDeep(q?.prompt),
+              options: Array.isArray(q?.options) ? q.options : [],
+              metadata: q?.metadata || {},
+            }))
+          : [],
+      coding_questions: Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : [],
       time_allocated_minutes: pkg?.metadata?.time_allocated_minutes ?? null,
       expires_at: pkg?.metadata?.expires_at ?? null,
       camera_required: true,

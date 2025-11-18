@@ -1,15 +1,17 @@
-import { useState } from 'react';
-
-export default function QuestionCard({ question, onAnswer }) {
-  const [value, setValue] = useState('');
+export default function QuestionCard({ question, value, onChange }) {
   const isMcq = question?.type === 'mcq';
   const isText = question?.type === 'text';
   const isCode = question?.type === 'code';
 
+  const prompt =
+    typeof question?.prompt === 'string'
+      ? question.prompt
+      : (question?.prompt?.question || question?.prompt?.stem || '');
+
   return (
     <div className="card p-5">
       <div className="mb-2 text-sm text-emeraldbrand-300">{question?.skill || 'General'}</div>
-      <h3 className="text-lg font-semibold mb-3">{question?.prompt}</h3>
+      <h3 className="text-lg font-semibold mb-3">{prompt}</h3>
 
       {isMcq && (
         <div className="space-y-2">
@@ -19,8 +21,9 @@ export default function QuestionCard({ question, onAnswer }) {
                 type="radio"
                 name={`q-${question.id}`}
                 value={opt}
+                checked={value === opt}
                 className="accent-emeraldbrand-500"
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => onChange?.(question.id, e.target.value)}
               />
               <span>{opt}</span>
             </label>
@@ -33,7 +36,8 @@ export default function QuestionCard({ question, onAnswer }) {
           className="mt-2 w-full rounded-xl bg-neutral-800 border border-neutral-700 p-3 focus:outline-none focus:ring-2 focus:ring-emeraldbrand-500"
           rows={4}
           placeholder="Type your answer..."
-          onChange={(e) => setValue(e.target.value)}
+          value={value || ''}
+          onChange={(e) => onChange?.(question.id, e.target.value)}
         />
       )}
 
@@ -42,20 +46,10 @@ export default function QuestionCard({ question, onAnswer }) {
           className="mt-2 w-full font-mono rounded-xl bg-neutral-900 border border-neutral-700 p-3 focus:outline-none focus:ring-2 focus:ring-emeraldbrand-500"
           rows={8}
           placeholder="// Write your solution..."
-          onChange={(e) => setValue(e.target.value)}
+          value={value || ''}
+          onChange={(e) => onChange?.(question.id, e.target.value)}
         />
       )}
-
-      <div className="mt-4 flex justify-end">
-        <button
-          className="btn-emerald"
-          onClick={() => onAnswer?.(question.id, value)}
-        >
-          Save Answer
-        </button>
-      </div>
     </div>
   );
 }
-
-

@@ -17,8 +17,11 @@ export default function BaselineExam() {
   }, [searchParams]);
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [error, setError] = useState('');
+  const [cameraOk, setCameraOk] = useState(false);
+  const [attemptId, setAttemptId] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -79,20 +82,34 @@ export default function BaselineExam() {
 
         // Start camera before starting the exam
         await http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/start_camera`);
+        setCameraOk(true);
 
         // Start exam with required attempt_id
         const data = await examApi.start(resolvedExamId, { attempt_id: attemptId });
         if (!mounted) return;
+        // Normalize question shape for UI, preserve meta for submit payload
         const normalized = Array.isArray(data?.questions)
-          ? data.questions.map((p, idx) => ({
-              id: p?.question_id || p?.qid || p?.id || String(idx + 1),
-              type: (p?.metadata?.type || p?.type || 'mcq') === 'open' ? 'text' : (p?.metadata?.type || p?.type || 'mcq'),
-              prompt: p?.question || p?.stem || p?.prompt || '',
-              options: Array.isArray(p?.options) ? p.options : (Array.isArray(p?.choices) ? p.choices : []),
-              skill: p?.skill_name || p?.skill || p?.skill_id || 'General',
-            }))
+          ? data.questions.map((p, idx) => {
+              const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
+              const uiType = qTypeRaw === 'open' ? 'text' : qTypeRaw;
+              const text =
+                typeof p?.prompt === 'string'
+                  ? p.prompt
+                  : (p?.prompt?.question || p?.prompt?.stem || '');
+              const opts = Array.isArray(p?.options) ? p.options : (Array.isArray(p?.prompt?.choices) ? p.prompt.choices : []);
+              return {
+                id: p?.question_id || p?.qid || p?.id || String(idx + 1),
+                originalId: p?.question_id || p?.qid || p?.id || String(idx + 1),
+                type: uiType,
+                prompt: text,
+                options: opts,
+                skill: p?.prompt?.skill_name || p?.skill_name || p?.skill || p?.skill_id || 'General',
+                skill_id: p?.skill_id || null,
+              };
+            })
           : [];
         setQuestions(normalized);
+        setAttemptId(attemptId);
       } catch (e) {
         if (!mounted) return;
         setError(e?.response?.data?.error || e?.message || 'Failed to load exam');
@@ -117,13 +134,29 @@ export default function BaselineExam() {
     setAnswers((s) => ({ ...s, [id]: value }));
   }
 
+  function goPrev() {
+    setCurrentIdx((i) => Math.max(0, i - 1));
+  }
+  function goNext() {
+    setCurrentIdx((i) => Math.min(Math.max(0, questions.length - 1), i + 1));
+  }
+
   async function handleSubmit() {
     try {
       setLoading(true);
-      await examApi.submit(examId, { exam_type: 'baseline', answers });
+      const payloadAnswers = questions.map((q) => ({
+        question_id: q.originalId,
+        type: q.type === 'text' ? 'open' : q.type,
+        skill_id: q.skill_id || '',
+        answer: answers[q.id] ?? '',
+      }));
+      await examApi.submit(localStorage.getItem('exam_baseline_id') || examId, {
+        attempt_id: attemptId,
+        answers: payloadAnswers,
+      });
       alert('Submitted! Check results.');
     } catch (e) {
-      setError(e?.message || 'Submit failed');
+      setError(e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
       setLoading(false);
     }
@@ -142,21 +175,46 @@ export default function BaselineExam() {
           {error}
         </div>
       )}
-      <div className="space-y-5">
-        {questions.map((q) => (
+      <div className="text-xs text-neutral-400">
+        Camera: {cameraOk ? 'active' : 'starting...'}
+      </div>
+      {questions.length > 0 && (
+        <div className="space-y-5">
           <motion.div
-            key={q.id}
+            key={questions[currentIdx].id}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
           >
-            <QuestionCard question={q} onAnswer={handleAnswer} />
+            <QuestionCard
+              question={questions[currentIdx]}
+              value={answers[questions[currentIdx].id] || ''}
+              onChange={handleAnswer}
+            />
           </motion.div>
-        ))}
-      </div>
-      <div className="flex justify-end">
-        <button className="btn-emerald" onClick={handleSubmit}>Submit</button>
-      </div>
+          <div className="flex items-center justify-between">
+            <button
+              className="btn-secondary"
+              onClick={goPrev}
+              disabled={currentIdx === 0}
+            >
+              Previous
+            </button>
+            <div className="text-sm text-neutral-400">
+              {currentIdx + 1} / {questions.length}
+            </div>
+            {currentIdx < questions.length - 1 ? (
+              <button className="btn-emerald" onClick={goNext}>
+                Next
+              </button>
+            ) : (
+              <button className="btn-emerald" onClick={handleSubmit}>
+                Submit
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
