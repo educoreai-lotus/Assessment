@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import { examApi } from '../../services/examApi';
 
 export default function BaselineExam() {
+  const [searchParams] = useSearchParams();
+  const examId = useMemo(() => {
+    const qp = searchParams.get('examId');
+    if (qp) return qp;
+    const stored = localStorage.getItem('exam_baseline_id');
+    if (stored) return stored;
+    const generated = '1001';
+    localStorage.setItem('exam_baseline_id', generated);
+    return generated;
+  }, [searchParams]);
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -14,7 +25,7 @@ export default function BaselineExam() {
     let mounted = true;
     setLoading(true);
     examApi
-      .start({ exam_type: 'baseline' })
+      .start(examId, { exam_type: 'baseline' })
       .then((data) => {
         if (!mounted) return;
         setQuestions(data?.questions || []);
@@ -24,7 +35,7 @@ export default function BaselineExam() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [examId]);
 
   const progress = useMemo(() => {
     if (!questions.length) return 0;
@@ -39,7 +50,7 @@ export default function BaselineExam() {
   async function handleSubmit() {
     try {
       setLoading(true);
-      await examApi.submit({ exam_type: 'baseline', answers });
+      await examApi.submit(examId, { exam_type: 'baseline', answers });
       alert('Submitted! Check results.');
     } catch (e) {
       setError(e?.message || 'Submit failed');

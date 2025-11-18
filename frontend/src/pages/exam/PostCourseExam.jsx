@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import QuestionCard from '../../components/QuestionCard';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import { examApi } from '../../services/examApi';
 
 export default function PostCourseExam() {
+  const [searchParams] = useSearchParams();
+  const examId = useMemo(() => {
+    const qp = searchParams.get('examId');
+    if (qp) return qp;
+    const stored = localStorage.getItem('exam_postcourse_id');
+    if (stored) return stored;
+    const generated = '2001';
+    localStorage.setItem('exam_postcourse_id', generated);
+    return generated;
+  }, [searchParams]);
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState({ course_id: '', coverage_map: {}, attempts: 0 });
   const [questions, setQuestions] = useState([]);
@@ -14,7 +25,7 @@ export default function PostCourseExam() {
     let mounted = true;
     setLoading(true);
     examApi
-      .start({ exam_type: 'postcourse' })
+      .start(examId, { exam_type: 'postcourse' })
       .then((data) => {
         if (!mounted) return;
         setMeta({
@@ -29,7 +40,7 @@ export default function PostCourseExam() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [examId]);
 
   const progress = useMemo(() => {
     if (!questions.length) return 0;
@@ -44,7 +55,7 @@ export default function PostCourseExam() {
   async function handleSubmit() {
     try {
       setLoading(true);
-      await examApi.submit({ exam_type: 'postcourse', answers });
+      await examApi.submit(examId, { exam_type: 'postcourse', answers });
       alert('Submitted! Check results.');
     } catch (e) {
       setError(e?.message || 'Submit failed');
