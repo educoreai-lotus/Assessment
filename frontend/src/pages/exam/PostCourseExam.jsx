@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
@@ -39,6 +39,7 @@ export default function PostCourseExam() {
   const [examId, setExamId] = useState(initialExamId);
   const [attemptId, setAttemptId] = useState(null);
   const [courseId, setCourseId] = useState(initialCourseId);
+  const [bootstrapReady, setBootstrapReady] = useState(false);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraOk, setCameraOk] = useState(false);
@@ -48,6 +49,7 @@ export default function PostCourseExam() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [strikes, setStrikes] = useState(0);
+  const proctoringStartedRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -100,6 +102,7 @@ export default function PostCourseExam() {
         if (!mounted) return;
         setExamId(resolvedExamId);
         setAttemptId(resolvedAttemptId);
+        setBootstrapReady(true);
       } catch (e) {
         if (!mounted) return;
         setError(e?.response?.data?.error || e?.message || 'Failed to initialize post-course exam');
@@ -274,19 +277,34 @@ export default function PostCourseExam() {
   // Camera callbacks
   async function handleCameraReady() {
     setCameraReady(true);
-    try {
-      await examApi.proctoringStart(attemptId);
-      setCameraOk(true);
-    } catch (e) {
-      setCameraOk(false);
-      setCameraError(e?.response?.data?.error || e?.message || 'Failed to activate proctoring');
-    }
   }
   function handleCameraError(message) {
     setCameraError(message || 'Camera access failed');
     setCameraReady(false);
     setCameraOk(false);
   }
+
+  // Start proctoring once when all prerequisites are ready
+  useEffect(() => {
+    if (!attemptId) return;
+    if (!cameraReady) return;
+    if (!bootstrapReady) return;
+    if (proctoringStartedRef.current) return;
+    let canceled = false;
+    (async () => {
+      try {
+        await examApi.proctoringStart(attemptId);
+        if (canceled) return;
+        proctoringStartedRef.current = true;
+        setCameraOk(true);
+      } catch (e) {
+        if (canceled) return;
+        setCameraOk(false);
+        setCameraError(e?.response?.data?.error || e?.message || 'Failed to activate proctoring');
+      }
+    })();
+    return () => { canceled = true; };
+  }, [attemptId, cameraReady, bootstrapReady]);
 
   if (loading && !attemptId) return <LoadingSpinner label="Initializing post-course exam..." />;
 

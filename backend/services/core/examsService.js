@@ -78,6 +78,8 @@ async function buildExamPackageDoc({
   expires_at_iso,
 }) {
   const doc = new ExamPackage({
+    // assessment_type explicitly persisted alongside IDs for reporting/filtering
+    assessment_type: String(exam_type || ''),
     exam_id: String(exam_id),
     attempt_id: String(attempt_id),
     user: { user_id: String(user_id), name: undefined, email: undefined },

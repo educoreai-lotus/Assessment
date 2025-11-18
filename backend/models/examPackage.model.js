@@ -46,6 +46,8 @@ const ExamPackageSchema = new Schema(
       type: Schema.Types.ObjectId,
       default: () => new mongoose.Types.ObjectId(),
     },
+    // New: explicit assessment type for the package (e.g., 'baseline', 'postcourse')
+    assessment_type: { type: String, required: false, index: true },
     exam_id: { type: String, required: true, index: true },
     attempt_id: { type: String, required: true, index: true },
     user: {
