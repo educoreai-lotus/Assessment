@@ -38,6 +38,24 @@ router.post('/:attempt_id/start_camera', proctoringController.startCamera);
  */
 router.post('/:attempt_id/focus_violation', proctoringController.reportFocusViolation);
 
+/**
+ * @openapi
+ * /api/proctoring/{attempt_id}/incident:
+ *   post:
+ *     summary: Report a generic proctoring incident for an attempt
+ *     description: Records an incident event tied to an attempt for auditing.
+ *     parameters:
+ *       - in: path
+ *         name: attempt_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Incident recorded
+ * */
+router.post('/:attempt_id/incident', proctoringController.reportIncident);
+
 module.exports = router;
 
 

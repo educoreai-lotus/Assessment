@@ -33,6 +33,7 @@ export default function Baseline() {
   const [questions, setQuestions] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
+  const [strikes, setStrikes] = useState(0);
 
   // Bootstrap: resolve user_id -> exam_id -> attempt_id
   useEffect(() => {
@@ -149,6 +150,62 @@ export default function Baseline() {
       cancelled = false;
     };
   }, [examId, attemptId, cameraReady, cameraOk]);
+
+  // Anti-cheating: three-strike system
+  useEffect(() => {
+    if (!attemptId || !examId) return;
+    let mounted = true;
+
+    function addStrike(reason) {
+      if (!mounted) return;
+      setStrikes((prev) => {
+        const next = prev + 1;
+        // log to backend
+        try {
+          http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/incident`, {
+            type: reason,
+            strike: next,
+            timestamp: new Date().toISOString(),
+          }).catch(() => {});
+        } catch {}
+        // cancel exam on 3 strikes
+        if (next >= 3) {
+          try {
+            http.post(`/api/exams/${encodeURIComponent(examId)}/cancel`, { attempt_id: attemptId }).catch(() => {});
+          } catch {}
+          navigate('/exam/cancelled');
+        }
+        return next;
+      });
+    }
+
+    const handleBlur = () => addStrike('window-blur');
+    const handleVisibility = () => {
+      try {
+        if (document.visibilityState === 'hidden') {
+          addStrike('tab-switch');
+        }
+      } catch {}
+    };
+    const handleResize = () => {
+      try {
+        if (window.outerWidth < 300 || window.outerHeight < 300) {
+          addStrike('window-minimize');
+        }
+      } catch {}
+    };
+
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [attemptId, examId, navigate]);
 
   const answeredCount = useMemo(() => {
     if (!questions.length) return 0;

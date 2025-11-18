@@ -10,6 +10,7 @@ import PostCourseExam from './pages/exam/PostCourseExam.jsx';
 import ResultsDashboard from './pages/results/ResultsDashboard.jsx';
 import BaselineResults from './pages/BaselineResults.jsx';
 import Health from './pages/dev/Health.jsx';
+import Cancelled from './pages/exam/Cancelled.jsx';
 
 const routes = [
   {
@@ -22,6 +23,7 @@ const routes = [
       { path: 'results', element: withMotion(<ResultsDashboard />) },
       { path: 'results/baseline', element: withMotion(<BaselineResults />) },
       { path: 'results/baseline/:attemptId', element: withMotion(<BaselineResults />) },
+      { path: 'exam/cancelled', element: withMotion(<Cancelled />) },
       { path: 'dev/health', element: withMotion(<Health />) },
     ],
   },
