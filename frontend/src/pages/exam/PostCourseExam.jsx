@@ -26,7 +26,10 @@ export default function PostCourseExam() {
       return qp;
     }
     const stored = localStorage.getItem('postcourse_course_id');
-    return stored || null;
+    if (stored) return stored;
+    const fallback = 'c_555';
+    localStorage.setItem('postcourse_course_id', fallback);
+    return fallback;
   }, [searchParams]);
 
   const [loading, setLoading] = useState(true);
