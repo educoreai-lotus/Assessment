@@ -1,7 +1,8 @@
 // Learning Analytics mock payloads per exact data contracts
+// Match integrationController.handleGetIntegration expected numeric types.
 exports.mockBaselineAnalytics = async () => {
   return {
-    user_id: 'u_123',
+    user_id: 123,
     exam_type: 'baseline',
     passing_grade: 70,
     final_grade: 68,
@@ -16,9 +17,9 @@ exports.mockBaselineAnalytics = async () => {
 
 exports.mockPostcourseAnalytics = async () => {
   return {
-    user_id: 'u_123',
+    user_id: 123,
     exam_type: 'postcourse',
-    course_id: 'c_789',
+    course_id: 789,
     course_name: 'Intro to JS',
     attempt_no: 2,
     passing_grade: 70,
