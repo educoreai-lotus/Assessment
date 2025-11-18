@@ -54,3 +54,5 @@ temp/
 artifacts/*.json
 artifacts/*.md
 !artifacts/ROADMAP.json
+node_modules
+**/node_modules
