@@ -83,7 +83,16 @@ export default function BaselineExam() {
         // Start exam with required attempt_id
         const data = await examApi.start(resolvedExamId, { attempt_id: attemptId });
         if (!mounted) return;
-        setQuestions(data?.questions || []);
+        const normalized = Array.isArray(data?.questions)
+          ? data.questions.map((p, idx) => ({
+              id: p?.question_id || p?.qid || p?.id || String(idx + 1),
+              type: (p?.metadata?.type || p?.type || 'mcq') === 'open' ? 'text' : (p?.metadata?.type || p?.type || 'mcq'),
+              prompt: p?.question || p?.stem || p?.prompt || '',
+              options: Array.isArray(p?.options) ? p.options : (Array.isArray(p?.choices) ? p.choices : []),
+              skill: p?.skill_name || p?.skill || p?.skill_id || 'General',
+            }))
+          : [];
+        setQuestions(normalized);
       } catch (e) {
         if (!mounted) return;
         setError(e?.response?.data?.error || e?.message || 'Failed to load exam');
