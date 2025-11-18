@@ -142,6 +142,8 @@ app.get('/health/mongo', async (req, res) => {
     // List collections in a safe, non-regex way and compute count
     const collections = await mongoose.connection.db.listCollections().toArray();
     const existingCollections = collections.map((c) => c.name);
+    const requiredCollections = ['exam_packages', 'ai_audit_trail', 'proctoring_events', 'incidents'];
+    const missingCollections = requiredCollections.filter((c) => !existingCollections.includes(c));
 
     res.json({
       ok: true,
@@ -150,6 +152,7 @@ app.get('/health/mongo', async (req, res) => {
       ping,
       collections: existingCollections.length,
       observedCollections: existingCollections,
+      missingCollections,
     });
   } catch (error) {
     console.error('Mongo health check error:', error);

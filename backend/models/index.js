@@ -5,8 +5,11 @@ const isTest = process.env.NODE_ENV === 'test';
 if (isTest) {
   module.exports = {
     ExamPackage: {
-      findOne: async () => ({
-        sort: async () => null,
+      findOne: () => ({
+        sort: () => ({
+          lean: async () => null,
+        }),
+        lean: async () => null,
       }),
       findOneAndUpdate: async () => null,
       create: async () => ({
@@ -18,9 +21,11 @@ if (isTest) {
       save: async () => ({}),
     },
     ProctoringSession: {
-      findOne: async () => null,
+      findOne: () => ({
+        lean: async () => null,
+      }),
       findOneAndUpdate: async () => null,
-      create: async () => ({}),
+      create: async () => null,
       save: async () => ({}),
     },
   };

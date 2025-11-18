@@ -64,12 +64,10 @@ exports.startExam = async (req, res, next) => {
       return res.status(403).json({ error: 'attempt_canceled' });
     }
 
-    // Enforce camera activation prior to starting (skip in tests)
-    if (process.env.NODE_ENV !== 'test') {
-      const session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
-      if (!session || session.camera_status !== 'active') {
-        return res.status(403).json({ error: 'Proctoring session not started' });
-      }
+    // Enforce camera activation prior to starting
+    const session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
+    if (!session || session.camera_status !== 'active') {
+      return res.status(403).json({ error: 'Proctoring session not started' });
     }
 
     const result = await markAttemptStarted({ attempt_id: attemptIdNum });
@@ -184,12 +182,10 @@ exports.submitExam = async (req, res, next) => {
       }
     }
 
-    // Ensure camera is still active (skip in tests)
-    if (process.env.NODE_ENV !== 'test') {
-      const session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
-      if (!session || session.camera_status !== 'active') {
-        return res.status(403).json({ error: 'Proctoring session not started' });
-      }
+    // Ensure camera is still active
+    const session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
+    if (!session || session.camera_status !== 'active') {
+      return res.status(403).json({ error: 'Proctoring session not started' });
     }
 
     const response = await submitAttempt({ attempt_id: attemptIdNum, answers });
