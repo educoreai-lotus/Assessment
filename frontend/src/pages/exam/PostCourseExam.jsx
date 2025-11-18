@@ -304,6 +304,10 @@ export default function PostCourseExam() {
 
   if (loading && !attemptId) return <LoadingSpinner label="Initializing post-course exam..." />;
 
+  useEffect(() => {
+    console.log("🔥 FRONTEND attemptId =", attemptId);
+  }, [attemptId]);
+
   return (
     <div className="container-safe py-8 space-y-6">
       <div className="flex items-center justify-between">
