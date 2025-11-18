@@ -30,6 +30,7 @@ async function getAttemptsForUser(userId) {
     [userInt]
   );
   return rows.map((r) => ({
+    exam_id: r.exam_id,
     user_id: Number(userInt),
     course_id: r.course_id != null ? Number(r.course_id) : null,
     exam_type: r.exam_type,
@@ -65,6 +66,7 @@ async function getAttemptDetail(attemptId) {
   const policy = a.policy_snapshot || {};
   const userIdNormalized = normalizeToInt(pkg?.user?.user_id);
   const base = {
+    exam_id: a.exam_id,
     user_id: userIdNormalized != null ? Number(userIdNormalized) : null,
     exam_type: a.exam_type,
     passing_grade: Number(policy?.passing_grade ?? 0),

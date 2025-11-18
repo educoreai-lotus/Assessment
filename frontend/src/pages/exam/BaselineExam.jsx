@@ -13,9 +13,7 @@ export default function BaselineExam() {
     if (qp) return qp;
     const stored = localStorage.getItem('exam_baseline_id');
     if (stored) return stored;
-    const generated = '1001';
-    localStorage.setItem('exam_baseline_id', generated);
-    return generated;
+    return null;
   }, [searchParams]);
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState([]);
@@ -40,31 +38,31 @@ export default function BaselineExam() {
         let resolvedExamId = examId;
         let attemptId = null;
 
-        // If we don't have an exam id stored, create baseline exam
-        if (!resolvedExamId) {
-          try {
-            const created = await examApi.create({ user_id: userId, exam_type: 'baseline' });
-            resolvedExamId = String(created?.exam_id ?? '');
-            attemptId = created?.attempt_id ?? null;
-            if (resolvedExamId) {
-              localStorage.setItem('exam_baseline_id', resolvedExamId);
-            }
-          } catch (err) {
-            const apiErr = err?.response?.data?.error || '';
-            // If baseline already exists for this user, fetch latest baseline attempt
-            if (apiErr === 'baseline_already_exists') {
-              const list = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
-              const baseline = Array.isArray(list) ? list.find(a => a.exam_type === 'baseline') : null;
-              if (baseline) {
-                resolvedExamId = String(baseline.exam_id);
-                attemptId = baseline.attempt_id;
+        // Always (idempotently) create baseline; fall back to existing if already created
+        try {
+          const created = await examApi.create({ user_id: userId, exam_type: 'baseline' });
+          resolvedExamId = String(created?.exam_id ?? '');
+          attemptId = created?.attempt_id ?? null;
+          if (resolvedExamId) {
+            localStorage.setItem('exam_baseline_id', resolvedExamId);
+          }
+        } catch (err) {
+          const apiErr = err?.response?.data?.error || '';
+          // If baseline already exists for this user, fetch latest baseline attempt
+          if (apiErr === 'baseline_already_exists') {
+            const list = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
+            const baseline = Array.isArray(list) ? list.find(a => a.exam_type === 'baseline') : null;
+            if (baseline) {
+              resolvedExamId = String(baseline.exam_id);
+              attemptId = baseline.attempt_id;
+              if (resolvedExamId) {
                 localStorage.setItem('exam_baseline_id', resolvedExamId);
-              } else {
-                throw err;
               }
             } else {
               throw err;
             }
+          } else {
+            throw err;
           }
         }
 
