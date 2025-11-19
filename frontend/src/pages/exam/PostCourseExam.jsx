@@ -302,11 +302,11 @@ export default function PostCourseExam() {
     return () => { canceled = true; };
   }, [attemptId, cameraReady, bootstrapReady]);
 
-  if (loading && !attemptId) return <LoadingSpinner label="Initializing post-course exam..." />;
-
   useEffect(() => {
     console.log("🔥 FRONTEND attemptId =", attemptId);
   }, [attemptId]);
+
+  if (loading && !attemptId) return <LoadingSpinner label="Initializing post-course exam..." />;
 
   return (
     <div className="container-safe py-8 space-y-6">
