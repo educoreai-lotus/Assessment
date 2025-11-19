@@ -147,6 +147,16 @@ async function buildExamPackageDoc({
 }
 
 async function createExam({ user_id, exam_type, course_id, course_name }) {
+  // Map user_id to numeric at the very beginning
+  const userStr = String(user_id);
+  const userInt = Number(userStr.replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(userInt)) {
+    return { error: "invalid_user_id" };
+  }
+  try {
+    // eslint-disable-next-line no-console
+    console.log("[TRACE][USER_ID][MAPPED]", { original: user_id, numeric: userInt });
+  } catch {}
   // Fetch upstream data via gateways with safe mocks
   let policy = {};
   let skillsPayload = null;
@@ -156,6 +166,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     // eslint-disable-next-line no-console
     console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE][BEGIN]`, {
       user_id_original: user_id,
+      user_id_numeric: userInt,
       course_id: course_id ?? null,
       env: {
         DIRECTORY_BASE_URL: !!process.env.DIRECTORY_BASE_URL,
@@ -216,17 +227,10 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
   const { normalizeSkills } = require("./skillsUtils");
 
-  // Insert exam row in PG (normalize any user_id -> integer for FK) using strict conversion
-  const userStr = String(user_id);
-  const userInt = Number(userStr.replace(/[^0-9]/g, ""));
-  if (!Number.isFinite(userInt)) {
-    return { error: "invalid_user_id" };
-  }
+  // Already converted user_id above; proceed
   try {
     // eslint-disable-next-line no-console
     console.log("[TRACE][EXAM][CREATE][USER_MAP]", { user_id_original: user_id, user_id_numeric: userInt });
-    // requested explicit user-id trace
-    console.log("[TRACE][USER_ID][MAPPED]", { original: user_id, numeric: userInt });
   } catch {}
   const courseInt = normalizeToInt(course_id); // can be null for baseline
 
