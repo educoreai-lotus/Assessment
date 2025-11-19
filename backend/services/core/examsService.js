@@ -121,7 +121,9 @@ async function buildExamPackageDoc({
         difficulty: !isCode ? String(difficulty) : undefined,
         // Strip hints everywhere; additionally strip difficulty for theoretical prompts
         prompt: sanitizeQuestionPromptForStorage(q),
-        options: Array.isArray(q?.choices) ? q.choices : [],
+        options: Array.isArray(q?.choices)
+          ? q.choices
+          : (Array.isArray(q?.prompt?.options) ? q.prompt.options : []),
         answer_key: q?.correct_answer ?? null,
         metadata: { type: type || "mcq", difficulty },
       };
@@ -497,8 +499,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
         type: q.type === 'open' ? 'open' : 'mcq',
         stem: q.stem || '',
         question: q.stem || '',
-        choices: Array.isArray(q.options) ? q.options : [],
-        correct_answer: q.correct_answer || '',
+        choices: Array.isArray(q.options) ? q.options : (Array.isArray(q.prompt?.options) ? q.prompt.options : []),
+        correct_answer: q.correct_answer || q.prompt?.correct_answer || '',
         difficulty: 'medium', // enforced policy
         topic_id: 0,
         topic_name: 'General',
@@ -518,25 +520,85 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       });
     } catch {}
   } catch (err) {
-    // Fallback to minimal internal question if OpenAI fails
-    questions = [{
+    // Fallback to theoretical mocks if OpenAI fails
+    const { buildMockQuestions } = require("../mocks/theoryMock");
+    const skillsForMocks = (() => {
+      const arr = [];
+      if (exam_type === "baseline") {
+        for (const s of (skillsArray || [])) arr.push(String(s.skill_id));
+      } else {
+        for (const it of (coverageMap || [])) {
+          for (const s of (it.skills || [])) arr.push(String(s.skill_id));
+        }
+      }
+      return Array.from(new Set(arr.filter(Boolean)));
+    })();
+    const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, questionCount) });
+    // map mocks into unified normalized structure
+    questions = mocks.map((m) => ({
+      qid: m.qid,
       type: "mcq",
-      stem: "Which statement about event loop and microtasks in JavaScript is true?",
-      question: "Which statement about event loop and microtasks in JavaScript is true?",
-      choices: [
-        "Microtasks run before rendering and before next macrotask.",
-        "Microtasks run after each macrotask batch completes.",
-        "Microtasks run after DOM updates.",
-        "Microtasks run only during async/await functions.",
-      ],
-      correct_answer: "Microtasks run before rendering and before next macrotask.",
+      skill_id: m.skill_id,
       difficulty: "medium",
-      topic_id: 0,
-      topic_name: "General",
-      humanLanguage: "en",
-      hints: ["Think about scheduling order of microtasks vs macrotasks"],
-    }];
+      question: m.prompt?.question || "",
+      stem: m.prompt?.question || "",
+      choices: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
+      correct_answer: m.prompt?.correct_answer || "",
+    }));
   }
+  // If AI returned zero items, also fallback to mocks
+  if (!Array.isArray(questions) || questions.length === 0) {
+    const { buildMockQuestions } = require("../mocks/theoryMock");
+    const skillsForMocks = (() => {
+      const arr = [];
+      if (exam_type === "baseline") {
+        for (const s of (skillsArray || [])) arr.push(String(s.skill_id));
+      } else {
+        for (const it of (coverageMap || [])) {
+          for (const s of (it.skills || [])) arr.push(String(s.skill_id));
+        }
+      }
+      return Array.from(new Set(arr.filter(Boolean)));
+    })();
+    const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, questionCount) });
+    questions = mocks.map((m) => ({
+      qid: m.qid,
+      type: "mcq",
+      skill_id: m.skill_id,
+      difficulty: "medium",
+      question: m.prompt?.question || "",
+      stem: m.prompt?.question || "",
+      choices: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
+      correct_answer: m.prompt?.correct_answer || "",
+    }));
+  }
+
+  // Theoretical validator: ensure prompt.correct_answer ∈ options
+  function validateTheoreticalQuestions(input) {
+    const out = [];
+    for (const q of input || []) {
+      const options = Array.isArray(q?.choices) ? q.choices : (Array.isArray(q?.prompt?.options) ? q.prompt.options : []);
+      const ca = q?.correct_answer || q?.prompt?.correct_answer || "";
+      let fixedCA = ca;
+      if (!Array.isArray(options) || options.length === 0) {
+        out.push(q);
+        continue;
+      }
+      if (!options.includes(ca)) {
+        fixedCA = options[0];
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[THEORY][MOCK][FIXED]', { reason: 'correct_answer_not_in_options', set_to: fixedCA });
+        } catch {}
+      }
+      out.push({
+        ...q,
+        correct_answer: fixedCA,
+      });
+    }
+    return out;
+  }
+  questions = validateTheoreticalQuestions(questions);
   if (process.env.NODE_ENV !== "test") {
     try {
       const pkg = await buildExamPackageDoc({
@@ -834,19 +896,11 @@ async function submitAttempt({ attempt_id, answers }) {
       const rawAnswer = ans.answer != null ? String(ans.answer) : "";
       const skillId = normalizeSkillIdFrom(ans, q);
       if (type === "mcq") {
-        // Find correct answer from prompt or answer_key
-        let correct = "";
-        let ok = false;
-        if (q) {
-          if ((q && q.prompt && q.prompt.correct_answer) != null) {
-            correct = String(q.prompt.correct_answer);
-          } else if (q && q.answer_key != null) {
-            correct = String(q.answer_key);
-          }
-          ok = rawAnswer === correct;
-        } else {
-          ok = false;
-        }
+        // Compare only against prompt.correct_answer
+        const correct = q && q.prompt && q.prompt.correct_answer != null
+          ? String(q.prompt.correct_answer)
+          : "";
+        const ok = rawAnswer === correct;
         graded.push({
           question_id: qid,
           skill_id: skillId,
