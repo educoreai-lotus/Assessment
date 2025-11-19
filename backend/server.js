@@ -6,6 +6,7 @@ const pool = require('./config/supabaseDB');
 const connectMongo = require('./config/mongoDB');
 const models = require('./models');
 const integrationRoutes = require('./routes/integration');
+const { resultsRouter } = require('./routes/results');
 const examsRouter = require('./routes/exams');
 const attemptsRouter = require('./routes/attempts');
 const packagesRouter = require('./routes/packages');
@@ -162,6 +163,7 @@ app.get('/health/mongo', async (req, res) => {
 
 // Mount integration endpoints EXACTLY as per integration map (no version prefix)
 app.use('/api', integrationRoutes);
+app.use('/api/results', resultsRouter);
 
 // New Assessment API v1 routers
 app.use('/api/exams', examsRouter);

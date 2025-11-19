@@ -325,7 +325,7 @@ export default function PostCourseExam() {
     let canceled = false;
     (async () => {
       try {
-        await examApi.proctoringStart(attemptId);
+        await examApi.proctoringStartForExam(examId, { attempt_id: attemptId });
         if (canceled) return;
         proctoringStartedRef.current = true;
         setCameraOk(true);
@@ -336,7 +336,7 @@ export default function PostCourseExam() {
       }
     })();
     return () => { canceled = true; };
-  }, [attemptId, cameraReady, bootstrapReady]);
+  }, [attemptId, examId, cameraReady, bootstrapReady]);
 
   useEffect(() => {
     console.log("🔥 FRONTEND attemptId =", attemptId);

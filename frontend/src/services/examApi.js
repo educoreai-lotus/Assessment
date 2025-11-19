@@ -13,6 +13,9 @@ export const examApi = {
   proctoringStart(attemptId) {
     return http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/start_camera`).then(r => r.data);
   },
+  proctoringStartForExam(examId, payload) {
+    return http.post(`/api/exams/${encodeURIComponent(examId)}/proctoring/start`, payload).then(r => r.data);
+  },
   attempt(attemptId) {
     return http.get(`/api/attempts/${encodeURIComponent(attemptId)}`).then(r => r.data);
   },

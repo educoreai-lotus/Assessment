@@ -14,6 +14,7 @@ const { createExam, markAttemptStarted, getPackageByExamId, submitAttempt } = re
 const pool = require('../config/supabaseDB');
 const { ProctoringSession, ExamPackage } = require('../models');
 const { normalizeToInt } = require("../services/core/idNormalizer");
+const proctoringController = require('./../controllers/proctoringController');
 
 exports.createExam = async (req, res, next) => {
   try {
@@ -256,6 +257,53 @@ exports.submitExam = async (req, res, next) => {
     }
 
     return res.json(codingBlock ? { ...response, coding_results: codingBlock } : response);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Start proctoring session for an exam/attempt via exams route
+exports.startProctoring = async (req, res, next) => {
+  try {
+    const { examId } = req.params;
+    const { attempt_id } = req.body || {};
+    if (!attempt_id) {
+      return res.status(400).json({ error: 'attempt_id_required' });
+    }
+
+    const attemptIdNum = normalizeToInt(attempt_id);
+    if (attemptIdNum == null) {
+      return res.status(400).json({ error: 'invalid_attempt_id' });
+    }
+
+    // In test, mimic existing behavior without hitting Postgres
+    if (process.env.NODE_ENV === 'test') {
+      await ProctoringSession.findOneAndUpdate(
+        { attempt_id: String(attemptIdNum) },
+        {
+          attempt_id: String(attemptIdNum),
+          exam_id: String(examId),
+          camera_status: 'active',
+          $setOnInsert: { start_time: new Date(), events: [] },
+        },
+        { new: true, upsert: true },
+      );
+      return res.json({ ok: true });
+    }
+
+    // For non-test, trust examId and attempt_id; create/activate session
+    await ProctoringSession.findOneAndUpdate(
+      { attempt_id: String(attemptIdNum) },
+      {
+        attempt_id: String(attemptIdNum),
+        exam_id: String(examId),
+        camera_status: 'active',
+        $setOnInsert: { start_time: new Date(), events: [] },
+      },
+      { new: true, upsert: true },
+    );
+
+    return res.json({ ok: true });
   } catch (err) {
     return next(err);
   }

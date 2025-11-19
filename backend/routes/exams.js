@@ -64,6 +64,34 @@ router.post('/:examId/start', examsController.startExam);
 
 /**
  * @openapi
+ * /api/exams/{examId}/proctoring:
+ *   post:
+ *     summary: Start proctoring session for an attempt
+ *     description: Activates the proctoring camera session for the given exam/attempt.
+ *     parameters:
+ *       - in: path
+ *         name: examId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [attempt_id]
+ *             properties:
+ *               attempt_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Proctoring session started
+ */
+router.post('/:examId/proctoring/start', examsController.startProctoring);
+
+/**
+ * @openapi
  * /api/exams/{examId}/resolve:
  *   get:
  *     summary: Resolve timing/status for latest attempt of exam
