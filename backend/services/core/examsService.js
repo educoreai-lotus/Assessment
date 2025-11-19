@@ -814,6 +814,15 @@ async function submitAttempt({ attempt_id, answers }) {
       (q) => [String(q.question_id || ""), q],
     ),
   );
+  function normalizeSkillIdFrom(answerItem, questionItem) {
+    const a = String(answerItem?.skill_id || "").trim();
+    if (a) return a;
+    const qs = String(questionItem?.skill_id || "").trim();
+    if (qs) return qs;
+    const qp = String(questionItem?.prompt?.skill_id || "").trim();
+    if (qp) return qp;
+    return "unassigned";
+  }
 
   // 5) Theoretical grading (internal)
   function gradeTheoreticalAnswers(pkg, items) {
@@ -823,16 +832,21 @@ async function submitAttempt({ attempt_id, answers }) {
       const q = qById.get(qid);
       const type = String(ans.type || "").toLowerCase();
       const rawAnswer = ans.answer != null ? String(ans.answer) : "";
-      const skillId = ans.skill_id || (q && q.skill_id) || "";
+      const skillId = normalizeSkillIdFrom(ans, q);
       if (type === "mcq") {
         // Find correct answer from prompt or answer_key
-        const correct =
-          (q && q.prompt && q.prompt.correct_answer) != null
-            ? String(q.prompt.correct_answer)
-            : q && q.answer_key != null
-              ? String(q.answer_key)
-              : "";
-        const ok = rawAnswer === correct;
+        let correct = "";
+        let ok = false;
+        if (q) {
+          if ((q && q.prompt && q.prompt.correct_answer) != null) {
+            correct = String(q.prompt.correct_answer);
+          } else if (q && q.answer_key != null) {
+            correct = String(q.answer_key);
+          }
+          ok = rawAnswer === correct;
+        } else {
+          ok = false;
+        }
         graded.push({
           question_id: qid,
           skill_id: skillId,
@@ -894,9 +908,11 @@ async function submitAttempt({ attempt_id, answers }) {
     const s = typeof r.score === "number" ? r.score : 0;
     const m = typeof r.max_score === "number" ? r.max_score : 1;
     const scaled = m > 0 ? (s / m) * 100 : 0;
+    const qItem = qById.get(String(r.question_id || ""));
+    const normSkillId = String(r.skill_id || "").trim() || normalizeSkillIdFrom({}, qItem);
     return {
       question_id: String(r.question_id || ""),
-      skill_id: String(r.skill_id || ""),
+      skill_id: normSkillId || "unassigned",
       type: "code",
       raw_answer:
         codingAnswers.find((a) => String(a.question_id) === String(r.question_id))
@@ -935,7 +951,8 @@ async function submitAttempt({ attempt_id, answers }) {
   // 8) Per-skill aggregation
   const bySkill = new Map();
   for (const item of gradedItems) {
-    const sid = String(item.skill_id || "");
+    let sid = String(item.skill_id || "").trim();
+    if (!sid) sid = "unassigned";
     if (!bySkill.has(sid)) bySkill.set(sid, []);
     bySkill.get(sid).push(item);
   }
@@ -969,12 +986,28 @@ async function submitAttempt({ attempt_id, answers }) {
   }
 
   // 9) Final grade
-  const perSkillScores = perSkill.map((s) => Number(s.score || 0));
-  const finalGrade =
+  const totalAnswersCount = allAnswers.length;
+  const nonBlankAnswersCount = allAnswers.filter((a) => {
+    const t = String(a?.type || "").toLowerCase();
+    if (t === "mcq" || t === "code") {
+      return a?.answer != null && String(a.answer).trim() !== "";
+    }
+    return String(a?.answer || "").trim().length > 0;
+  }).length;
+  let perSkillScores = perSkill.map((s) => Number(s.score || 0));
+  let finalGrade =
     perSkillScores.length > 0
       ? perSkillScores.reduce((a, b) => a + b, 0) / perSkillScores.length
       : 0;
-  const passed = finalGrade >= passing;
+  let passed = finalGrade >= passing;
+  if (totalAnswersCount === 0 || nonBlankAnswersCount === 0) {
+    for (const s of perSkill) {
+      s.score = 0;
+      s.status = "not_acquired";
+    }
+    finalGrade = 0;
+    passed = false;
+  }
   try {
     // eslint-disable-next-line no-console
     console.log('[TRACE][EXAM][SUBMIT][RESULT]', {
@@ -982,6 +1015,17 @@ async function submitAttempt({ attempt_id, answers }) {
       skills: perSkill.length,
       final_grade: Number(finalGrade),
       passed,
+    });
+  } catch {}
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[TRACE][EXAM][SUBMIT][SUMMARY]', {
+      attempt_id: attemptIdNum,
+      exam_type: examType,
+      final_grade: Number(finalGrade),
+      totalAnswersCount,
+      nonBlankAnswersCount,
+      per_skill: perSkill.map((s) => ({ skill_id: s.skill_id, score: s.score, status: s.status })),
     });
   } catch {}
 
