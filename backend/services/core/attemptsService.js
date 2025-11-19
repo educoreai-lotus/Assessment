@@ -15,9 +15,14 @@ const { ExamPackage } = require('../../models');
 const { normalizeToInt } = require('./idNormalizer');
 
 async function getAttemptsForUser(userId) {
-  // PostgreSQL queries use numeric mapped IDs; API returns original IDs
-  const userInt = normalizeToInt(userId);
-  if (userInt == null || Number.isNaN(userInt)) return [];
+  // PostgreSQL uses numeric IDs; API may send strings like "u_123"
+  const userStr = String(userId);
+  const userInt = Number(userStr.replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(userInt)) return [];
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[TRACE][USER_ID][MAPPED]', { original: userId, numeric: userInt });
+  } catch {}
   const { rows } = await pool.query(
     `
       SELECT ea.attempt_id, ea.attempt_no, ea.final_grade, ea.passed, ea.submitted_at,

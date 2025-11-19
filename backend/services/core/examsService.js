@@ -179,7 +179,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
           AND ea.status = 'submitted'
         LIMIT 1
       `,
-      [user_id],
+      [userInt],
     );
     if (completedBaseline && completedBaseline.length > 0) {
       return { error: "baseline_already_completed" };
@@ -225,6 +225,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   try {
     // eslint-disable-next-line no-console
     console.log("[TRACE][EXAM][CREATE][USER_MAP]", { user_id_original: user_id, user_id_numeric: userInt });
+    // requested explicit user-id trace
+    console.log("[TRACE][USER_ID][MAPPED]", { original: user_id, numeric: userInt });
   } catch {}
   const courseInt = normalizeToInt(course_id); // can be null for baseline
 
@@ -318,8 +320,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     const res = await pool.query(insertExamText, [exam_type, userInt, courseInt]);
     examRows = res.rows;
   } catch (e) {
-    try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: e?.message, stage: 'insert_exam' }); } catch {}
-    return { error: "exam_creation_failed" };
+    try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'invalid_user_id', message: e?.message, stage: 'insert_exam' }); } catch {}
+    return { error: "invalid_user_id" };
   }
   const examId = examRows[0].exam_id;
 
