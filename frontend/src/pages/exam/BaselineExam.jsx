@@ -112,15 +112,11 @@ export default function BaselineExam() {
           }
         }
 
-        // If attemptId still unknown, try to derive from attempts list
-        if (!attemptId) {
-          const list = await http.get(`/api/attempts/user/${encodeURIComponent(localStorage.getItem('demo_user_id') || 'u_123')}`).then(r => r.data);
-          const baseline = Array.isArray(list) ? list.find(a => String(a?.exam_id) === String(resolvedExamId)) : null;
-          attemptId = baseline?.attempt_id ?? null;
-        }
-
+        // If attemptId still unknown after create (and not baseline_already_completed fallback), stop and report
         if (!resolvedExamId || !attemptId) {
-          throw new Error('Unable to resolve exam or attempt. Please try again.');
+          console.error('Exam creation returned no attempt_id');
+          setError('Exam creation failed. Please try again.');
+          return;
         }
 
         // Enforce camera before starting the exam

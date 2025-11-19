@@ -11,16 +11,16 @@ const resultsController = require('../controllers/resultsController');
  *       - in: path
  *         name: examId
  *         required: true
-         schema:
-           type: integer
-       - in: path
-         name: attemptId
-         required: true
-         schema:
-           type: integer
-     responses:
-       200:
-         description: Result payload for the attempt
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       '200':
+ *         description: Result payload for the attempt
  */
 router.get('/:examId/:attemptId', resultsController.getResultByExamAndAttempt);
 

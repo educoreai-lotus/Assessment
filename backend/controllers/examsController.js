@@ -22,11 +22,19 @@ exports.createExam = async (req, res, next) => {
     if (!user_id || !exam_type) {
       return res.status(400).json({ error: 'user_id_and_exam_type_required' });
     }
+    // Enforce numeric user id to avoid sending "u_123" to Postgres
+    const userStr = String(user_id);
+    const userInt = Number(userStr.replace(/[^0-9]/g, ""));
+    if (!Number.isFinite(userInt)) {
+      try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'invalid_user_id', user_id_original: user_id, user_id_numeric: null }); } catch {}
+      return res.status(400).json({ error: 'invalid_user_id' });
+    }
     // [TRACE] create entry
     try {
       // eslint-disable-next-line no-console
       console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE]`, {
-        user_id,
+        user_id_original: user_id,
+        user_id_numeric: userInt,
         exam_type,
         course_id: course_id ?? null,
         course_name: course_name ?? null,
@@ -39,7 +47,7 @@ exports.createExam = async (req, res, next) => {
         },
       });
     } catch {}
-    const resp = await createExam({ user_id, exam_type, course_id, course_name });
+    const resp = await createExam({ user_id: userStr, exam_type, course_id, course_name });
     if (resp && resp.error) {
       const errorCode = String(resp.error);
       if (errorCode === 'baseline_already_completed' || errorCode === 'max_attempts_reached' || errorCode === 'retake_not_allowed') {
@@ -51,6 +59,7 @@ exports.createExam = async (req, res, next) => {
       }
       return res.status(400).json({ error: errorCode, message: resp.message || errorCode });
     }
+    try { console.log('[TRACE][EXAM][CREATE][RETURN]', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id }); } catch {}
     return res.status(201).json(resp);
   } catch (err) {
     return next(err);

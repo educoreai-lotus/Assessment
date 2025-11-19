@@ -155,7 +155,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   try {
     // eslint-disable-next-line no-console
     console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE][BEGIN]`, {
-      user_id,
+      user_id_original: user_id,
       course_id: course_id ?? null,
       env: {
         DIRECTORY_BASE_URL: !!process.env.DIRECTORY_BASE_URL,
@@ -216,12 +216,16 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
   const { normalizeSkills } = require("./skillsUtils");
 
-  // Insert exam row in PG (normalize any user_id -> integer for FK)
-  const userInt = normalizeToInt(user_id);
-  if (userInt == null) {
+  // Insert exam row in PG (normalize any user_id -> integer for FK) using strict conversion
+  const userStr = String(user_id);
+  const userInt = Number(userStr.replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(userInt)) {
     return { error: "invalid_user_id" };
   }
-  console.log("createExam user mapping:", { user_id, userInt });
+  try {
+    // eslint-disable-next-line no-console
+    console.log("[TRACE][EXAM][CREATE][USER_MAP]", { user_id_original: user_id, user_id_numeric: userInt });
+  } catch {}
   const courseInt = normalizeToInt(course_id); // can be null for baseline
 
   // Determine attempt_no based on rules
@@ -309,11 +313,14 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     VALUES ($1, $2, $3)
     RETURNING exam_id
   `;
-  const { rows: examRows } = await pool.query(insertExamText, [
-    exam_type,
-    userInt,
-    courseInt,
-  ]);
+  let examRows;
+  try {
+    const res = await pool.query(insertExamText, [exam_type, userInt, courseInt]);
+    examRows = res.rows;
+  } catch (e) {
+    try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: e?.message, stage: 'insert_exam' }); } catch {}
+    return { error: "exam_creation_failed" };
+  }
   const examId = examRows[0].exam_id;
 
   // Prepare skills and coverage map (normalize shapes)
@@ -358,13 +365,24 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   `;
   // Temporarily set package_ref after creating package
   const tempPackageRef = null;
-  const { rows: attemptRows } = await pool.query(insertAttemptText, [
-    examId,
-    attemptNo,
-    JSON.stringify(policySnapshot),
-    tempPackageRef,
-  ]);
+  let attemptRows;
+  try {
+    const resAttempt = await pool.query(insertAttemptText, [
+      examId,
+      attemptNo,
+      JSON.stringify(policySnapshot),
+      tempPackageRef,
+    ]);
+    attemptRows = resAttempt.rows;
+  } catch (e) {
+    try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: e?.message, stage: 'insert_attempt' }); } catch {}
+    return { error: "exam_creation_failed" };
+  }
   const attemptId = attemptRows[0].attempt_id;
+  if (!Number.isFinite(Number(attemptId))) {
+    try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: 'attempt_id missing', stage: 'attempt_id_validation' }); } catch {}
+    return { error: "exam_creation_failed" };
+  }
 
   // Persist timing into attempt (duration_minutes, expires_at)
   try {
@@ -518,7 +536,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       const pkg = await buildExamPackageDoc({
         exam_id: examId,
         attempt_id: attemptId,
-        user_id,
+        user_id: userStr, // keep original form in package metadata only
         exam_type,
         policy: policySnapshot,
         skills: skillsArray, // normalized objects
@@ -542,10 +560,21 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       } catch {}
       return { error: "exam_creation_failed", message: "Failed to create and persist exam package" };
     }
+    // End-to-end validation: Confirm package exists
+    try {
+      const verify = await ExamPackage.findOne({ attempt_id: String(attemptId) }).lean();
+      if (!verify) {
+        try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_incomplete', message: 'ExamPackage missing after creation' }); } catch {}
+        return { error: 'exam_incomplete' };
+      }
+    } catch (e) {
+      try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_incomplete', message: e?.message }); } catch {}
+      return { error: 'exam_incomplete' };
+    }
   }
 
   // Build API response
-  return {
+  const response = {
     exam_id: examId,
     attempt_id: attemptId,
     exam_type,
@@ -558,6 +587,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     expires_at: expiresAtIso,
     duration_seconds: Number.isFinite(durationMinutes) ? durationMinutes * 60 : null,
   };
+  try { console.log('[TRACE][EXAM][CREATE][RETURN]', { exam_id: response.exam_id, attempt_id: response.attempt_id }); } catch {}
+  return response;
 }
 
 async function markAttemptStarted({ attempt_id }) {
