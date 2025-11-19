@@ -62,17 +62,21 @@ export default function Baseline() {
           }
         } catch (err) {
           const apiErr = err?.response?.data?.error || '';
-          if (apiErr === 'baseline_already_exists') {
-            const list = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
-            const baseline = Array.isArray(list) ? list.find(a => a.exam_type === 'baseline') : null;
-            if (baseline) {
-              resolvedExamId = String(baseline.exam_id);
-              resolvedAttemptId = baseline.attempt_id;
-              if (resolvedExamId) {
-                localStorage.setItem('exam_baseline_id', resolvedExamId);
+          if (apiErr === 'baseline_already_completed') {
+            try {
+              const attemptsResp = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`);
+              const attempts = attemptsResp?.data || [];
+              const baselineAttempt = attempts.find(a => a.exam_type === 'baseline' && a.submitted_at);
+              console.log("Baseline existing attempt:", baselineAttempt);
+              if (!baselineAttempt) {
+                setError('baseline_exists_but_not_found');
+                return;
               }
-            } else {
-              throw err;
+              navigate(`/results/baseline/${encodeURIComponent(baselineAttempt.attempt_id)}`);
+              return;
+            } catch {
+              setError('baseline_exists_but_not_found');
+              return;
             }
           } else {
             throw err;
