@@ -46,13 +46,18 @@ exports.startExam = async (req, res, next) => {
 
     // Block if attempt time expired
     const { rows: expRows } = await pool.query(
-      `SELECT expires_at, duration_minutes, status FROM exam_attempts WHERE attempt_id = $1`,
+      `SELECT expires_at, duration_minutes, started_at, status FROM exam_attempts WHERE attempt_id = $1`,
       [attemptIdNum],
     ).catch(() => ({ rows: [] }));
     const expAt = expRows?.[0]?.expires_at ? new Date(expRows[0].expires_at) : null;
     if (expAt && new Date() > expAt) {
-      return res.status(403).json({ error: 'exam_time_expired' });
+      return res.status(403).json({ error: 'exam_time_expired', status: 'expired', expires_at: expAt.toISOString() });
     }
+    const startedAtVal = expRows?.[0]?.started_at ? new Date(expRows[0].started_at).toISOString() : null;
+    const durationSecondsVal =
+      Number.isFinite(Number(expRows?.[0]?.duration_minutes))
+        ? Number(expRows[0].duration_minutes) * 60
+        : null;
 
     // Block if attempt was canceled
     const { rows: statusRows } = await pool.query(
@@ -149,6 +154,8 @@ exports.startExam = async (req, res, next) => {
       coding_questions: Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : [],
       time_allocated_minutes: pkg?.metadata?.time_allocated_minutes ?? null,
       expires_at: pkg?.metadata?.expires_at ?? null,
+      started_at: startedAtVal,
+      duration_seconds: durationSecondsVal,
       camera_required: true,
     });
   } catch (err) {
@@ -249,6 +256,44 @@ exports.submitExam = async (req, res, next) => {
     }
 
     return res.json(codingBlock ? { ...response, coding_results: codingBlock } : response);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+exports.resolveExam = async (req, res, next) => {
+  try {
+    const { examId } = req.params;
+    const examIdNum = normalizeToInt(examId);
+    if (examIdNum == null) {
+      return res.status(400).json({ error: 'invalid_exam_id' });
+    }
+    const { rows } = await pool
+      .query(
+        `SELECT attempt_id, attempt_no, started_at, expires_at, duration_minutes, status
+         FROM exam_attempts
+         WHERE exam_id = $1
+         ORDER BY attempt_no DESC
+         LIMIT 1`,
+        [examIdNum],
+      )
+      .catch(() => ({ rows: [] }));
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'attempt_not_found' });
+    }
+    const a = rows[0];
+    const expAt = a.expires_at ? new Date(a.expires_at) : null;
+    const isExpired = expAt ? new Date() > expAt : false;
+    const durationSeconds =
+      Number.isFinite(Number(a.duration_minutes)) ? Number(a.duration_minutes) * 60 : null;
+    return res.json({
+      exam_id: Number(examIdNum),
+      attempt_id: Number(a.attempt_id),
+      started_at: a.started_at ? new Date(a.started_at).toISOString() : null,
+      expires_at: expAt ? expAt.toISOString() : null,
+      duration_seconds: durationSeconds,
+      status: isExpired ? 'expired' : (a.status || 'active'),
+    });
   } catch (err) {
     return next(err);
   }

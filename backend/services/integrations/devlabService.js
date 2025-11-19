@@ -1,5 +1,6 @@
 // Phase 08.2 – Build coding questions using unified envelope via gateway
 const devlabGateway = require('../gateways/devlabGateway');
+const { generateTheoreticalQuestions, validateQuestion } = require('../gateways/aiGateway');
 
 exports.buildCodingQuestionsForExam = async ({
   amount,
@@ -170,7 +171,71 @@ exports.handleInbound = async (payload, responseTemplate) => {
 		typeof responseTemplate === 'object' && responseTemplate !== null
 			? responseTemplate
 			: {};
-	return { ...resp };
+
+  // Expect shape: { action: 'generateTheoretical', skill_id, num_questions }
+  try {
+    const action = String(payload?.action || '').toLowerCase();
+    if (action !== 'generatetheoretical' && action !== 'generate_theoretical') {
+      return { ...resp };
+    }
+    const skillId = String(payload?.skill_id || 'general');
+    const nRaw = Number(payload?.num_questions || 1);
+    const n = Number.isFinite(nRaw) && nRaw > 0 ? Math.min(nRaw, 20) : 1;
+
+    // Difficulty pattern
+    let difficulties = [];
+    if (n === 1) difficulties = ['medium'];
+    else if (n === 2) difficulties = ['easy', 'medium'];
+    else if (n === 3) difficulties = ['easy', 'medium', 'hard'];
+    else {
+      difficulties = ['easy', ...Array.from({ length: n - 2 }).map(() => 'medium'), 'hard'];
+    }
+
+    const items = difficulties.map((d, idx) => ({
+      skill_id: skillId,
+      difficulty: d,
+      humanLanguage: 'en',
+      // let AI choose type randomly, but nudge by alternating
+      type: idx % 2 === 0 ? 'mcq' : 'open',
+    }));
+
+    let generated = [];
+    try {
+      generated = await generateTheoreticalQuestions({ items });
+    } catch (err) {
+      // fallback mock generation
+      generated = items.map((it, i) => ({
+        qid: `devlab_theory_${i + 1}`,
+        type: i % 2 === 0 ? 'mcq' : 'open',
+        stem: i % 2 === 0
+          ? `Which is true about ${it.skill_id}?`
+          : `Explain the concept related to ${it.skill_id}.`,
+        skill_id: it.skill_id,
+        difficulty: it.difficulty,
+        options: i % 2 === 0 ? ['A', 'B', 'C', 'D'] : undefined,
+        correct_answer: i % 2 === 0 ? 'A' : '',
+        explanation: 'Auto-generated mock explanation.',
+        hint: 'Think about the core idea without revealing the answer.',
+      }));
+    }
+
+    // Validate (best-effort)
+    const withValidation = [];
+    for (const q of generated) {
+      try {
+        const v = await validateQuestion({ question: q });
+        withValidation.push({ ...q, _validation: v });
+      } catch {
+        withValidation.push({ ...q, _validation: { valid: false, reasons: ['validation_failed'] } });
+      }
+    }
+
+    // Normalize to response expected by DevLab theoretical exchange:
+    // Each question includes: qid, type, stem, skill_id, difficulty, options?, correct_answer, explanation, hint
+    return { ...resp, questions: withValidation };
+  } catch {
+    return { ...resp, questions: [] };
+  }
 };
 
 

@@ -50,6 +50,8 @@ export default function PostCourseExam() {
   const [answers, setAnswers] = useState({});
   const [strikes, setStrikes] = useState(0);
   const proctoringStartedRef = useRef(false);
+  const [expiresAtIso, setExpiresAtIso] = useState(null);
+  const [remainingSec, setRemainingSec] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -145,6 +147,16 @@ export default function PostCourseExam() {
         setQuestions(normalized);
         setCurrentIdx(0);
         setAnswers({});
+        // Timer fields
+        if (data?.expires_at) {
+          setExpiresAtIso(String(data.expires_at));
+          const now = Date.now();
+          const exp = new Date(String(data.expires_at)).getTime();
+          const diff = Math.max(0, Math.floor((exp - now) / 1000));
+          setRemainingSec(Number.isFinite(diff) ? diff : null);
+        } else if (Number.isFinite(Number(data?.duration_seconds))) {
+          setRemainingSec(Number(data.duration_seconds));
+        }
       } catch (e) {
         const apiErr = e?.response?.data?.error || e?.message || '';
         if (apiErr === 'max_attempts_reached') {
@@ -169,6 +181,30 @@ export default function PostCourseExam() {
     startIfReady();
     return () => { cancelled = false; };
   }, [examId, attemptId, cameraReady, cameraOk, navigate]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!Number.isFinite(remainingSec) || remainingSec == null) return;
+    let cancelled = false;
+    const id = setInterval(() => {
+      if (cancelled) return;
+      setRemainingSec((s) => {
+        if (s == null) return s;
+        const next = s - 1;
+        if (next <= 0) {
+          clearInterval(id);
+          // Auto-submit or block
+          handleSubmit().catch(() => {});
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [remainingSec]);
 
   useEffect(() => {
     if (!attemptId || !examId) return;
@@ -315,6 +351,11 @@ export default function PostCourseExam() {
         <div className="flex items-center gap-4">
           <div className="text-xs text-neutral-400">
             Camera: {cameraReady && cameraOk ? 'active' : (cameraError ? 'error' : 'starting...')}
+          </div>
+          <div className="px-3 py-1 rounded-md bg-emerald-900/50 border border-emerald-700 text-emerald-200 font-mono">
+            {Number.isFinite(remainingSec) && remainingSec != null
+              ? new Date(remainingSec * 1000).toISOString().substr(11, 8)
+              : '--:--:--'}
           </div>
           {attemptId && (
             <div className="w-56">

@@ -28,6 +28,8 @@ export default function BaselineExam() {
   const [startingCamera, setStartingCamera] = useState(false);
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const liveStreamRef = useRef(null);
+  const [expiresAtIso, setExpiresAtIso] = useState(null);
+  const [remainingSec, setRemainingSec] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -155,6 +157,16 @@ export default function BaselineExam() {
           : [];
         setQuestions(normalized);
         setAttemptId(attemptId);
+        // Timer fields
+        if (data?.expires_at) {
+          setExpiresAtIso(String(data.expires_at));
+          const now = Date.now();
+          const exp = new Date(String(data.expires_at)).getTime();
+          const diff = Math.max(0, Math.floor((exp - now) / 1000));
+          setRemainingSec(Number.isFinite(diff) ? diff : null);
+        } else if (Number.isFinite(Number(data?.duration_seconds))) {
+          setRemainingSec(Number(data.duration_seconds));
+        }
       } catch (e) {
         if (!mounted) return;
         setError(e?.response?.data?.error || e?.message || 'Failed to load exam');
@@ -178,6 +190,30 @@ export default function BaselineExam() {
       } catch {}
     };
   }, [examId]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!Number.isFinite(remainingSec) || remainingSec == null) return;
+    let cancelled = false;
+    const id = setInterval(() => {
+      if (cancelled) return;
+      setRemainingSec((s) => {
+        if (s == null) return s;
+        const next = s - 1;
+        if (next <= 0) {
+          clearInterval(id);
+          // Auto-submit or block
+          handleSubmit().catch(() => {});
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [remainingSec]);
 
   const progress = useMemo(() => {
     if (!questions.length) return 0;
@@ -222,7 +258,14 @@ export default function BaselineExam() {
     <div className="container-safe py-8 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Baseline Exam</h2>
-        <div className="text-sm text-neutral-300">Progress: {progress}%</div>
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-neutral-300">Progress: {progress}%</div>
+          <div className="px-3 py-1 rounded-md bg-emerald-900/50 border border-emerald-700 text-emerald-200 font-mono">
+            {Number.isFinite(remainingSec) && remainingSec != null
+              ? new Date(remainingSec * 1000).toISOString().substr(11, 8)
+              : '--:--:--'}
+          </div>
+        </div>
       </div>
       {error && (
         <div className="rounded-xl border border-red-900 bg-red-950/60 text-red-200 p-3">

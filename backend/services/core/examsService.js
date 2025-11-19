@@ -167,49 +167,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     throw new Error("invalid_exam_type");
   }
 
-  // Optional questions (DevLab) – coding handled via new integration below
-  const theoreticalReq = {
-    exam_id: "temp",
-    attempt_id: "temp",
-    difficulty: "hard",
-    question: {
-      type: "mcq",
-      // Phase 08.1 – carry DevLab theoretical metadata into question object
-      // Defaults used to avoid breaking existing flows
-      topic_id: 0,
-      topic_name: "General",
-      humanLanguage: "en",
-      stem: "Which statement about event loop and microtasks in JavaScript is true?",
-      choices: [
-        "Microtasks run before rendering and before next macrotask.",
-        "Microtasks run after each macrotask batch completes.",
-        "Microtasks run after DOM updates.",
-        "Microtasks run only during async/await functions.",
-      ],
-      correct_answer:
-        "Microtasks run before rendering and before next macrotask.",
-      hints: [
-        "Hint 1: Think about microtasks and macrotasks scheduling order.",
-        "Hint 2: Microtasks often come from Promises.",
-        "Hint 3: They execute before the next rendering phase.",
-      ],
-    },
-  };
-  // Phase 08.1 – internal theoretical builder; no external DevLab validation
-  const theoreticalResp = { status: "accepted", mode: "internal" };
-  // Log AI audit if available (skip in tests to avoid Mongo writes)
-  if (process.env.NODE_ENV !== "test") {
-    try {
-      await AiAuditTrail.create({
-        attempt_id: "pending",
-        event_type: "prompt",
-        model: { provider: "devlab", name: "validator", version: "v1" },
-        prompt: theoreticalReq,
-        response: theoreticalResp,
-        status: "success",
-      });
-    } catch {}
-  }
+  // Phase: Replace theoretical mocks with REAL OpenAI generation
+  const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
 
   // Insert exam row in PG (normalize any user_id -> integer for FK)
   const userInt = normalizeToInt(user_id);
@@ -229,6 +188,55 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       return { error: "baseline_already_exists" };
     }
   }
+
+  // Smart Retake Logic (pre-filter skills/coverage by failed ones from last completed attempt)
+  try {
+    const { selectFailedSkillIds } = require("./retakeUtils");
+    const { rows: lastRows } = await pool.query(
+      `
+        SELECT ea.attempt_id AS last_attempt_id, ea.exam_id AS last_exam_id, ea.submitted_at
+        FROM exam_attempts ea
+        JOIN exams e ON e.exam_id = ea.exam_id
+        WHERE e.user_id = $1 AND e.exam_type = $2 AND ea.submitted_at IS NOT NULL
+        ORDER BY ea.submitted_at DESC
+        LIMIT 1
+      `,
+      [userInt, exam_type],
+    );
+    if (Array.isArray(lastRows) && lastRows.length > 0) {
+      const lastAttemptId = lastRows[0].last_attempt_id;
+      const { rows: skillRows } = await pool.query(
+        `SELECT skill_id, skill_name, score, status FROM attempt_skills WHERE attempt_id = $1`,
+        [lastAttemptId],
+      );
+      const passingGrade = Number((policy || {})?.passing_grade ?? 70);
+      const failedSkillIds = selectFailedSkillIds(skillRows || [], passingGrade);
+      // If none failed -> passed previously → no retake allowed
+      if (failedSkillIds.size === 0) {
+        return { error: "retake_not_allowed" };
+      }
+      // Narrow future generation to failed skills only
+      if (exam_type === "baseline") {
+        const baseSkills = Array.isArray(skillsPayload?.skills) ? skillsPayload.skills : [];
+        const filtered = baseSkills.filter((s) => {
+          const sid = String(s?.skill_id || s?.id || s?.name || '').trim();
+          return sid && failedSkillIds.has(sid);
+        });
+        skillsPayload = { ...(skillsPayload || {}), skills: filtered.length ? filtered : baseSkills };
+      } else if (exam_type === "postcourse") {
+        const mapArray = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
+        const filteredMap = mapArray.map((item) => {
+          const arr = Array.isArray(item?.skills) ? item.skills : [];
+          const onlyFailed = arr.filter((sk) => {
+            const sid = String(sk?.skill_id || sk?.id || sk?.name || '').trim();
+            return sid && failedSkillIds.has(sid);
+          });
+          return { ...item, skills: onlyFailed };
+        }).filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
+        coveragePayload = { ...(coveragePayload || {}), coverage_map: filteredMap.length ? filteredMap : mapArray };
+      }
+    }
+  } catch {}
 
   const insertExamText = `
     INSERT INTO exams (exam_type, user_id, course_id)
@@ -329,10 +337,86 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       difficulty: "medium",
     });
 
-  const questions = [
-    // include theoretical as a "question" prompt only (coding stored separately)
-    theoreticalReq.question,
-  ];
+  // Generate theoretical questions with medium difficulty (fixed), mixed types
+  let questions = [];
+  try {
+    const sourceSkills = exam_type === "baseline"
+      ? (Array.isArray(skillsArray) ? skillsArray.map((s) => s?.skill_id || s?.id || s?.name || 'general') : [])
+      : (Array.isArray(coverageMap)
+          ? coverageMap.flatMap((m) =>
+              Array.isArray(m?.skills) ? m.skills.map((s) => s?.skill_id || s?.id || s?.name || 'general') : [],
+            )
+          : []);
+    const uniqueSkills = Array.from(new Set(sourceSkills.map(String)));
+    const items = [];
+    for (let i = 0; i < questionCount; i += 1) {
+      const skill_id = uniqueSkills[i % Math.max(uniqueSkills.length, 1)] || 'general';
+      // mix types pseudo-random: alternate mcq/open
+      const type = i % 2 === 0 ? 'mcq' : 'open';
+      items.push({ skill_id, difficulty: 'medium', humanLanguage: 'en', type });
+    }
+    const generated = await generateTheoreticalQuestions({ items });
+
+    // AI validation per question (non-blocking if fails)
+    const validated = [];
+    for (const q of generated) {
+      let validation = { valid: true, reasons: [] };
+      try {
+        validation = await validateQuestion({ question: q });
+      } catch (e) {
+        validation = { valid: false, reasons: ['validation_call_failed'] };
+      }
+      if (process.env.NODE_ENV !== "test") {
+        try {
+          await AiAuditTrail.create({
+            exam_id: String(examId),
+            attempt_id: String(attemptId),
+            event_type: "prompt",
+            model: { provider: "openai", name: process.env.AI_MODEL || "gpt-4o-mini", version: "v1" },
+            prompt: { action: "validate_question", question: q },
+            response: validation,
+            status: validation.valid ? "success" : "failure",
+          });
+        } catch {}
+      }
+      // Map to our theoretical question input shape
+      const hints = q?.hint ? [String(q.hint)] : undefined;
+      const normalized = {
+        type: q.type === 'open' ? 'open' : 'mcq',
+        stem: q.stem || '',
+        question: q.stem || '',
+        choices: Array.isArray(q.options) ? q.options : [],
+        correct_answer: q.correct_answer || '',
+        difficulty: 'medium', // enforced policy
+        topic_id: 0,
+        topic_name: 'General',
+        humanLanguage: 'en',
+        hints,
+        skill_id: q.skill_id || undefined,
+      };
+      validated.push(normalized);
+    }
+    questions = validated;
+  } catch (err) {
+    // Fallback to minimal internal question if OpenAI fails
+    questions = [{
+      type: "mcq",
+      stem: "Which statement about event loop and microtasks in JavaScript is true?",
+      question: "Which statement about event loop and microtasks in JavaScript is true?",
+      choices: [
+        "Microtasks run before rendering and before next macrotask.",
+        "Microtasks run after each macrotask batch completes.",
+        "Microtasks run after DOM updates.",
+        "Microtasks run only during async/await functions.",
+      ],
+      correct_answer: "Microtasks run before rendering and before next macrotask.",
+      difficulty: "medium",
+      topic_id: 0,
+      topic_name: "General",
+      humanLanguage: "en",
+      hints: ["Think about scheduling order of microtasks vs macrotasks"],
+    }];
+  }
   if (process.env.NODE_ENV !== "test") {
     const pkg = await buildExamPackageDoc({
       exam_id: examId,
@@ -366,6 +450,9 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     passing_grade: policySnapshot?.passing_grade ?? null,
     max_attempts: policySnapshot?.max_attempts ?? null,
     policy_snapshot: policySnapshot,
+    started_at: null,
+    expires_at: expiresAtIso,
+    duration_seconds: Number.isFinite(durationMinutes) ? durationMinutes * 60 : null,
   };
 }
 

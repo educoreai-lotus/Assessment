@@ -64,6 +64,23 @@ router.post('/:examId/start', examsController.startExam);
 
 /**
  * @openapi
+ * /api/exams/{examId}/resolve:
+ *   get:
+ *     summary: Resolve timing/status for latest attempt of exam
+ *     parameters:
+ *       - in: path
+ *         name: examId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Resolved timing/status
+ */
+router.get('/:examId/resolve', examsController.resolveExam);
+
+/**
+ * @openapi
  * /api/exams/{examId}/submit:
  *   post:
  *     summary: Submit an exam attempt
