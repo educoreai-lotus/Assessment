@@ -8,6 +8,11 @@ exports.startCamera = async (req, res, next) => {
     if (!attempt_id) {
       return res.status(400).json({ error: 'attempt_id_required' });
     }
+    // [TRACE] proctoring start (attempt-only)
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][PROCTORING][START_CAMERA]', { attempt_id });
+    } catch {}
 
     // Allow activation without Postgres in test environment
     if (process.env.NODE_ENV === 'test') {

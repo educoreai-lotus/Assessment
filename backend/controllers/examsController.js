@@ -10,7 +10,7 @@
 // - zero prefix collisions
 // - correct grading and attempt lookup
 
-const { createExam, markAttemptStarted, getPackageByExamId, submitAttempt } = require('../services/core/examsService');
+const { createExam, markAttemptStarted, getPackageByExamId, getPackageByAttemptId, submitAttempt } = require('../services/core/examsService');
 const pool = require('../config/supabaseDB');
 const { ProctoringSession, ExamPackage } = require('../models');
 const { normalizeToInt } = require("../services/core/idNormalizer");
@@ -22,12 +22,34 @@ exports.createExam = async (req, res, next) => {
     if (!user_id || !exam_type) {
       return res.status(400).json({ error: 'user_id_and_exam_type_required' });
     }
+    // [TRACE] create entry
+    try {
+      // eslint-disable-next-line no-console
+      console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE]`, {
+        user_id,
+        exam_type,
+        course_id: course_id ?? null,
+        course_name: course_name ?? null,
+        env: {
+          DIRECTORY_BASE_URL: !!process.env.DIRECTORY_BASE_URL,
+          SKILLS_ENGINE_BASE_URL: !!process.env.SKILLS_ENGINE_BASE_URL,
+          COURSE_BUILDER_BASE_URL: !!process.env.COURSE_BUILDER_BASE_URL,
+          INTEGRATION_DEVLAB_DATA_REQUEST_URL: !!process.env.INTEGRATION_DEVLAB_DATA_REQUEST_URL,
+          OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
+        },
+      });
+    } catch {}
     const resp = await createExam({ user_id, exam_type, course_id, course_name });
     if (resp && resp.error) {
-      if (resp.error === 'baseline_already_completed' || resp.error === 'max_attempts_reached') {
-        return res.status(403).json(resp);
+      const errorCode = String(resp.error);
+      if (errorCode === 'baseline_already_completed' || errorCode === 'max_attempts_reached' || errorCode === 'retake_not_allowed') {
+        return res.status(403).json({ error: errorCode, message: resp.message || errorCode });
       }
-      return res.status(400).json(resp);
+      if (errorCode === 'exam_creation_failed') {
+        try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error_code: errorCode, user_id, exam_type, course_id }); } catch {}
+        return res.status(500).json({ error: errorCode, message: resp.message || 'Failed to create exam' });
+      }
+      return res.status(400).json({ error: errorCode, message: resp.message || errorCode });
     }
     return res.status(201).json(resp);
   } catch (err) {
@@ -39,49 +61,64 @@ exports.startExam = async (req, res, next) => {
   try {
     const { examId } = req.params;
     const { attempt_id } = req.body || {};
-    if (!attempt_id) {
-      return res.status(400).json({ error: 'attempt_id_required' });
-    }
+    // [TRACE] start entry
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][EXAM][START]', { examId: Number(examId), attempt_id });
+    } catch {}
 
+    // Validate and parse IDs
+    const examIdNum = normalizeToInt(examId);
     const attemptIdNum = normalizeToInt(attempt_id);
-    if (attemptIdNum == null) {
-      return res.status(400).json({ error: "invalid_attempt_id" });
+    if (attemptIdNum == null || examIdNum == null || Number(examIdNum) <= 0 || Number(attemptIdNum) <= 0) {
+      try { console.log('[TRACE][EXAM][START][ERROR]', { error: 'invalid_exam_or_attempt_id', exam_id: examId, attempt_id }); } catch {}
+      return res.status(400).json({ error: 'invalid_exam_or_attempt_id', message: 'Provide valid positive integer exam_id and attempt_id' });
     }
 
-    // Block if attempt time expired
-    const { rows: expRows } = await pool.query(
-      `SELECT expires_at, duration_minutes, started_at, status FROM exam_attempts WHERE attempt_id = $1`,
+    // Load attempt and basic validations (time, cancel, mismatch)
+    const { rows: attemptRows } = await pool.query(
+      `SELECT attempt_id, exam_id, status, expires_at, started_at, duration_minutes FROM exam_attempts WHERE attempt_id = $1`,
       [attemptIdNum],
     ).catch(() => ({ rows: [] }));
-    const expAt = expRows?.[0]?.expires_at ? new Date(expRows[0].expires_at) : null;
+    const attRow = attemptRows?.[0] || null;
+    if (!attRow) {
+      try { console.log('[TRACE][EXAM][START][NOT_FOUND]', { attempt_id: attemptIdNum }); } catch {}
+      return res.status(404).json({ error: 'attempt_not_found', message: 'Attempt not found' });
+    }
+    if (Number(attRow.exam_id) !== Number(examIdNum)) {
+      try { console.log('[TRACE][EXAM][START][MISMATCH]', { exam_id: examIdNum, attempt_exam_id: attRow.exam_id, attempt_id: attemptIdNum }); } catch {}
+      return res.status(400).json({ error: 'attempt_exam_mismatch', message: 'Attempt does not belong to provided exam_id' });
+    }
+    const expAt = attRow?.expires_at ? new Date(attRow.expires_at) : null;
     if (expAt && new Date() > expAt) {
-      return res.status(403).json({ error: 'exam_time_expired', status: 'expired', expires_at: expAt.toISOString() });
+      return res.status(403).json({ error: 'exam_time_expired', message: 'Exam time expired', status: 'expired', expires_at: expAt.toISOString() });
     }
-    const startedAtVal = expRows?.[0]?.started_at ? new Date(expRows[0].started_at).toISOString() : null;
+    const startedAtVal = attRow?.started_at ? new Date(attRow.started_at).toISOString() : null;
     const durationSecondsVal =
-      Number.isFinite(Number(expRows?.[0]?.duration_minutes))
-        ? Number(expRows[0].duration_minutes) * 60
+      Number.isFinite(Number(attRow?.duration_minutes))
+        ? Number(attRow.duration_minutes) * 60
         : null;
-
-    // Block if attempt was canceled
-    const { rows: statusRows } = await pool.query(
-      `SELECT status FROM exam_attempts WHERE attempt_id = $1`,
-      [attemptIdNum],
-    ).catch(() => ({ rows: [] }));
-    const statusVal = statusRows?.[0]?.status || null;
-    if (statusVal === 'canceled') {
-      return res.status(403).json({ error: 'attempt_canceled' });
+    if ((attRow?.status || null) === 'canceled') {
+      return res.status(403).json({ error: 'attempt_canceled', message: 'Attempt was canceled' });
     }
 
     // Enforce camera activation prior to starting
-    const session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
-    if (!session || session.camera_status !== 'active') {
-      return res.status(403).json({ error: 'Proctoring session not started' });
+    let session = null;
+    try {
+      session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
+    } catch (e) {
+      try { console.log('[TRACE][EXAM][START][PROCTORING][ERROR]', { error: 'proctoring_lookup_failed', attempt_id: attemptIdNum, message: e?.message }); } catch {}
+      return res.status(500).json({ error: 'proctoring_lookup_failed', message: 'Failed to verify proctoring session' });
     }
+    if (!session || session.camera_status !== 'active') {
+      try { console.log('[TRACE][EXAM][START][PROCTORING]', { ok: false, attempt_id: attemptIdNum, camera_status: session?.camera_status || null }); } catch {}
+      return res.status(403).json({ error: 'proctoring_not_started', message: 'Proctoring session not started' });
+    }
+    try { console.log('[TRACE][EXAM][START][PROCTORING]', { ok: true, attempt_id: attemptIdNum }); } catch {}
 
     const result = await markAttemptStarted({ attempt_id: attemptIdNum });
     if (result && result.error) {
-      return res.status(400).json(result);
+      return res.status(400).json({ error: result.error, message: result.message || result.error });
     }
 
     // Set ExamPackage.metadata.start_time = now (skip in tests)
@@ -98,10 +135,11 @@ exports.startExam = async (req, res, next) => {
     let pkg;
     if (process.env.NODE_ENV === 'test') {
       // Prefer real package if available (e.g., when running e2e against real Mongo)
-      pkg = await getPackageByExamId(examId);
+      pkg = await getPackageByAttemptId(String(attemptIdNum));
+      if (!pkg) pkg = await getPackageByExamId(examIdNum);
       if (!pkg) {
         pkg = {
-          exam_id: String(examId),
+          exam_id: String(examIdNum),
           attempt_id: String(attemptIdNum),
           metadata: {
             exam_type: null,
@@ -116,11 +154,39 @@ exports.startExam = async (req, res, next) => {
         };
       }
     } else {
-      pkg = await getPackageByExamId(examId);
+      pkg = await getPackageByAttemptId(String(attemptIdNum));
+      if (!pkg) pkg = await getPackageByExamId(examIdNum);
       if (!pkg) {
-        return res.status(404).json({ error: 'package_not_found' });
+        try { console.log('[TRACE][EXAM][START][PACKAGE_NOT_FOUND]', { exam_id: examIdNum, attempt_id: attemptIdNum }); } catch {}
+        return res.status(500).json({ error: 'exam_package_not_found', message: 'Exam package not found' });
       }
     }
+    if (!Array.isArray(pkg?.questions)) {
+      try { console.log('[TRACE][EXAM][START][PACKAGE_INVALID]', { exam_id: examIdNum, attempt_id: attemptIdNum }); } catch {}
+      return res.status(500).json({ error: 'invalid_exam_package', message: 'Invalid exam package' });
+    }
+
+    // Defensive question shaping
+    const safeMapQuestions = (arr) => {
+      const out = [];
+      for (const q of Array.isArray(arr) ? arr : []) {
+        if (!q || typeof q !== 'object') {
+          try { console.log('[TRACE][EXAM][START][QUESTION_SKIPPED]', { reason: 'non_object', exam_id: examIdNum, attempt_id: attemptIdNum }); } catch {}
+          continue;
+        }
+        const metadata = (q && q.metadata && typeof q.metadata === 'object') ? q.metadata : {};
+        const prompt = (q && q.prompt && typeof q.prompt === 'object') ? q.prompt : (typeof q?.prompt === 'string' ? { question: q.prompt } : {});
+        const options = Array.isArray(q?.options) ? q.options : [];
+        out.push({
+          question_id: q?.question_id || null,
+          skill_id: q?.skill_id || (prompt && prompt.skill_id) || null,
+          prompt,
+          options,
+          metadata,
+        });
+      }
+      return out;
+    };
     const removeHintsDeep = (input) => {
       if (input == null) return input;
       if (Array.isArray(input)) return input.map((i) => removeHintsDeep(i));
@@ -136,6 +202,13 @@ exports.startExam = async (req, res, next) => {
     };
     const userIntFromPkg = normalizeToInt(pkg?.user?.user_id);
     const courseIntFromPkg = normalizeToInt(pkg?.metadata?.course_id);
+    const questionsForResponse = safeMapQuestions(pkg?.questions).map((q) => ({
+      question_id: q.question_id,
+      skill_id: q.skill_id,
+      prompt: removeHintsDeep(q.prompt),
+      options: Array.isArray(q.options) ? q.options : [],
+      metadata: q.metadata || {},
+    }));
     return res.json({
       exam_id: Number(pkg.exam_id),
       attempt_id: Number(pkg.attempt_id),
@@ -145,16 +218,7 @@ exports.startExam = async (req, res, next) => {
       policy: pkg?.metadata?.policy || {},
       skills: pkg?.metadata?.skills || [],
       coverage_map: pkg?.coverage_map || [],
-      questions:
-        Array.isArray(pkg?.questions)
-          ? pkg.questions.map((q) => ({
-              question_id: q?.question_id || null,
-              skill_id: q?.skill_id || null,
-              prompt: removeHintsDeep(q?.prompt),
-              options: Array.isArray(q?.options) ? q.options : [],
-              metadata: q?.metadata || {},
-            }))
-          : [],
+      questions: questionsForResponse,
       coding_questions: Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : [],
       time_allocated_minutes: pkg?.metadata?.time_allocated_minutes ?? null,
       expires_at: pkg?.metadata?.expires_at ?? null,
@@ -163,7 +227,8 @@ exports.startExam = async (req, res, next) => {
       camera_required: true,
     });
   } catch (err) {
-    return next(err);
+    try { console.log('[TRACE][EXAM][START][ERROR]', { error: 'unexpected_error', message: err?.message }); } catch {}
+    return res.status(500).json({ error: 'start_internal_error', message: 'Unexpected error while starting exam' });
   }
 };
 
@@ -171,15 +236,24 @@ exports.submitExam = async (req, res, next) => {
   try {
     const { examId } = req.params;
     const { attempt_id, answers } = req.body || {};
+    // [TRACE] submit entry
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][EXAM][SUBMIT]', {
+        examId: Number(examId),
+        attempt_id,
+        answers_count: Array.isArray(answers) ? answers.length : 0,
+      });
+    } catch {}
 
     if (!attempt_id || !Array.isArray(answers)) {
-      return res.status(400).json({ error: 'attempt_id_and_answers_required' });
+      return res.status(400).json({ error: 'attempt_id_and_answers_required', message: 'attempt_id and answers[] are required' });
     }
 
     // Validate attempt exists and matches examId; check status and expiration
     const attemptIdNum = normalizeToInt(attempt_id);
     if (attemptIdNum == null) {
-      return res.status(400).json({ error: "invalid_attempt_id" });
+      return res.status(400).json({ error: "invalid_attempt_id", message: 'Provide valid attempt_id' });
     }
     // [submitExam-controller] diagnostic logs
     // eslint-disable-next-line no-console
@@ -204,30 +278,36 @@ exports.submitExam = async (req, res, next) => {
     });
 
     if (!attemptRows || attemptRows.length === 0) {
-      return res.status(404).json({ error: 'attempt_not_found' });
+      return res.status(404).json({ error: 'attempt_not_found', message: 'Attempt not found' });
     }
 
     const att = attemptRows[0];
     if (Number(att.exam_id) !== Number(examId)) {
-      return res.status(400).json({ error: 'exam_mismatch' });
+      return res.status(400).json({ error: 'exam_mismatch', message: 'Attempt does not belong to provided exam_id' });
     }
 
     if (att.status === 'canceled') {
-      return res.status(403).json({ error: 'attempt_canceled' });
+      return res.status(403).json({ error: 'attempt_canceled', message: 'Attempt was canceled' });
     }
 
     if (att.expires_at) {
       const now = new Date();
       const exp = new Date(att.expires_at);
       if (now > exp) {
-        return res.status(403).json({ error: 'exam_time_expired' });
+        return res.status(403).json({ error: 'exam_time_expired', message: 'Exam time expired' });
       }
     }
 
     // Ensure camera is still active
-    const session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
+    let session = null;
+    try {
+      session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
+    } catch (e) {
+      try { console.log('[TRACE][EXAM][SUBMIT][ERROR]', { error: 'proctoring_lookup_failed', attempt_id: attemptIdNum, message: e?.message }); } catch {}
+      return res.status(500).json({ error: 'proctoring_lookup_failed', message: 'Failed to verify proctoring session' });
+    }
     if (!session || session.camera_status !== 'active') {
-      return res.status(403).json({ error: 'Proctoring session not started' });
+      return res.status(403).json({ error: 'proctoring_not_started', message: 'Proctoring session not started' });
     }
 
     const response = await submitAttempt({ attempt_id: attemptIdNum, answers });
@@ -235,12 +315,12 @@ exports.submitExam = async (req, res, next) => {
     if (response && response.error) {
       // Map known service errors to 4xx
       if (response.error === 'exam_time_expired' || response.error === 'attempt_canceled') {
-        return res.status(403).json(response);
+        return res.status(403).json({ error: response.error, message: response.message || response.error });
       }
       if (response.error === 'attempt_not_found') {
-        return res.status(404).json(response);
+        return res.status(404).json({ error: response.error, message: response.message || response.error });
       }
-      return res.status(400).json(response);
+      return res.status(400).json({ error: response.error, message: response.message || response.error });
     }
 
     // Phase 08.3 – Surface coding grading results in response (skip in tests)
@@ -261,7 +341,8 @@ exports.submitExam = async (req, res, next) => {
 
     return res.json(codingBlock ? { ...response, coding_results: codingBlock } : response);
   } catch (err) {
-    return next(err);
+    try { console.log('[TRACE][EXAM][SUBMIT][ERROR]', { error: 'unexpected_error', message: err?.message }); } catch {}
+    return res.status(500).json({ error: 'submit_internal_error', message: 'Unexpected error while submitting exam' });
   }
 };
 
@@ -270,6 +351,11 @@ exports.startProctoring = async (req, res, next) => {
   try {
     const { examId } = req.params;
     const { attempt_id } = req.body || {};
+    // [TRACE] proctoring start
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][PROCTORING][START]', { examId: Number(examId), attempt_id });
+    } catch {}
     if (!attempt_id) {
       return res.status(400).json({ error: 'attempt_id_required' });
     }

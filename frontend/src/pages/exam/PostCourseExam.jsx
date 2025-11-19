@@ -75,23 +75,33 @@ export default function PostCourseExam() {
         let resolvedAttemptId = null;
 
         // Create a postcourse exam (idempotent per use-case; attempts policy enforced on start)
-        const created = await examApi.create({
-          user_id: userId,
-          exam_type: 'postcourse',
-          course_id: courseId,
-        });
-        resolvedExamId = String(created?.exam_id ?? '');
-        if (resolvedExamId) {
-          localStorage.setItem('exam_postcourse_id', resolvedExamId);
+        try {
+          const created = await examApi.create({
+            user_id: userId,
+            exam_type: 'postcourse',
+            course_id: courseId,
+          });
+          resolvedExamId = String(created?.exam_id ?? '');
+          resolvedAttemptId = created?.attempt_id ?? null;
+          if (resolvedExamId) {
+            localStorage.setItem('exam_postcourse_id', resolvedExamId);
+          }
+          if (!resolvedAttemptId) {
+            throw new Error('Create response missing attempt_id');
+          }
+        } catch (err) {
+          const apiErr = err?.response?.data?.error || '';
+          // Fallback to most recent attempt when policy prevents new attempt
+          if (apiErr === 'max_attempts_reached' || apiErr === 'baseline_already_completed') {
+            const list = await examApi.attemptsByUser(userId);
+            const candidates = Array.isArray(list) ? list.filter(a => a.exam_type === 'postcourse') : [];
+            const latest = candidates.find(a => String(a?.exam_id) === String(resolvedExamId)) || candidates[0];
+            resolvedExamId = String(latest?.exam_id || resolvedExamId || '');
+            resolvedAttemptId = latest?.attempt_id ?? null;
+          } else {
+            throw err;
+          }
         }
-        // Always resolve attempt_id via attempts list (created.attempt_id may be null for postcourse)
-        const list = await examApi.attemptsByUser(userId);
-        const matching = Array.isArray(list)
-          ? list
-              .filter(a => a.exam_type === 'postcourse')
-              .find(a => String(a?.exam_id) === String(resolvedExamId))
-          : null;
-        resolvedAttemptId = matching?.attempt_id ?? null;
 
         if (!resolvedExamId || !resolvedAttemptId) {
           throw new Error('Unable to resolve post-course exam or attempt.');
@@ -103,7 +113,7 @@ export default function PostCourseExam() {
         setBootstrapReady(true);
       } catch (e) {
         if (!mounted) return;
-        setError(e?.response?.data?.error || e?.message || 'Failed to initialize post-course exam');
+        setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Failed to initialize post-course exam');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -158,7 +168,7 @@ export default function PostCourseExam() {
           setRemainingSec(Number(data.duration_seconds));
         }
       } catch (e) {
-        const apiErr = e?.response?.data?.error || e?.message || '';
+        const apiErr = e?.response?.data?.message || e?.response?.data?.error || e?.message || '';
         if (apiErr === 'max_attempts_reached') {
           // Try to redirect to the most recent attempt results for this user/course
           try {
@@ -300,7 +310,7 @@ export default function PostCourseExam() {
       });
       navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || 'Submit failed');
+      setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
       setLoading(false);
     }

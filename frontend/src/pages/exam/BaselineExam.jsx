@@ -95,7 +95,7 @@ export default function BaselineExam() {
         } catch (err) {
           const apiErr = err?.response?.data?.error || '';
           // If baseline already exists for this user, fetch latest baseline attempt
-          if (apiErr === 'baseline_already_exists') {
+          if (apiErr === 'baseline_already_completed') {
             const list = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
             const baseline = Array.isArray(list) ? list.find(a => a.exam_type === 'baseline') : null;
             if (baseline) {
@@ -169,7 +169,7 @@ export default function BaselineExam() {
         }
       } catch (e) {
         if (!mounted) return;
-        setError(e?.response?.data?.error || e?.message || 'Failed to load exam');
+        setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Failed to load exam');
       } finally {
         if (mounted) {
           setLoading(false);
@@ -246,7 +246,7 @@ export default function BaselineExam() {
       });
       alert('Submitted! Check results.');
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || 'Submit failed');
+      setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
       setLoading(false);
     }

@@ -151,6 +151,21 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   let policy = {};
   let skillsPayload = null;
   let coveragePayload = null;
+  // [TRACE] create entry
+  try {
+    // eslint-disable-next-line no-console
+    console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE][BEGIN]`, {
+      user_id,
+      course_id: course_id ?? null,
+      env: {
+        DIRECTORY_BASE_URL: !!process.env.DIRECTORY_BASE_URL,
+        SKILLS_ENGINE_BASE_URL: !!process.env.SKILLS_ENGINE_BASE_URL,
+        COURSE_BUILDER_BASE_URL: !!process.env.COURSE_BUILDER_BASE_URL,
+        INTEGRATION_DEVLAB_DATA_REQUEST_URL: !!process.env.INTEGRATION_DEVLAB_DATA_REQUEST_URL,
+        OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
+      },
+    });
+  } catch {}
 
   if (exam_type === "baseline") {
     // Check for already submitted baseline attempt for this user
@@ -170,6 +185,12 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       return { error: "baseline_already_completed" };
     }
     skillsPayload = await safeFetchBaselineSkills({ user_id });
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][BASELINE][CREATE][SKILLS]', {
+        count: Array.isArray(skillsPayload?.skills) ? skillsPayload.skills.length : 0,
+      });
+    } catch {}
     policy = await safeFetchPolicy("baseline");
   } else if (exam_type === "postcourse") {
     coveragePayload = await safeFetchCoverage({
@@ -177,9 +198,18 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       learner_name: undefined,
       course_id,
     });
+    try {
+      const mapArr = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
+      const skillsTotal = mapArr.map(i => Array.isArray(i?.skills) ? i.skills.length : 0).reduce((a,b)=>a+b,0);
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][POSTCOURSE][CREATE][COVERAGE]', {
+        coverage_items: mapArr.length,
+        coverage_skills_total: skillsTotal,
+      });
+    } catch {}
     policy = await safeFetchPolicy("postcourse");
   } else {
-    throw new Error("invalid_exam_type");
+    return { error: "invalid_exam_type" };
   }
 
   // Phase: Replace theoretical mocks with REAL OpenAI generation
@@ -364,13 +394,30 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   })();
   // eslint-disable-next-line no-console
   console.debug("Coding generation skills:", skillsForCoding);
-  const codingQuestionsDecorated =
-    await devlabIntegration.buildCodingQuestionsForExam({
-      amount: 2,
-      skills: skillsForCoding,
-      humanLanguage: "en",
-      difficulty: "medium",
+  let codingQuestionsDecorated = [];
+  try {
+    codingQuestionsDecorated =
+      await devlabIntegration.buildCodingQuestionsForExam({
+        amount: 2,
+        skills: skillsForCoding,
+        humanLanguage: "en",
+        difficulty: "medium",
+      });
+  } catch (e) {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'devlab_build_failed', message: e?.message });
+    } catch {}
+    codingQuestionsDecorated = [];
+  }
+  try {
+    // eslint-disable-next-line no-console
+    console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE][DEVLAB]`, {
+      skills_for_coding: skillsForCoding.length,
+      questions_built: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.length : 0,
+      real_candidate: !!process.env.INTEGRATION_DEVLAB_DATA_REQUEST_URL,
     });
+  } catch {}
 
   // Generate theoretical questions with medium difficulty (fixed), mixed types
   let questions = [];
@@ -438,6 +485,14 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       validated.push(normalized);
     }
     questions = validated;
+    try {
+      // eslint-disable-next-line no-console
+      console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE][THEORY]`, {
+        generated: Array.isArray(generated) ? generated.length : 0,
+        validated: Array.isArray(questions) ? questions.length : 0,
+        real_candidate: !!process.env.OPENAI_API_KEY,
+      });
+    } catch {}
   } catch (err) {
     // Fallback to minimal internal question if OpenAI fails
     questions = [{
@@ -459,26 +514,34 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     }];
   }
   if (process.env.NODE_ENV !== "test") {
-    const pkg = await buildExamPackageDoc({
-      exam_id: examId,
-      attempt_id: attemptId,
-      user_id,
-      exam_type,
-      policy: policySnapshot,
-      skills: skillsArray, // normalized objects
-      coverage_map: coverageMap, // normalized lesson.skill objects
-      course_id: course_id != null ? course_id : null,
-      course_name: resolvedCourseName || undefined,
-      questions,
-      coding_questions: codingQuestionsDecorated,
-      time_allocated_minutes: durationMinutes || undefined,
-      expires_at_iso: expiresAtIso || undefined,
-    });
-    // Backfill package_ref in PG
-    await pool.query(
-      `UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`,
-      [pkg._id, attemptId],
-    );
+    try {
+      const pkg = await buildExamPackageDoc({
+        exam_id: examId,
+        attempt_id: attemptId,
+        user_id,
+        exam_type,
+        policy: policySnapshot,
+        skills: skillsArray, // normalized objects
+        coverage_map: coverageMap, // normalized lesson.skill objects
+        course_id: course_id != null ? course_id : null,
+        course_name: resolvedCourseName || undefined,
+        questions,
+        coding_questions: codingQuestionsDecorated,
+        time_allocated_minutes: durationMinutes || undefined,
+        expires_at_iso: expiresAtIso || undefined,
+      });
+      // Backfill package_ref in PG
+      await pool.query(
+        `UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`,
+        [pkg._id, attemptId],
+      );
+    } catch (e) {
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: e?.message, stack: e?.stack });
+      } catch {}
+      return { error: "exam_creation_failed", message: "Failed to create and persist exam package" };
+    }
   }
 
   // Build API response
@@ -550,8 +613,16 @@ async function markAttemptStarted({ attempt_id }) {
       `UPDATE exam_attempts SET started_at = NOW() WHERE attempt_id = $1`,
       [attempt_id],
     );
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][EXAM][STARTED]', { attempt_id, started: true });
+    } catch {}
     return { ok: true };
   }
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[TRACE][EXAM][STARTED]', { attempt_id, already_started: true });
+  } catch {}
   return { ok: true, already_started: true };
 }
 
@@ -589,6 +660,13 @@ async function submitAttempt({ attempt_id, answers }) {
   if (attemptIdNum == null) {
     throw new Error("invalid_attempt_id");
   }
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[TRACE][EXAM][SUBMIT][BEGIN]', {
+      attempt_id: attempt_id,
+      answers_count: Array.isArray(answers) ? answers.length : 0,
+    });
+  } catch {}
   // [submitAttempt-service] diagnostic logs
   // eslint-disable-next-line no-console
   console.debug('[submitAttempt-service] input', {
@@ -681,6 +759,17 @@ async function submitAttempt({ attempt_id, answers }) {
   const theoreticalAnswers = allAnswers.filter(
     (a) => String(a?.type || "").toLowerCase() !== "code",
   );
+  try {
+    const mcqCount = theoreticalAnswers.filter(a => String(a?.type||'').toLowerCase()==='mcq').length;
+    const openCount = theoreticalAnswers.filter(a => String(a?.type||'').toLowerCase()==='open').length;
+    // eslint-disable-next-line no-console
+    console.log('[TRACE][EXAM][SUBMIT][COUNTS]', {
+      theoretical_total: theoreticalAnswers.length,
+      mcq: mcqCount,
+      open: openCount,
+      code: codingAnswers.length,
+    });
+  } catch {}
 
   // Helper: map question by id
   const qById = new Map(
@@ -830,9 +919,10 @@ async function submitAttempt({ attempt_id, answers }) {
         ? numericScores.reduce((a, b) => a + b, 0) / numericScores.length
         : 0;
     const status = avg >= passing ? "acquired" : "failed";
-    const name =
+    let name =
       skillIdToName.get(sid) ||
       (qById.get(String(items[0]?.question_id))?.prompt?.skill_name || sid);
+    if (!name || String(name).trim() === "") name = sid;
     perSkill.push({
       skill_id: sid,
       skill_name: name || sid,
@@ -848,6 +938,15 @@ async function submitAttempt({ attempt_id, answers }) {
       ? perSkillScores.reduce((a, b) => a + b, 0) / perSkillScores.length
       : 0;
   const passed = finalGrade >= passing;
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[TRACE][EXAM][SUBMIT][RESULT]', {
+      attempt_id: attemptIdNum,
+      skills: perSkill.length,
+      final_grade: Number(finalGrade),
+      passed,
+    });
+  } catch {}
 
   // 10) Update Postgres exam_attempts
   await pool.query(
