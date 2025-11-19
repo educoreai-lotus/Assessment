@@ -24,17 +24,13 @@ async function safePushExamResults(payload) {
   try {
     const base = getBaseUrl();
     const url = `${base}/api/directory/exam-results`;
-    const body = {
-      requester_service: 'assessment',
-      payload: JSON.stringify(payload || {}),
-      response: JSON.stringify({ status: 'accepted' }),
+    const envelope = {
+      service_requester: 'Assessment',
+      payload: payload || {},
+      response: {},
     };
-    const { data } = await axios.post(url, body, { timeout: 15000 });
-    const raw = data?.response ?? null;
-    if (typeof raw === 'string') {
-      try { return JSON.parse(raw); } catch { return raw; }
-    }
-    return raw;
+    const { data } = await axios.post(url, envelope, { timeout: 15000 });
+    return data;
   } catch (err) {
     console.warn('Directory pushExamResults failed, using mock. Reason:', err?.message || err);
     return mockPushExamResults(payload);

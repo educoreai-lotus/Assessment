@@ -6,27 +6,15 @@ function getDevlabUrl() {
 	return url;
 }
 
-// Global Protocol: requester_service='assessment', payload/response are stringified
 async function sendToDevlabEnvelope(payloadObj) {
 	const url = getDevlabUrl();
-	const body = {
-		requester_service: 'assessment',
-		payload: JSON.stringify(payloadObj || {}),
-		response: JSON.stringify({ answer: [] }),
+	const envelope = {
+		service_requester: 'Assessment',
+		payload: payloadObj || {},
+		response: {},
 	};
-	const { data } = await axios.post(url, body, { timeout: 20000 });
-	const raw = data?.response ?? null;
-	if (typeof raw === 'string') {
-		try {
-			const parsed = JSON.parse(raw);
-			// DevLab responses often shape as { answer: [...] }
-			if (parsed && Array.isArray(parsed.answer)) return parsed.answer;
-			return parsed;
-		} catch {
-			return raw;
-		}
-	}
-	return raw;
+	const { data } = await axios.post(url, envelope, { timeout: 20000 });
+	return data;
 }
 
 async function requestCodingQuestions({ amount, skills, humanLanguage = 'en', difficulty = 'medium' }) {
@@ -38,14 +26,13 @@ async function requestCodingQuestions({ amount, skills, humanLanguage = 'en', di
 		programming_language: 'javascript',
 		skills,
 	});
-	// Return array of questions directly if available
-	return Array.isArray(resp) ? resp : (resp?.answer || []);
+	// Expect envelope with response.answer
+	return Array.isArray(resp?.response?.answer) ? resp.response.answer : [];
 }
 
 async function sendCodingGradeEnvelope(payloadObj) {
 	const resp = await sendToDevlabEnvelope(payloadObj);
-	// Return grading array if available
-	return Array.isArray(resp) ? resp : (resp?.answer || []);
+	return Array.isArray(resp?.response?.answer) ? resp.response.answer : [];
 }
 
 module.exports = { sendToDevlabEnvelope, requestCodingQuestions, sendCodingGradeEnvelope };

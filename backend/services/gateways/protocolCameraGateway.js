@@ -19,17 +19,13 @@ async function safeSendSummary(payload) {
   try {
     const base = getBaseUrl();
     const url = `${base}/api/protocol-camera/summary`;
-    const body = {
-      requester_service: 'assessment',
-      payload: JSON.stringify(payload || {}),
-      response: JSON.stringify({ status: 'acknowledged' }),
+    const envelope = {
+      service_requester: 'Assessment',
+      payload: payload || {},
+      response: {},
     };
-    const { data } = await axios.post(url, body, { timeout: 15000 });
-    const raw = data?.response ?? null;
-    if (typeof raw === 'string') {
-      try { return JSON.parse(raw); } catch { return raw; }
-    }
-    return raw;
+    const { data } = await axios.post(url, envelope, { timeout: 15000 });
+    return data;
   } catch (err) {
     console.warn('ProtocolCamera send summary failed, using mock. Reason:', err?.message || err);
     return mockSendSummary(payload);

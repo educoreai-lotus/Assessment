@@ -172,27 +172,27 @@ exports.handleInbound = async (payload, responseTemplate) => {
 			? responseTemplate
 			: {};
 
-  // Expect shape: { action: 'generateTheoretical', skill_id, num_questions }
+  // Unified envelope expected upstream; here we receive parsed payload object.
+  // For theoretical:
+  // { action: 'theoretical', topic_id, topic_name, amount, difficulty: 'in ascending order of difficulty', humanLanguage, skills: [...] }
   try {
     const action = String(payload?.action || '').toLowerCase();
-    if (action !== 'generatetheoretical' && action !== 'generate_theoretical') {
+    if (action !== 'theoretical') {
       return { ...resp };
     }
-    const skillId = String(payload?.skill_id || 'general');
-    const nRaw = Number(payload?.num_questions || 1);
+    const nRaw = Number(payload?.amount || 1);
     const n = Number.isFinite(nRaw) && nRaw > 0 ? Math.min(nRaw, 20) : 1;
 
     // Difficulty pattern
     let difficulties = [];
-    if (n === 1) difficulties = ['medium'];
+    if (n === 1) difficulties = ['easy'];
     else if (n === 2) difficulties = ['easy', 'medium'];
     else if (n === 3) difficulties = ['easy', 'medium', 'hard'];
-    else {
-      difficulties = ['easy', ...Array.from({ length: n - 2 }).map(() => 'medium'), 'hard'];
-    }
+    else difficulties = ['easy', ...Array.from({ length: n - 2 }).map(() => 'medium'), 'hard'];
 
+    const skills = Array.isArray(payload?.skills) ? payload.skills.map(String) : [];
     const items = difficulties.map((d, idx) => ({
-      skill_id: skillId,
+      skill_id: skills[idx % Math.max(skills.length, 1)] || 'general',
       difficulty: d,
       humanLanguage: 'en',
       // let AI choose type randomly, but nudge by alternating
@@ -207,9 +207,7 @@ exports.handleInbound = async (payload, responseTemplate) => {
       generated = items.map((it, i) => ({
         qid: `devlab_theory_${i + 1}`,
         type: i % 2 === 0 ? 'mcq' : 'open',
-        stem: i % 2 === 0
-          ? `Which is true about ${it.skill_id}?`
-          : `Explain the concept related to ${it.skill_id}.`,
+        stem: i % 2 === 0 ? `Which is true about ${it.skill_id}?` : `Explain the concept related to ${it.skill_id}.`,
         skill_id: it.skill_id,
         difficulty: it.difficulty,
         options: i % 2 === 0 ? ['A', 'B', 'C', 'D'] : undefined,
@@ -230,11 +228,18 @@ exports.handleInbound = async (payload, responseTemplate) => {
       }
     }
 
-    // Normalize to response expected by DevLab theoretical exchange:
-    // Each question includes: qid, type, stem, skill_id, difficulty, options?, correct_answer, explanation, hint
-    return { ...resp, questions: withValidation };
+    // Envelope back with response.answer array
+    return {
+      service_requester: 'Assessment',
+      payload: payload || {},
+      response: { answer: withValidation },
+    };
   } catch {
-    return { ...resp, questions: [] };
+    return {
+      service_requester: 'Assessment',
+      payload: payload || {},
+      response: { answer: [] },
+    };
   }
 };
 

@@ -18,24 +18,24 @@ jest.mock('../../services/gateways/aiGateway', () => ({
 const devlabService = require('../../services/integrations/devlabService');
 
 describe('DevLab theoretical generation difficulty pattern', () => {
-  test('1 -> medium', async () => {
-    const resp = await devlabService.handleInbound({ action: 'generateTheoretical', skill_id: 's1', num_questions: 1 }, {});
-    const diffs = resp.questions.map(q => q.difficulty);
-    expect(diffs).toEqual(['medium']);
+  test('1 -> easy', async () => {
+    const resp = await devlabService.handleInbound({ action: 'theoretical', skills: ['s1'], amount: 1 }, {});
+    const diffs = (resp.response?.answer || []).map(q => q.difficulty);
+    expect(diffs).toEqual(['easy']);
   });
   test('2 -> easy, medium', async () => {
-    const resp = await devlabService.handleInbound({ action: 'generateTheoretical', skill_id: 's1', num_questions: 2 }, {});
-    const diffs = resp.questions.map(q => q.difficulty);
+    const resp = await devlabService.handleInbound({ action: 'theoretical', skills: ['s1'], amount: 2 }, {});
+    const diffs = (resp.response?.answer || []).map(q => q.difficulty);
     expect(diffs).toEqual(['easy', 'medium']);
   });
   test('3 -> easy, medium, hard', async () => {
-    const resp = await devlabService.handleInbound({ action: 'generateTheoretical', skill_id: 's1', num_questions: 3 }, {});
-    const diffs = resp.questions.map(q => q.difficulty);
+    const resp = await devlabService.handleInbound({ action: 'theoretical', skills: ['s1'], amount: 3 }, {});
+    const diffs = (resp.response?.answer || []).map(q => q.difficulty);
     expect(diffs).toEqual(['easy', 'medium', 'hard']);
   });
   test('5 -> easy, medium, medium, medium, hard', async () => {
-    const resp = await devlabService.handleInbound({ action: 'generateTheoretical', skill_id: 's1', num_questions: 5 }, {});
-    const diffs = resp.questions.map(q => q.difficulty);
+    const resp = await devlabService.handleInbound({ action: 'theoretical', skills: ['s1'], amount: 5 }, {});
+    const diffs = (resp.response?.answer || []).map(q => q.difficulty);
     expect(diffs).toEqual(['easy', 'medium', 'medium', 'medium', 'hard']);
   });
 });

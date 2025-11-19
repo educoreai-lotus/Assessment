@@ -2,29 +2,50 @@ const request = require('supertest');
 const app = require('../../server');
 
 describe('Universal integration endpoint', () => {
-  test('POST /api/fill-content-metrics with skillsengine', async () => {
+  test('POST /api/fill-content-metrics with skillsengine (unified envelope)', async () => {
     const res = await request(app)
       .post('/api/fill-content-metrics')
-      .send({ requester_service: 'skillsengine', stringified_json: JSON.stringify({ user_id: 'u_1' }) });
-    expect([200, 202]).toContain(res.status);
-    expect(res.body).toHaveProperty('requester_service', 'skillsengine');
-    expect(res.body).toHaveProperty('stringified_json');
+      .send({
+        service_requester: 'SkillsEngine',
+        payload: { stringified_json: JSON.stringify({ user_id: 'u_1' }) },
+        response: {}
+      });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('service_requester', 'Assessment');
+    expect(res.body).toHaveProperty('payload');
   });
 
-  test('POST /api/fill-content-metrics with coursebuilder', async () => {
+  test('POST /api/fill-content-metrics with coursebuilder (unified envelope)', async () => {
     const res = await request(app)
       .post('/api/fill-content-metrics')
-      .send({ requester_service: 'coursebuilder', stringified_json: JSON.stringify({}) });
-    expect([200, 202]).toContain(res.status);
-    expect(res.body).toHaveProperty('requester_service', 'coursebuilder');
+      .send({
+        service_requester: 'CourseBuilder',
+        payload: { stringified_json: JSON.stringify({}) },
+        response: {}
+      });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('service_requester', 'Assessment');
   });
 
-  test('POST /api/fill-content-metrics with devlab', async () => {
+  test('POST /api/fill-content-metrics with devlab (unified envelope)', async () => {
     const res = await request(app)
       .post('/api/fill-content-metrics')
-      .send({ requester_service: 'devlab', stringified_json: JSON.stringify({ questions: [{ qid: 'q1' }] }) });
-    expect([200, 202]).toContain(res.status);
-    expect(res.body).toHaveProperty('requester_service', 'devlab');
+      .send({
+        service_requester: 'DevLab',
+        payload: {
+          action: 'theoretical',
+          topic_id: 1,
+          topic_name: 'Arrays',
+          amount: 3,
+          difficulty: 'in ascending order of difficulty',
+          humanLanguage: 'en',
+          skills: ['s_js_async', 's_js_promises']
+        },
+        response: { answer: [] }
+      });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('service_requester', 'Assessment');
+    expect(res.body).toHaveProperty('response');
   });
 
   test('POST /api/fill-content-metrics with missing fields returns 400', async () => {

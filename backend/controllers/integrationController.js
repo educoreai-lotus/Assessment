@@ -313,24 +313,37 @@ exports.handleCourseBuilderPreExam = async (req, res, next) => {
 // Phase 08.6 – Universal Integration Endpoint handler (single inbound route)
 exports.universalIntegrationHandler = async (req, res) => {
   try {
-    const { requester_service, stringified_json } = req.body || {};
+    // Accept both legacy and unified envelopes
+    const serviceRequester = req.body?.service_requester || req.body?.requester_service || '';
+    const payload = req.body?.payload || {};
+    const legacyStringified = req.body?.stringified_json;
 
-    if (!requester_service || typeof stringified_json !== 'string') {
-      return res.status(400).json({
-        error: "Invalid envelope. Expected requester_service and stringified_json (string)."
-      });
+    if (!serviceRequester) {
+      return res.status(400).json({ error: "Missing service_requester" });
     }
 
     let parsedPayload = {};
-    try {
-      parsedPayload = JSON.parse(stringified_json);
-    } catch {
-      return res.status(400).json({ error: "stringified_json is not valid JSON" });
+    if (typeof payload?.stringified_json === 'string') {
+      try {
+        parsedPayload = JSON.parse(payload.stringified_json);
+      } catch {
+        return res.status(400).json({ error: "payload.stringified_json is not valid JSON" });
+      }
+    } else if (typeof legacyStringified === 'string') {
+      try {
+        parsedPayload = JSON.parse(legacyStringified);
+      } catch {
+        return res.status(400).json({ error: "stringified_json is not valid JSON" });
+      }
+    } else if (payload && typeof payload === 'object') {
+      parsedPayload = payload;
+    } else {
+      parsedPayload = {};
     }
 
     let result;
 
-    switch (String(requester_service).toLowerCase()) {
+    switch (String(serviceRequester).toLowerCase()) {
       case 'coursebuilder':
         result = await courseBuilderService.handleInbound(parsedPayload, {});
         break;
@@ -360,14 +373,14 @@ exports.universalIntegrationHandler = async (req, res) => {
         break;
       default:
         return res.status(400).json({
-          error: `Unknown requester_service: ${requester_service}`
+          error: `Unknown service_requester: ${serviceRequester}`
         });
     }
 
     return res.json({
-      requester_service,
-      stringified_json,
-      response: JSON.stringify(result || {})
+      service_requester: 'Assessment',
+      payload: parsedPayload,
+      response: result || {},
     });
 
   } catch (err) {

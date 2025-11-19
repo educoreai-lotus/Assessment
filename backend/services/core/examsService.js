@@ -169,6 +169,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
 
   // Phase: Replace theoretical mocks with REAL OpenAI generation
   const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
+  const { normalizeSkills } = require("./skillsUtils");
 
   // Insert exam row in PG (normalize any user_id -> integer for FK)
   const userInt = normalizeToInt(user_id);
@@ -250,9 +251,19 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   ]);
   const examId = examRows[0].exam_id;
 
-  // Prepare skills and coverage map
-  const skillsArray = skillsPayload?.skills || [];
-  const coverageMap = coveragePayload?.coverage_map || [];
+  // Prepare skills and coverage map (normalize shapes)
+  const normalizedBaselineSkills = normalizeSkills(skillsPayload?.skills || []);
+  const rawCoverage = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
+  const normalizedCoverageMap = rawCoverage.map((item) => ({
+    ...item,
+    skills: normalizeSkills(item?.skills || []),
+  })).filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
+  // eslint-disable-next-line no-console
+  console.debug("Normalized baseline skills:", normalizedBaselineSkills);
+  // eslint-disable-next-line no-console
+  console.debug("Normalized coverage skills:", normalizedCoverageMap.map(x => x.skills).flat());
+  const skillsArray = normalizedBaselineSkills;
+  const coverageMap = normalizedCoverageMap;
   const resolvedCourseName =
     exam_type === "postcourse"
       ? coveragePayload?.course_name || course_name || null
@@ -306,29 +317,18 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   // Build ExamPackage in Mongo
   // Phase 08.2 – Build coding questions via DevLab envelope and store in dedicated field
   const skillsForCoding = (() => {
-    const fromSkills = Array.isArray(skillsArray) ? skillsArray : [];
-    const primary = Array.from(
-      new Set(
-        fromSkills
-          .map((s) => s?.skill_id || s?.id || s?.skill_name || s?.name)
-          .filter((v) => typeof v === "string" && v.trim() !== "")
-          .map(String),
-      ),
-    );
-    if (primary.length > 0) return primary;
-    const fromCoverage = Array.isArray(coverageMap) ? coverageMap : [];
-    const flattened = [];
-    for (const item of fromCoverage) {
-      const arr = Array.isArray(item?.skills) ? item.skills : [];
-      for (const sk of arr) {
-        const ref = sk?.skill_id || sk?.id || sk?.skill_name || sk?.name;
-        if (typeof ref === "string" && ref.trim() !== "") {
-          flattened.push(String(ref));
-        }
+    const ids = [];
+    if (Array.isArray(skillsArray) && skillsArray.length > 0) {
+      for (const s of skillsArray) ids.push(String(s.skill_id));
+    } else if (Array.isArray(coverageMap) && coverageMap.length > 0) {
+      for (const item of coverageMap) {
+        for (const s of (item.skills || [])) ids.push(String(s.skill_id));
       }
     }
-    return Array.from(new Set(flattened));
+    return Array.from(new Set(ids.filter(Boolean)));
   })();
+  // eslint-disable-next-line no-console
+  console.debug("Coding generation skills:", skillsForCoding);
   const codingQuestionsDecorated =
     await devlabIntegration.buildCodingQuestionsForExam({
       amount: 2,
@@ -340,17 +340,23 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   // Generate theoretical questions with medium difficulty (fixed), mixed types
   let questions = [];
   try {
-    const sourceSkills = exam_type === "baseline"
-      ? (Array.isArray(skillsArray) ? skillsArray.map((s) => s?.skill_id || s?.id || s?.name || 'general') : [])
-      : (Array.isArray(coverageMap)
-          ? coverageMap.flatMap((m) =>
-              Array.isArray(m?.skills) ? m.skills.map((s) => s?.skill_id || s?.id || s?.name || 'general') : [],
-            )
-          : []);
-    const uniqueSkills = Array.from(new Set(sourceSkills.map(String)));
+    const sourceIds = (() => {
+      if (exam_type === "baseline") {
+        return (skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean);
+      }
+      const ids = [];
+      for (const it of coverageMap || []) {
+        for (const s of (it.skills || [])) ids.push(String(s.skill_id));
+      }
+      return ids.filter(Boolean);
+    })();
+    const uniqueSkills = Array.from(new Set(sourceIds));
+    // eslint-disable-next-line no-console
+    console.debug("Theoretical generation skills:", uniqueSkills);
     const items = [];
     for (let i = 0; i < questionCount; i += 1) {
-      const skill_id = uniqueSkills[i % Math.max(uniqueSkills.length, 1)] || 'general';
+      const skill_id = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
+      if (!skill_id) continue;
       // mix types pseudo-random: alternate mcq/open
       const type = i % 2 === 0 ? 'mcq' : 'open';
       items.push({ skill_id, difficulty: 'medium', humanLanguage: 'en', type });
@@ -424,8 +430,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       user_id,
       exam_type,
       policy: policySnapshot,
-      skills: skillsArray,
-      coverage_map: coverageMap,
+      skills: skillsArray, // normalized objects
+      coverage_map: coverageMap, // normalized lesson.skill objects
       course_id: course_id != null ? course_id : null,
       course_name: resolvedCourseName || undefined,
       questions,
@@ -676,16 +682,19 @@ async function submitAttempt({ attempt_id, answers }) {
           source: "theoretical",
         });
       } else {
-        // open-ended placeholder
+        // open-ended fallback grading
+        const nonBlank = rawAnswer.trim().length > 0;
         graded.push({
           question_id: qid,
           skill_id: skillId,
           type: "open",
           raw_answer: rawAnswer,
-          score: 0,
-          status: "pending_review",
+          score: nonBlank ? 60 : 0,
+          status: nonBlank ? "partial" : "blank",
           source: "theoretical",
         });
+        // eslint-disable-next-line no-console
+        console.debug("Grading fallback triggered", { question_id: qid, nonBlank });
         // optional audit trail
         if (process.env.NODE_ENV !== "test") {
           try {

@@ -319,7 +319,7 @@ export default function BaselineExam() {
                 Next
               </button>
             ) : (
-              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading}>
+              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !cameraOk}>
                 Submit
               </button>
             )}

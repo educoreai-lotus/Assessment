@@ -25,28 +25,15 @@ async function safeFetchCoverage(params) {
 
 // Phase 08.5 – Outgoing results push with envelope to metrics URL
 async function sendCourseBuilderExamResults(payloadObj) {
-  // Build envelope body
   const body = {
-    requester_service: 'assessment',
-    payload: JSON.stringify(payloadObj || {}),
-    response: JSON.stringify({
-      learner_id: '',
-      course_id: '',
-      course_name: '',
-      exam_type: '',
-      passing_grade: 0,
-      final_grade: 0,
-      passed: false,
-    }),
+    service_requester: 'Assessment',
+    payload: payloadObj || {},
+    response: {},
   };
   const url = process.env.INTEGRATION_COURSEBUILDER_FILL_METRICS_URL;
   if (!url) throw new Error('INTEGRATION_COURSEBUILDER_FILL_METRICS_URL not set');
   const { data } = await axios.post(url, body, { timeout: 15000 });
-  const raw = data?.response ?? null;
-  if (typeof raw === 'string') {
-    try { return JSON.parse(raw); } catch { return raw; }
-  }
-  return raw;
+  return data;
 }
 
 // Backward-compatible safe wrapper (uses mock on failure)

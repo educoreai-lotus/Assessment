@@ -19,17 +19,13 @@ async function safePushIncidentDecision(payload) {
   try {
     const base = getBaseUrl();
     const url = `${base}/api/rag/incident-response`;
-    const body = {
-      requester_service: 'assessment',
-      payload: JSON.stringify(payload || {}),
-      response: JSON.stringify({ status: 'acknowledged' }),
+    const envelope = {
+      service_requester: 'Assessment',
+      payload: payload || {},
+      response: {},
     };
-    const { data } = await axios.post(url, body, { timeout: 15000 });
-    const raw = data?.response ?? null;
-    if (typeof raw === 'string') {
-      try { return JSON.parse(raw); } catch { return raw; }
-    }
-    return raw;
+    const { data } = await axios.post(url, envelope, { timeout: 15000 });
+    return data;
   } catch (err) {
     console.warn('RAG push incident decision failed, using mock. Reason:', err?.message || err);
     return mockAcknowledgeDecision(payload);
