@@ -24,6 +24,9 @@ exports.createExam = async (req, res, next) => {
     }
     const resp = await createExam({ user_id, exam_type, course_id, course_name });
     if (resp && resp.error) {
+      if (resp.error === 'baseline_already_completed' || resp.error === 'max_attempts_reached') {
+        return res.status(403).json(resp);
+      }
       return res.status(400).json(resp);
     }
     return res.status(201).json(resp);
@@ -316,7 +319,7 @@ exports.resolveExam = async (req, res, next) => {
     if (examIdNum == null) {
       return res.status(400).json({ error: 'invalid_exam_id' });
     }
-    const { rows } = await pool
+  const { rows } = await pool
       .query(
         `SELECT attempt_id, attempt_no, started_at, expires_at, duration_minutes, status
          FROM exam_attempts

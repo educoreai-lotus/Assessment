@@ -153,8 +153,23 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   let coveragePayload = null;
 
   if (exam_type === "baseline") {
+    // Check for already submitted baseline attempt for this user
+    const { rows: completedBaseline } = await pool.query(
+      `
+        SELECT ea.attempt_id
+        FROM exam_attempts ea
+        JOIN exams e ON e.exam_id = ea.exam_id
+        WHERE e.user_id = $1
+          AND e.exam_type = 'baseline'
+          AND ea.status = 'submitted'
+        LIMIT 1
+      `,
+      [user_id],
+    );
+    if (completedBaseline && completedBaseline.length > 0) {
+      return { error: "baseline_already_completed" };
+    }
     skillsPayload = await safeFetchBaselineSkills({ user_id });
-    // Directory policy for baseline (may include passing_grade only; include max_attempts if provided)
     policy = await safeFetchPolicy("baseline");
   } else if (exam_type === "postcourse") {
     coveragePayload = await safeFetchCoverage({
@@ -179,14 +194,34 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   console.log("createExam user mapping:", { user_id, userInt });
   const courseInt = normalizeToInt(course_id); // can be null for baseline
 
-  // Baseline exam: only one baseline exam per user is allowed
+  // Determine attempt_no based on rules
+  let attemptNo = 1;
   if (exam_type === "baseline") {
-    const { rows: existingBaseline } = await pool.query(
-      `SELECT 1 FROM exams WHERE exam_type = $1 AND user_id = $2 LIMIT 1`,
-      ["baseline", userInt],
+    // Always first and only attempt
+    attemptNo = 1;
+  } else if (exam_type === "postcourse") {
+    const passingGrade = Number((policy || {})?.passing_grade ?? 0);
+    const maxAttempts = Number((policy || {})?.max_attempts ?? 0);
+    const { rows: lastPost } = await pool.query(
+      `
+        SELECT ea.attempt_id, ea.attempt_no
+        FROM exam_attempts ea
+        JOIN exams e ON e.exam_id = ea.exam_id
+        WHERE e.user_id = $1
+          AND e.exam_type = 'postcourse'
+        ORDER BY ea.attempt_no DESC
+        LIMIT 1
+      `,
+      [userInt],
     );
-    if (existingBaseline.length > 0) {
-      return { error: "baseline_already_exists" };
+    if (!lastPost || lastPost.length === 0) {
+      attemptNo = 1;
+    } else {
+      const lastNo = Number(lastPost[0].attempt_no || 0);
+      if (Number.isFinite(maxAttempts) && maxAttempts > 0 && lastNo >= maxAttempts) {
+        return { error: "max_attempts_reached" };
+      }
+      attemptNo = lastNo + 1;
     }
   }
 
@@ -295,7 +330,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   const tempPackageRef = null;
   const { rows: attemptRows } = await pool.query(insertAttemptText, [
     examId,
-    1,
+    attemptNo,
     JSON.stringify(policySnapshot),
     tempPackageRef,
   ]);
