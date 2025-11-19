@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
@@ -9,6 +9,7 @@ import CameraPreview from '../../components/CameraPreview';
 
 export default function BaselineExam() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const examId = useMemo(() => {
     const qp = searchParams.get('examId');
     if (qp) return qp;
@@ -94,18 +95,23 @@ export default function BaselineExam() {
           }
         } catch (err) {
           const apiErr = err?.response?.data?.error || '';
-          // If baseline already exists for this user, fetch latest baseline attempt
+          // If baseline already exists for this user, redirect to last submitted baseline result
           if (apiErr === 'baseline_already_completed') {
-            const list = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
-            const baseline = Array.isArray(list) ? list.find(a => a.exam_type === 'baseline') : null;
-            if (baseline) {
-              resolvedExamId = String(baseline.exam_id);
-              attemptId = baseline.attempt_id;
-              if (resolvedExamId) {
-                localStorage.setItem('exam_baseline_id', resolvedExamId);
+            try {
+              const list = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
+              const baseline = Array.isArray(list)
+                ? list.find(a => a.exam_type === 'baseline' && a.submitted_at)
+                : null;
+              console.log("Baseline fallback attempt:", baseline);
+              if (baseline && baseline.attempt_id) {
+                navigate(`/results/baseline/${encodeURIComponent(baseline.attempt_id)}`);
+                return;
               }
-            } else {
-              throw err;
+              setError('Baseline attempt exists but could not be loaded.');
+              return;
+            } catch {
+              setError('Baseline attempt exists but could not be loaded.');
+              return;
             }
           } else {
             throw err;
