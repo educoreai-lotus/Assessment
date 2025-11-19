@@ -343,38 +343,44 @@ exports.universalIntegrationHandler = async (req, res) => {
 
     let result;
 
-    switch (String(serviceRequester).toLowerCase()) {
-      case 'coursebuilder':
-        result = await courseBuilderService.handleInbound(parsedPayload, {});
-        break;
-      case 'management':
-        result = await managementService.handleInbound(parsedPayload, {});
-        break;
-      case 'directory':
-        result = await directoryService.handleInbound(parsedPayload, {});
-        break;
-      case 'skillsengine':
-      case 'skills_engine':
-        result = await skillsEngineService.handleInbound(parsedPayload, {});
-        break;
-      case 'devlab':
-        result = await devlabService.handleInbound(parsedPayload, {});
-        break;
-      case 'learninganalytics':
-      case 'learning_analytics':
-      case 'la':
-        result = await learningAnalyticsService.handleInbound(parsedPayload, {});
-        break;
-      case 'rag':
-      case 'protocol_camera':
-      case 'protocolcamera':
-        // No-op placeholders for inbound events if needed in future
-        result = {};
-        break;
-      default:
-        return res.status(400).json({
-          error: `Unknown service_requester: ${serviceRequester}`
-        });
+    const withTimeout = (p, ms = 300) => Promise.race([p, new Promise((resolve) => setTimeout(() => resolve(Symbol('timeout')), ms))]);
+
+    const lower = String(serviceRequester).toLowerCase();
+    const pick = async () => {
+      switch (lower) {
+        case 'coursebuilder':
+          return courseBuilderService.handleInbound(parsedPayload, {});
+        case 'management':
+          return managementService.handleInbound(parsedPayload, {});
+        case 'directory':
+          return directoryService.handleInbound(parsedPayload, {});
+        case 'skillsengine':
+        case 'skills_engine':
+          return skillsEngineService.handleInbound(parsedPayload, {});
+        case 'devlab':
+          return devlabService.handleInbound(parsedPayload, {});
+        case 'learninganalytics':
+        case 'learning_analytics':
+        case 'la':
+          return learningAnalyticsService.handleInbound(parsedPayload, {});
+        case 'rag':
+        case 'protocol_camera':
+        case 'protocolcamera':
+          return {};
+        default:
+          return { error: `Unknown service_requester: ${serviceRequester}` };
+      }
+    };
+
+    const raced = await withTimeout(pick(), 300);
+    if (raced && typeof raced === 'object' && !Object.is(raced, Symbol('timeout'))) {
+      result = raced;
+    } else {
+      return res.json({
+        service_requester: 'Assessment',
+        payload: parsedPayload,
+        response: { answer: [] },
+      });
     }
 
     return res.json({

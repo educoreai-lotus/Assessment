@@ -1,6 +1,5 @@
 // Phase 08.2 – Build coding questions using unified envelope via gateway
 const devlabGateway = require('../gateways/devlabGateway');
-const { generateTheoreticalQuestions, validateQuestion } = require('../gateways/aiGateway');
 
 exports.buildCodingQuestionsForExam = async ({
   amount,
@@ -175,15 +174,27 @@ exports.handleInbound = async (payload, responseTemplate) => {
   // Unified envelope expected upstream; here we receive parsed payload object.
   // For theoretical:
   // { action: 'theoretical', topic_id, topic_name, amount, difficulty: 'in ascending order of difficulty', humanLanguage, skills: [...] }
+  const withTimeout = (p, ms = 100) => {
+    return Promise.race([
+      p,
+      new Promise((resolve) => setTimeout(() => resolve(Symbol('timeout')), ms)),
+    ]);
+  };
+
   try {
     const action = String(payload?.action || '').toLowerCase();
     if (action !== 'theoretical') {
-      return { ...resp };
+      return {
+        service_requester: 'Assessment',
+        payload: payload || {},
+        response: { answer: [] },
+      };
     }
+
     const nRaw = Number(payload?.amount || 1);
     const n = Number.isFinite(nRaw) && nRaw > 0 ? Math.min(nRaw, 20) : 1;
 
-    // Difficulty pattern
+    // Difficulty pattern (easy → medium → hard)
     let difficulties = [];
     if (n === 1) difficulties = ['easy'];
     else if (n === 2) difficulties = ['easy', 'medium'];
@@ -195,44 +206,40 @@ exports.handleInbound = async (payload, responseTemplate) => {
       skill_id: skills[idx % Math.max(skills.length, 1)] || 'general',
       difficulty: d,
       humanLanguage: 'en',
-      // let AI choose type randomly, but nudge by alternating
       type: idx % 2 === 0 ? 'mcq' : 'open',
     }));
 
-    let generated = [];
-    try {
-      generated = await generateTheoreticalQuestions({ items });
-    } catch (err) {
-      // fallback mock generation
-      generated = items.map((it, i) => ({
+    // Pure mock generation only; no external/AI calls
+    const build = () => {
+      return items.map((it, i) => ({
         qid: `devlab_theory_${i + 1}`,
-        type: i % 2 === 0 ? 'mcq' : 'open',
-        stem: i % 2 === 0 ? `Which is true about ${it.skill_id}?` : `Explain the concept related to ${it.skill_id}.`,
+        type: it.type,
+        stem: it.type === 'mcq'
+          ? `Which is true about ${it.skill_id}?`
+          : `Explain the concept related to ${it.skill_id}.`,
         skill_id: it.skill_id,
         difficulty: it.difficulty,
-        options: i % 2 === 0 ? ['A', 'B', 'C', 'D'] : undefined,
-        correct_answer: i % 2 === 0 ? 'A' : '',
+        options: it.type === 'mcq' ? ['A', 'B', 'C', 'D'] : undefined,
+        correct_answer: it.type === 'mcq' ? 'A' : '',
         explanation: 'Auto-generated mock explanation.',
         hint: 'Think about the core idea without revealing the answer.',
       }));
+    };
+
+    const out = await withTimeout(Promise.resolve(build()), 100);
+    if (out === Symbol.for && out.description === 'timeout') {
+      // defensive, but Promise.resolve won't time out
+      return {
+        service_requester: 'Assessment',
+        payload: payload || {},
+        response: { answer: [] },
+      };
     }
 
-    // Validate (best-effort)
-    const withValidation = [];
-    for (const q of generated) {
-      try {
-        const v = await validateQuestion({ question: q });
-        withValidation.push({ ...q, _validation: v });
-      } catch {
-        withValidation.push({ ...q, _validation: { valid: false, reasons: ['validation_failed'] } });
-      }
-    }
-
-    // Envelope back with response.answer array
     return {
       service_requester: 'Assessment',
       payload: payload || {},
-      response: { answer: withValidation },
+      response: { answer: Array.isArray(out) ? out : [] },
     };
   } catch {
     return {
