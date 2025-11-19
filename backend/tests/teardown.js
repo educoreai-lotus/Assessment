@@ -19,6 +19,12 @@ module.exports = async () => {
     // eslint-disable-next-line no-console
     console.error("Postgres teardown error:", err.message);
   }
+
+  try {
+    if (typeof jest !== 'undefined' && jest.useRealTimers) {
+      jest.useRealTimers();
+    }
+  } catch {}
 };
 
 

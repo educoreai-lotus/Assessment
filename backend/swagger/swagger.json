@@ -95,7 +95,7 @@
     "/api/exams": {
       "post": {
         "summary": "Create exam (baseline or postcourse)",
-        "description": "Creates an exam and initial attempt. Theoretical questions are generated via OpenAI (medium difficulty, mixed types). Coding questions are requested from DevLab. Hints are stored but never returned to the frontend.",
+        "description": "Creates an exam and initial attempt, builds ExamPackage via integrations with safe mock fallbacks.",
         "requestBody": {
           "required": true,
           "content": {
@@ -141,7 +141,7 @@
     "/api/exams/{examId}/start": {
       "post": {
         "summary": "Start an exam attempt",
-        "description": "Marks attempt as started and returns ExamPackage (policy, skills, coverage_map, questions) with timing fields.",
+        "description": "Marks attempt as started and returns ExamPackage (policy, skills, coverage_map, questions).",
         "parameters": [
           {
             "in": "path",
@@ -172,22 +172,7 @@
         },
         "responses": {
           "200": {
-            "description": "Started",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "exam_id": { "type": "integer" },
-                    "attempt_id": { "type": "integer" },
-                    "expires_at": { "type": "string", "format": "date-time" },
-                    "started_at": { "type": "string", "format": "date-time" },
-                    "duration_seconds": { "type": "integer" },
-                    "questions": { "type": "array" }
-                  }
-                }
-              }
-            }
+            "description": "Started"
           }
         }
       }
@@ -200,27 +185,14 @@
             "in": "path",
             "name": "examId",
             "required": true,
-            "schema": { "type": "integer" }
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Resolved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "exam_id": { "type": "integer" },
-                    "attempt_id": { "type": "integer" },
-                    "started_at": { "type": "string", "format": "date-time" },
-                    "expires_at": { "type": "string", "format": "date-time" },
-                    "duration_seconds": { "type": "integer" },
-                    "status": { "type": "string", "example": "active|expired|canceled" }
-                  }
-                }
-              }
-            }
+            "description": "Resolved timing/status"
           }
         }
       }
@@ -302,7 +274,7 @@
     "/api/fill-content-metrics": {
       "post": {
         "summary": "Universal inbound integration endpoint",
-        "description": "Accepts all inbound integration requests via a unified envelope. For DevLab with action=generateTheoretical, returns theoretical questions using OpenAI with difficulty pattern rules.",
+        "description": "Accepts all inbound integration requests via a unified envelope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -320,7 +292,7 @@
                   },
                   "stringified_json": {
                     "type": "string",
-                    "description": "Stringified JSON payload for the request. Example for DevLab theoretical generation: {\"action\":\"generateTheoretical\",\"skill_id\":\"s_js_async\",\"num_questions\":3}"
+                    "description": "Stringified JSON payload for the request"
                   }
                 }
               }
@@ -329,7 +301,7 @@
         },
         "responses": {
           "200": {
-            "description": "Accepted envelope processed. For DevLab theoretical, response contains { questions: [...] }."
+            "description": "Accepted envelope processed"
           },
           "400": {
             "description": "Invalid envelope"
@@ -395,6 +367,27 @@
         "responses": {
           "200": {
             "description": "Violation recorded"
+          }
+        }
+      }
+    },
+    "/api/proctoring/{attempt_id}/incident": {
+      "post": {
+        "summary": "Report a generic proctoring incident for an attempt",
+        "description": "Records an incident event tied to an attempt for auditing.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Incident recorded"
           }
         }
       }
