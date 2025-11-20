@@ -16,6 +16,27 @@ const { ProctoringSession, ExamPackage } = require('../models');
 const { normalizeToInt } = require("../services/core/idNormalizer");
 const proctoringController = require('./../controllers/proctoringController');
 
+// GET /api/exams/:examId - package readiness/info
+exports.getExam = async (req, res, next) => {
+  try {
+    const { examId } = req.params;
+    const examIdNum = normalizeToInt(examId);
+    if (examIdNum == null) {
+      return res.status(400).json({ error: 'invalid_exam_id' });
+    }
+    const pkg = await ExamPackage.findOne({ exam_id: String(examIdNum) }).lean();
+    if (!pkg) {
+      return res.status(202).json({ package_ready: false });
+    }
+    return res.status(200).json({
+      package_ready: true,
+      ...pkg,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 exports.createExam = async (req, res, next) => {
   try {
     const { user_id, exam_type, course_id, course_name } = req.body || {};

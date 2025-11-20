@@ -7,6 +7,22 @@ import CameraPreview from '../../components/CameraPreview';
 import { examApi } from '../../services/examApi';
 import { http } from '../../services/http';
 
+async function waitForPackage(examId, maxWaitMs = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    try {
+      const res = await http.get(`/api/exams/${examId}`);
+      if (res?.data?.package_ready) {
+        return res.data;
+      }
+    } catch (err) {
+      // Ignore until ready
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  throw new Error("Exam package still not ready after waiting");
+}
+
 export default function PostCourseExam() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -103,6 +119,12 @@ export default function PostCourseExam() {
             exam_type: 'postcourse',
             course_id: courseId,
           });
+          const { exam_id, attempt_id } = created;
+          setAttemptId(attempt_id);
+          setExamId(exam_id);
+          console.log("⏳ Waiting for exam package to be ready...");
+          await waitForPackage(exam_id);
+          console.log("✅ Exam package ready");
           // Always override with fresh IDs from backend
           resolvedExamId = String(created?.exam_id ?? '');
           resolvedAttemptId = created?.attempt_id ?? null;

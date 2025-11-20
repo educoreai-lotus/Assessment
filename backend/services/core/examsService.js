@@ -151,6 +151,13 @@ async function buildExamPackageDoc({
       expires_at: expires_at_iso ?? undefined,
     },
   });
+  // Emit full package payload before persisting, for postcourse only
+  try {
+    if (String(doc.assessment_type).toLowerCase() === 'postcourse') {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][POSTCOURSE][BUILT_PACKAGE]', JSON.stringify(doc.toObject(), null, 2));
+    }
+  } catch {}
   await doc.save();
   return doc;
 }
@@ -528,6 +535,12 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       // eslint-disable-next-line no-console
       console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'devlab_build_failed', message: e?.message });
     } catch {}
+    try {
+      if (String(exam_type).toLowerCase() === 'postcourse') {
+        // eslint-disable-next-line no-console
+        console.log('[TRACE][POSTCOURSE][DEVLAB][ERROR]', { stage: 'build_coding_questions', message: e?.message, stack: e?.stack });
+      }
+    } catch {}
     codingQuestionsDecorated = [];
   }
   try {
@@ -625,42 +638,79 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       }
     } catch {}
   } catch (err) {
+    try {
+      if (String(exam_type).toLowerCase() === 'postcourse') {
+        // eslint-disable-next-line no-console
+        console.log('[TRACE][POSTCOURSE][AI][ERROR]', { stage: 'generate_theoretical_questions', message: err?.message, stack: err?.stack });
+      } else {
+        // eslint-disable-next-line no-console
+        console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'ai_generation_failed', message: err?.message });
+      }
+    } catch {}
     // Fallback to theoretical mocks if OpenAI fails
-    const { buildMockQuestions } = require("../mocks/theoryMock");
-    const skillsForMocks = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
-    const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
-    // map mocks into unified normalized structure; MCQs only in mock; OPEN omitted if not available
-    const normalizedMcqs = mocks.map((m) => ({
-      qid: m.qid,
-      type: "mcq",
-      skill_id: m.skill_id,
-      difficulty: "medium",
-      question: m.prompt?.question || "",
-      stem: m.prompt?.question || "",
-      options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
-      correct_answer: m.prompt?.correct_answer || "",
-    }));
-    // duplicate MCQ set once if we need two per skill in postcourse
-    const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
-    questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+    try {
+      const { buildMockQuestions } = require("../mocks/theoryMock");
+      const skillsForMocks = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
+      const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
+      // map mocks into unified normalized structure; MCQs only in mock; OPEN omitted if not available
+      const normalizedMcqs = mocks.map((m) => ({
+        qid: m.qid,
+        type: "mcq",
+        skill_id: m.skill_id,
+        difficulty: "medium",
+        question: m.prompt?.question || "",
+        stem: m.prompt?.question || "",
+        options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
+        correct_answer: m.prompt?.correct_answer || "",
+      }));
+      // duplicate MCQ set once if we need two per skill in postcourse
+      const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
+      questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+      try {
+        if (String(exam_type).toLowerCase() === 'postcourse') {
+          // eslint-disable-next-line no-console
+          console.log('[TRACE][POSTCOURSE][MOCK_FALLBACK]', { reason: 'ai_failed', mcq_count: normalizedMcqs.length, duplicated_for_open: duplicatedForOpen.length });
+        }
+      } catch {}
+    } catch (mockErr) {
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'mock_fallback_failed', message: mockErr?.message, stack: mockErr?.stack });
+      } catch {}
+      questions = [];
+    }
   }
   // If AI returned zero items, also fallback to mocks
   if (!Array.isArray(questions) || questions.length === 0) {
-    const { buildMockQuestions } = require("../mocks/theoryMock");
-    const skillsForMocks = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
-    const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
-    const normalizedMcqs = mocks.map((m) => ({
-      qid: m.qid,
-      type: "mcq",
-      skill_id: m.skill_id,
-      difficulty: "medium",
-      question: m.prompt?.question || "",
-      stem: m.prompt?.question || "",
-      options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
-      correct_answer: m.prompt?.correct_answer || "",
-    }));
-    const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
-    questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+    try {
+      const { buildMockQuestions } = require("../mocks/theoryMock");
+      const skillsForMocks = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
+      const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
+      const normalizedMcqs = mocks.map((m) => ({
+        qid: m.qid,
+        type: "mcq",
+        skill_id: m.skill_id,
+        difficulty: "medium",
+        question: m.prompt?.question || "",
+        stem: m.prompt?.question || "",
+        options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
+        correct_answer: m.prompt?.correct_answer || "",
+      }));
+      const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
+      questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+      try {
+        if (String(exam_type).toLowerCase() === 'postcourse') {
+          // eslint-disable-next-line no-console
+          console.log('[TRACE][POSTCOURSE][MOCK_FALLBACK]', { reason: 'no_items_generated', mcq_count: normalizedMcqs.length, duplicated_for_open: duplicatedForOpen.length });
+        }
+      } catch {}
+    } catch (mockErr2) {
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'mock_fallback_failed', message: mockErr2?.message, stack: mockErr2?.stack });
+      } catch {}
+      questions = [];
+    }
   }
 
   // Final validation

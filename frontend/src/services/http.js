@@ -15,7 +15,7 @@ function resolveBaseUrl() {
 
 export const http = axios.create({
   baseURL: resolveBaseUrl(),
-  timeout: 45000,
+  timeout: 45000, // Postcourse exam creation can take up to 30s
   headers: { 'Content-Type': 'application/json' },
 });
 

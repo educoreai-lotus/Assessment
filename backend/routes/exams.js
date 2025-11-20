@@ -62,6 +62,9 @@ router.post('/', examsController.createExam);
  */
 router.post('/:examId/start', examsController.startExam);
 
+// Package readiness / exam info
+router.get('/:examId', examsController.getExam);
+
 /**
  * @openapi
  * /api/exams/{examId}/proctoring:
