@@ -120,11 +120,18 @@ async function buildExamPackageDoc({
             : undefined,
         difficulty: !isCode ? String(difficulty) : undefined,
         // Strip hints everywhere; additionally strip difficulty for theoretical prompts
-        prompt: sanitizeQuestionPromptForStorage(q),
-        options: Array.isArray(q?.choices)
-          ? q.choices
-          : (Array.isArray(q?.prompt?.options) ? q.prompt.options : []),
-        answer_key: q?.correct_answer ?? null,
+        // Persist prompt with options/correct_answer for theoretical
+        prompt: sanitizeQuestionPromptForStorage({
+          question: q.question || q.stem || '',
+          options: Array.isArray(q?.options) ? q.options : (Array.isArray(q?.prompt?.options) ? q.prompt.options : (Array.isArray(q?.choices) ? q.choices : [])),
+          correct_answer: q.correct_answer || q?.prompt?.correct_answer || '',
+          skill_id: q.skill_id,
+          type,
+        }),
+        options: Array.isArray(q?.options)
+          ? q.options
+          : (Array.isArray(q?.prompt?.options) ? q.prompt.options : (Array.isArray(q?.choices) ? q.choices : [])),
+        answer_key: isCode ? (q?.correct_answer ?? null) : undefined,
         metadata: { type: type || "mcq", difficulty },
       };
     }),
@@ -227,6 +234,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
 
   // Phase: Replace theoretical mocks with REAL OpenAI generation
   const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
+  const { normalizeAiQuestion, validateTheoreticalQuestions } = require("./theoryService");
   const { normalizeSkills } = require("./skillsUtils");
 
   // Already converted user_id above; proceed
@@ -495,22 +503,13 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       }
       // Map to our theoretical question input shape
       const hints = q?.hint ? [String(q.hint)] : undefined;
-      const normalized = {
-        type: q.type === 'open' ? 'open' : 'mcq',
-        stem: q.stem || '',
-        question: q.stem || '',
-        choices: Array.isArray(q.options) ? q.options : (Array.isArray(q.prompt?.options) ? q.prompt.options : []),
-        correct_answer: q.correct_answer || q.prompt?.correct_answer || '',
-        difficulty: 'medium', // enforced policy
-        topic_id: 0,
-        topic_name: 'General',
-        humanLanguage: 'en',
-        hints,
-        skill_id: q.skill_id || undefined,
-      };
+      const normalized = normalizeAiQuestion({
+        ...q,
+        hint: hints,
+      });
       validated.push(normalized);
     }
-    questions = validated;
+    questions = validateTheoreticalQuestions(validated);
     try {
       // eslint-disable-next-line no-console
       console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE][THEORY]`, {
@@ -535,16 +534,16 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     })();
     const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, questionCount) });
     // map mocks into unified normalized structure
-    questions = mocks.map((m) => ({
+    questions = validateTheoreticalQuestions(mocks.map((m) => ({
       qid: m.qid,
       type: "mcq",
       skill_id: m.skill_id,
       difficulty: "medium",
       question: m.prompt?.question || "",
       stem: m.prompt?.question || "",
-      choices: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
+      options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
       correct_answer: m.prompt?.correct_answer || "",
-    }));
+    })));
   }
   // If AI returned zero items, also fallback to mocks
   if (!Array.isArray(questions) || questions.length === 0) {
@@ -561,43 +560,19 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       return Array.from(new Set(arr.filter(Boolean)));
     })();
     const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, questionCount) });
-    questions = mocks.map((m) => ({
+    questions = validateTheoreticalQuestions(mocks.map((m) => ({
       qid: m.qid,
       type: "mcq",
       skill_id: m.skill_id,
       difficulty: "medium",
       question: m.prompt?.question || "",
       stem: m.prompt?.question || "",
-      choices: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
+      options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
       correct_answer: m.prompt?.correct_answer || "",
-    }));
+    })));
   }
 
-  // Theoretical validator: ensure prompt.correct_answer ∈ options
-  function validateTheoreticalQuestions(input) {
-    const out = [];
-    for (const q of input || []) {
-      const options = Array.isArray(q?.choices) ? q.choices : (Array.isArray(q?.prompt?.options) ? q.prompt.options : []);
-      const ca = q?.correct_answer || q?.prompt?.correct_answer || "";
-      let fixedCA = ca;
-      if (!Array.isArray(options) || options.length === 0) {
-        out.push(q);
-        continue;
-      }
-      if (!options.includes(ca)) {
-        fixedCA = options[0];
-        try {
-          // eslint-disable-next-line no-console
-          console.log('[THEORY][MOCK][FIXED]', { reason: 'correct_answer_not_in_options', set_to: fixedCA });
-        } catch {}
-      }
-      out.push({
-        ...q,
-        correct_answer: fixedCA,
-      });
-    }
-    return out;
-  }
+  // Final validation
   questions = validateTheoreticalQuestions(questions);
   if (process.env.NODE_ENV !== "test") {
     try {

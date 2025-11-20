@@ -20,7 +20,7 @@ function buildMockQuestions({ skills = [], amount = 4 }) {
   for (let i = 0; i < total; i += 1) {
     const skill_id = String(pool[i % pool.length] || "general");
     results.push({
-      qid: `mock_q_${i + 1}`,
+      qid: `mock_theory_${i + 1}`,
       type: "mcq",
       skill_id,
       difficulty: "medium",
