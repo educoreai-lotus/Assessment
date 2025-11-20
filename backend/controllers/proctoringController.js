@@ -11,7 +11,7 @@ exports.startCamera = async (req, res, next) => {
     // [TRACE] proctoring start (attempt-only)
     try {
       // eslint-disable-next-line no-console
-      console.log('[TRACE][PROCTORING][START_CAMERA]', { attempt_id });
+      console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'starting', attempt_id });
     } catch {}
 
     // Allow activation without Postgres in test environment
@@ -26,7 +26,8 @@ exports.startCamera = async (req, res, next) => {
         },
         { new: true, upsert: true },
       );
-      return res.json({ ok: true });
+      try { console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'active', attempt_id }); } catch {}
+      return res.json({ ok: true, camera_status: 'active' });
     }
 
     // Load exam_id from Postgres for the given attempt
@@ -51,7 +52,8 @@ exports.startCamera = async (req, res, next) => {
       { new: true, upsert: true },
     );
 
-    return res.json({ ok: true });
+    try { console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'active', attempt_id }); } catch {}
+    return res.json({ ok: true, camera_status: 'active' });
   } catch (err) {
     return next(err);
   }
