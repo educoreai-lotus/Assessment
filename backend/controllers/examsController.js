@@ -115,8 +115,16 @@ exports.startExam = async (req, res, next) => {
     let session = null;
     try {
       session = await ProctoringSession.findOne({ attempt_id: String(attemptIdNum) }).lean();
+      try {
+        console.log('[TRACE][EXAM][START][PROCTORING][LOOKUP]', {
+          attempt_id: attemptIdNum,
+          exam_id: Number(examIdNum),
+          found: !!session,
+          doc: session || null,
+        });
+      } catch {}
     } catch (e) {
-      try { console.log('[TRACE][EXAM][START][PROCTORING][ERROR]', { error: 'proctoring_lookup_failed', attempt_id: attemptIdNum, message: e?.message }); } catch {}
+      try { console.log('[TRACE][EXAM][START][PROCTORING][ERROR]', { error: 'proctoring_lookup_failed', attempt_id: attemptIdNum, exam_id: Number(examIdNum), message: e?.message }); } catch {}
       return res.status(500).json({ error: 'proctoring_lookup_failed', message: 'Failed to verify proctoring session' });
     }
     const hasStarted =
@@ -125,10 +133,10 @@ exports.startExam = async (req, res, next) => {
         !!session?.start_time ||
         !!session?.started_at);
     if (!hasStarted) {
-      try { console.log('[TRACE][EXAM][START][PROCTORING]', { ok: false, attempt_id: attemptIdNum, camera_status: session?.camera_status || null, start_time: session?.start_time || null }); } catch {}
+      try { console.log('[TRACE][EXAM][START][PROCTORING][GATE]', { ok: false, attempt_id: attemptIdNum, exam_id: Number(examIdNum), camera_status: session?.camera_status || null, start_time: session?.start_time || null }); } catch {}
       return res.status(403).json({ error: 'proctoring_not_started', message: 'Proctoring session not started' });
     }
-    try { console.log('[TRACE][EXAM][START][PROCTORING]', { ok: true, attempt_id: attemptIdNum, camera_status: session?.camera_status || 'active' }); } catch {}
+    try { console.log('[TRACE][EXAM][START][PROCTORING][GATE]', { ok: true, attempt_id: attemptIdNum, exam_id: Number(examIdNum), camera_status: session?.camera_status || 'active' }); } catch {}
 
     const result = await markAttemptStarted({ attempt_id: attemptIdNum });
     if (result && result.error) {

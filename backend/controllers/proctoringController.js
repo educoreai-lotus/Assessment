@@ -11,12 +11,12 @@ exports.startCamera = async (req, res, next) => {
     // [TRACE] proctoring start (attempt-only)
     try {
       // eslint-disable-next-line no-console
-      console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'starting', attempt_id });
+      console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'starting', attempt_id, exam_id: null });
     } catch {}
 
     // Allow activation without Postgres in test environment
     if (process.env.NODE_ENV === 'test') {
-      await ProctoringSession.findOneAndUpdate(
+      const doc = await ProctoringSession.findOneAndUpdate(
         { attempt_id: String(attempt_id) },
         {
           attempt_id: String(attempt_id),
@@ -26,8 +26,16 @@ exports.startCamera = async (req, res, next) => {
         },
         { new: true, upsert: true },
       );
-      try { console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'active', attempt_id }); } catch {}
-      return res.json({ ok: true, camera_status: 'active' });
+      try {
+        console.log('[TRACE][PROCTORING][START_CAMERA][MONGO_UPSERT]', {
+          attempt_id,
+          exam_id: '0',
+          upserted: !!doc,
+          doc: doc || null,
+        });
+        console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'active', attempt_id, exam_id: '0' });
+      } catch {}
+      return res.json({ ok: true, camera_status: 'active', attempt_id, exam_id: '0' });
     }
 
     // Load exam_id from Postgres for the given attempt
@@ -41,7 +49,7 @@ exports.startCamera = async (req, res, next) => {
     }
     const examId = rows[0].exam_id;
 
-    await ProctoringSession.findOneAndUpdate(
+    const doc = await ProctoringSession.findOneAndUpdate(
       { attempt_id: String(attempt_id) },
       {
         attempt_id: String(attempt_id),
@@ -52,8 +60,17 @@ exports.startCamera = async (req, res, next) => {
       { new: true, upsert: true },
     );
 
-    try { console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'active', attempt_id }); } catch {}
-    return res.json({ ok: true, camera_status: 'active' });
+    try {
+      console.log('[TRACE][PROCTORING][START_CAMERA][MONGO_UPSERT]', {
+        attempt_id,
+        exam_id: String(examId),
+        upserted: !!doc,
+        doc: doc || null,
+      });
+      console.log('[TRACE][PROCTORING][START_CAMERA]', { ok: true, camera_status: 'active', attempt_id, exam_id: String(examId) });
+    } catch {}
+
+    return res.json({ ok: true, camera_status: 'active', attempt_id, exam_id: String(examId) });
   } catch (err) {
     return next(err);
   }
