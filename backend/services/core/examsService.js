@@ -479,11 +479,24 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       `
         UPDATE exam_attempts
         SET duration_minutes = $1,
-            expires_at = NULL
+            expires_at = NULL,
+            started_at = NULL
         WHERE attempt_id = $2
       `,
       [durationMinutes || null, attemptId],
     );
+  } catch {}
+  try {
+    // eslint-disable-next-line no-console
+    if (exam_type === 'postcourse') {
+      console.log('[TRACE][POSTCOURSE][ATTEMPT_CREATED]', {
+        exam_id: examId,
+        attempt_id: attemptId,
+        attempt_no: attemptNo,
+        started_at: null,
+        expires_at: null,
+      });
+    }
   } catch {}
 
   // Build ExamPackage in Mongo
@@ -674,6 +687,16 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
         `UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`,
         [pkg._id, attemptId],
       );
+      try {
+        // eslint-disable-next-line no-console
+        if (exam_type === 'postcourse') {
+          console.log('[TRACE][POSTCOURSE][PACKAGE_LINKED]', {
+            exam_id: examId,
+            attempt_id: attemptId,
+            package_ref: String(pkg._id),
+          });
+        }
+      } catch {}
     } catch (e) {
       try {
         // eslint-disable-next-line no-console
