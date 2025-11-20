@@ -52,6 +52,7 @@ export default function PostCourseExam() {
   const proctoringStartedRef = useRef(false);
   const [expiresAtIso, setExpiresAtIso] = useState(null);
   const [remainingSec, setRemainingSec] = useState(null);
+  const recreateOnceRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -71,10 +72,31 @@ export default function PostCourseExam() {
           localStorage.setItem('demo_user_id', userId);
         }
 
-        let resolvedExamId = examId;
+        let resolvedExamId = null;
         let resolvedAttemptId = null;
 
-        // Create a postcourse exam (idempotent per use-case; attempts policy enforced on start)
+        // If any stale stored attempt exists, verify and clear if expired
+        try {
+          const storedExamId = localStorage.getItem('exam_postcourse_id');
+          const storedAttemptId = localStorage.getItem('postcourse_attempt_id');
+          if (storedExamId && storedAttemptId) {
+            try {
+              const status = await examApi.resolve(storedExamId);
+              const expired = status?.status === 'expired' || (status?.expires_at && new Date(status.expires_at) < new Date());
+              if (expired) {
+                console.log('🔥 Clearing expired stored postcourse attempt', storedAttemptId, storedExamId);
+                localStorage.removeItem('postcourse_attempt_id');
+                localStorage.removeItem('postcourse_attempt_no');
+              }
+            } catch {
+              // If resolve fails, clear stale cache to be safe
+              localStorage.removeItem('postcourse_attempt_id');
+              localStorage.removeItem('postcourse_attempt_no');
+            }
+          }
+        } catch {}
+
+        // Always request a fresh attempt from backend
         try {
           const created = await examApi.create({
             user_id: userId,
@@ -90,6 +112,8 @@ export default function PostCourseExam() {
             localStorage.removeItem('exam_baseline_id');
             // Do NOT persist any attempt_id in storage; only exam id for convenience
             if (resolvedExamId) localStorage.setItem('exam_postcourse_id', resolvedExamId);
+            if (resolvedAttemptId) localStorage.setItem('postcourse_attempt_id', String(resolvedAttemptId));
+            if (created?.attempt_no != null) localStorage.setItem('postcourse_attempt_no', String(created.attempt_no));
           } catch {}
           // Reset UI and gating state to avoid reusing stale attempt info
           proctoringStartedRef.current = false;
@@ -107,6 +131,14 @@ export default function PostCourseExam() {
           }
         } catch (err) {
           const apiErr = err?.response?.data?.error || '';
+          const statusCode = err?.response?.status;
+          if (statusCode === 403 || apiErr === 'exam_time_expired' || apiErr === 'proctoring_not_started') {
+            // Clear stale attempt if any 403 at creation
+            try {
+              localStorage.removeItem('postcourse_attempt_id');
+              localStorage.removeItem('postcourse_attempt_no');
+            } catch {}
+          }
           // Fallback to most recent attempt when policy prevents new attempt
           if (apiErr === 'max_attempts_reached' || apiErr === 'baseline_already_completed') {
             const list = await examApi.attemptsByUser(userId);
@@ -185,6 +217,66 @@ export default function PostCourseExam() {
         }
       } catch (e) {
         const apiErr = e?.response?.data?.message || e?.response?.data?.error || e?.message || '';
+        const statusCode = e?.response?.status;
+        // On any start 403 or known gating errors, clear stale attempt and try one more fresh create-start cycle
+        if (!recreateOnceRef.current && (statusCode === 403 || apiErr === 'proctoring_not_started' || apiErr === 'exam_time_expired')) {
+          recreateOnceRef.current = true;
+          try {
+            console.log('🔥 Restarting postcourse attempt after start error', { apiErr, statusCode });
+            localStorage.removeItem('postcourse_attempt_id');
+            localStorage.removeItem('postcourse_attempt_no');
+            // Recreate attempt
+            const userId = localStorage.getItem('demo_user_id') || 'u_123';
+            const created = await examApi.create({ user_id: userId, exam_type: 'postcourse', course_id: courseId });
+            const newExamId = String(created?.exam_id ?? '');
+            const newAttemptId = created?.attempt_id ?? null;
+            if (newExamId) localStorage.setItem('exam_postcourse_id', newExamId);
+            if (newAttemptId) localStorage.setItem('postcourse_attempt_id', String(newAttemptId));
+            if (created?.attempt_no != null) localStorage.setItem('postcourse_attempt_no', String(created.attempt_no));
+            setExamId(newExamId);
+            setAttemptId(newAttemptId);
+            // start camera, then restart exam
+            await examApi.proctoringStartForExam(newExamId, { attempt_id: newAttemptId });
+            const data2 = await examApi.start(newExamId, { attempt_id: newAttemptId });
+            if (cancelled) return;
+            const normalized2 = Array.isArray(data2?.questions)
+              ? data2.questions.map((p, idx) => {
+                  const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
+                  const uiType = qTypeRaw === 'open' ? 'text' : qTypeRaw;
+                  const text =
+                    typeof p?.prompt === 'string'
+                      ? p.prompt
+                      : (p?.prompt?.question || p?.prompt?.stem || '');
+                  const optsRaw = Array.isArray(p?.options) ? p.options : (Array.isArray(p?.prompt?.choices) ? p.prompt.choices : []);
+                  const opts = Array.isArray(optsRaw) ? optsRaw.map((o) => (typeof o === 'string' ? o : JSON.stringify(o))) : [];
+                  return {
+                    id: p?.question_id || p?.qid || p?.id || String(idx + 1),
+                    originalId: p?.question_id || p?.qid || p?.id || String(idx + 1),
+                    type: uiType,
+                    prompt: text,
+                    options: opts,
+                    skill: p?.prompt?.skill_name || p?.skill_name || p?.skill || p?.skill_id || 'General',
+                    skill_id: p?.skill_id || null,
+                  };
+                })
+              : [];
+            setQuestions(normalized2);
+            setCurrentIdx(0);
+            setAnswers({});
+            if (data2?.expires_at) {
+              setExpiresAtIso(String(data2.expires_at));
+              const now = Date.now();
+              const exp = new Date(String(data2.expires_at)).getTime();
+              const diff = Math.max(0, Math.floor((exp - now) / 1000));
+              setRemainingSec(Number.isFinite(diff) ? diff : null);
+            } else if (Number.isFinite(Number(data2?.duration_seconds))) {
+              setRemainingSec(Number(data2.duration_seconds));
+            }
+            return;
+          } catch (re) {
+            // fall through to render error
+          }
+        }
         if (apiErr === 'max_attempts_reached') {
           // Try to redirect to the most recent attempt results for this user/course
           try {

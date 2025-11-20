@@ -4,6 +4,9 @@ export const examApi = {
   create(payload) {
     return http.post('/api/exams', payload).then(r => r.data);
   },
+  resolve(examId) {
+    return http.get(`/api/exams/${encodeURIComponent(examId)}`).then(r => r.data);
+  },
   start(examId, payload) {
     return http.post(`/api/exams/${encodeURIComponent(examId)}/start`, payload).then(r => r.data);
   },
