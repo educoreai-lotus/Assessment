@@ -80,7 +80,11 @@ exports.createExam = async (req, res, next) => {
       }
       return res.status(400).json({ error: errorCode, message: resp.message || errorCode });
     }
-    try { console.log('[TRACE][EXAM][CREATE][RETURN]', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id }); } catch {}
+    try {
+      console.log('[TRACE][EXAM][CREATE][RETURN]', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id });
+      // Explicit assertion: createExam does NOT start proctoring or the exam
+      console.log('[TRACE][CREATE] no startExam', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id });
+    } catch {}
     return res.status(201).json(resp);
   } catch (err) {
     return next(err);
@@ -95,6 +99,7 @@ exports.startExam = async (req, res, next) => {
     try {
       // eslint-disable-next-line no-console
       console.log('[TRACE][EXAM][START]', { examId: Number(examId), attempt_id });
+      console.log('[TRACE][START] only runs on frontend request', { examId: Number(examId) });
     } catch {}
 
     // Validate and parse IDs
