@@ -213,6 +213,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     } catch {}
     policy = await safeFetchPolicy("baseline");
   } else if (exam_type === "postcourse") {
+    // Phase 1: Policy first, then coverage (with safe mocks)
+    policy = await safeFetchPolicy("postcourse");
     coveragePayload = await safeFetchCoverage({
       learner_id: user_id,
       learner_name: undefined,
@@ -222,12 +224,11 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       const mapArr = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
       const skillsTotal = mapArr.map(i => Array.isArray(i?.skills) ? i.skills.length : 0).reduce((a,b)=>a+b,0);
       // eslint-disable-next-line no-console
-      console.log('[TRACE][POSTCOURSE][CREATE][COVERAGE]', {
+      console.log('[TRACE][POSTCOURSE][COVERAGE]', {
         coverage_items: mapArr.length,
         coverage_skills_total: skillsTotal,
       });
     } catch {}
-    policy = await safeFetchPolicy("postcourse");
   } else {
     return { error: "invalid_exam_type" };
   }
@@ -250,79 +251,97 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     // Always first and only attempt
     attemptNo = 1;
   } else if (exam_type === "postcourse") {
+    // Phase 2: Smart retake skill selection across ALL postcourse attempts for this user+course
     const passingGrade = Number((policy || {})?.passing_grade ?? 0);
-    const maxAttempts = Number((policy || {})?.max_attempts ?? 0);
-    const { rows: lastPost } = await pool.query(
+    const maxAttempts = Number((policy || {})?.max_attempts ?? 1);
+    const courseInt = normalizeToInt(course_id);
+    // Fetch attempts for this user + course
+    const { rows: attemptsRows } = await pool.query(
       `
-        SELECT ea.attempt_id, ea.attempt_no
+        SELECT ea.attempt_id, ea.attempt_no, ea.final_grade, ea.passed, e.course_id
         FROM exam_attempts ea
         JOIN exams e ON e.exam_id = ea.exam_id
         WHERE e.user_id = $1
           AND e.exam_type = 'postcourse'
+          AND e.course_id = $2
         ORDER BY ea.attempt_no DESC
-        LIMIT 1
       `,
-      [userInt],
+      [userInt, courseInt],
     );
-    if (!lastPost || lastPost.length === 0) {
-      attemptNo = 1;
-    } else {
-      const lastNo = Number(lastPost[0].attempt_no || 0);
-      if (Number.isFinite(maxAttempts) && maxAttempts > 0 && lastNo >= maxAttempts) {
-        return { error: "max_attempts_reached" };
-      }
-      attemptNo = lastNo + 1;
+    const latestAttemptNo = attemptsRows?.[0] ? Number(attemptsRows[0].attempt_no || 0) : 0;
+    // Enforce max attempts
+    if (Number.isFinite(maxAttempts) && latestAttemptNo >= maxAttempts) {
+      return { error: "max_attempts_reached" };
     }
-  }
-
-  // Smart Retake Logic (pre-filter skills/coverage by failed ones from last completed attempt)
-  try {
-    const { selectFailedSkillIds } = require("./retakeUtils");
-    const { rows: lastRows } = await pool.query(
-      `
-        SELECT ea.attempt_id AS last_attempt_id, ea.exam_id AS last_exam_id, ea.submitted_at
-        FROM exam_attempts ea
-        JOIN exams e ON e.exam_id = ea.exam_id
-        WHERE e.user_id = $1 AND e.exam_type = $2 AND ea.submitted_at IS NOT NULL
-        ORDER BY ea.submitted_at DESC
-        LIMIT 1
-      `,
-      [userInt, exam_type],
-    );
-    if (Array.isArray(lastRows) && lastRows.length > 0) {
-      const lastAttemptId = lastRows[0].last_attempt_id;
-      const { rows: skillRows } = await pool.query(
-        `SELECT skill_id, skill_name, score, status FROM attempt_skills WHERE attempt_id = $1`,
-        [lastAttemptId],
+    // Enforce already passed if any attempt meets passing
+    const anyPassed =
+      Array.isArray(attemptsRows) &&
+      attemptsRows.some((r) => Number(r.final_grade || 0) >= passingGrade);
+    if (anyPassed) {
+      return { error: "postcourse_already_passed" };
+    }
+    attemptNo = (latestAttemptNo || 0) + 1;
+    // Normalize coverage map now to compute skills
+    const { normalizeSkills } = require("./skillsUtils");
+    const rawCoverageList = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
+    const normalizedCoverageMapPre = rawCoverageList.map((item) => ({
+      ...item,
+      skills: normalizeSkills(item?.skills || []),
+    })).filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
+    // Compute coverage skills set
+    const coverageSkills = new Set();
+    for (const it of normalizedCoverageMapPre) {
+      for (const s of it.skills) {
+        const sid = String(s?.skill_id || "").trim();
+        if (sid) coverageSkills.add(sid);
+      }
+    }
+    // Gather prior attempt_ids
+    const priorAttemptIds = attemptsRows.map((r) => r.attempt_id).filter(Boolean);
+    let acquiredSkills = new Set();
+    if (priorAttemptIds.length > 0) {
+      const { rows: acquiredRows } = await pool.query(
+        `
+          SELECT skill_id, score, status
+          FROM attempt_skills
+          WHERE attempt_id = ANY($1::int[])
+        `,
+        [priorAttemptIds],
       );
-      const passingGrade = Number((policy || {})?.passing_grade ?? 70);
-      const failedSkillIds = selectFailedSkillIds(skillRows || [], passingGrade);
-      // If none failed -> passed previously → no retake allowed
-      if (failedSkillIds.size === 0) {
-        return { error: "retake_not_allowed" };
-      }
-      // Narrow future generation to failed skills only
-      if (exam_type === "baseline") {
-        const baseSkills = Array.isArray(skillsPayload?.skills) ? skillsPayload.skills : [];
-        const filtered = baseSkills.filter((s) => {
-          const sid = String(s?.skill_id || s?.id || s?.name || '').trim();
-          return sid && failedSkillIds.has(sid);
-        });
-        skillsPayload = { ...(skillsPayload || {}), skills: filtered.length ? filtered : baseSkills };
-      } else if (exam_type === "postcourse") {
-        const mapArray = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
-        const filteredMap = mapArray.map((item) => {
-          const arr = Array.isArray(item?.skills) ? item.skills : [];
-          const onlyFailed = arr.filter((sk) => {
-            const sid = String(sk?.skill_id || sk?.id || sk?.name || '').trim();
-            return sid && failedSkillIds.has(sid);
-          });
-          return { ...item, skills: onlyFailed };
-        }).filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
-        coveragePayload = { ...(coveragePayload || {}), coverage_map: filteredMap.length ? filteredMap : mapArray };
-      }
+      acquiredSkills = new Set(
+        (acquiredRows || [])
+          .filter((r) => String(r?.status || "").toLowerCase() === "acquired" || Number(r?.score || 0) >= passingGrade)
+          .map((r) => String(r.skill_id || "").trim())
+          .filter(Boolean),
+      );
     }
-  } catch {}
+    // Compute retake skills
+    const retakeSkills = Array.from(coverageSkills).filter((sid) => !acquiredSkills.has(sid));
+    // If empty, keep full coverage skills as fallback
+    const useSkills = retakeSkills.length > 0 ? retakeSkills : Array.from(coverageSkills);
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][POSTCOURSE][RETAKE_SKILLS]', {
+        coverage: coverageSkills.size,
+        acquired: acquiredSkills.size,
+        retake: useSkills.length,
+      });
+    } catch {}
+    // Reduce coverage map to retake skills only
+    const reducedCoverageMap = normalizedCoverageMapPre
+      .map((it) => ({
+        ...it,
+        skills: (it.skills || []).filter((s) => useSkills.includes(String(s.skill_id))),
+      }))
+      .filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
+    // Overwrite coverage payload in-memory for downstream usage
+    coveragePayload = {
+      ...(coveragePayload || {}),
+      coverage_map: reducedCoverageMap,
+    };
+    // Also set a synthetic "skillsPayload" so downstream generators can use a unified path if needed
+    skillsPayload = { skills: useSkills.map((sid) => ({ skill_id: sid, skill_name: sid })) };
+  }
 
   const insertExamText = `
     INSERT INTO exams (exam_type, user_id, course_id)
@@ -350,7 +369,14 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   console.debug("Normalized baseline skills:", normalizedBaselineSkills);
   // eslint-disable-next-line no-console
   console.debug("Normalized coverage skills:", normalizedCoverageMap.map(x => x.skills).flat());
-  const skillsArray = normalizedBaselineSkills;
+  // For postcourse, metadata.skills should be the retake skills list; fallback to baseline skills otherwise
+  const skillsArray = exam_type === "postcourse"
+    ? Array.from(
+        new Map(
+          normalizedCoverageMap.flatMap((it) => it.skills).map((s) => [String(s.skill_id), s]),
+        ).values(),
+      )
+    : normalizedBaselineSkills;
   const coverageMap = normalizedCoverageMap;
   const resolvedCourseName =
     exam_type === "postcourse"
@@ -362,11 +388,9 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   if (exam_type === "baseline") {
     questionCount = Array.isArray(skillsArray) ? skillsArray.length : 0;
   } else if (exam_type === "postcourse") {
-    const mapArray = Array.isArray(coverageMap) ? coverageMap : [];
-    questionCount = mapArray.reduce((acc, item) => {
-      const skillsInItem = Array.isArray(item?.skills) ? item.skills.length : 0;
-      return acc + skillsInItem;
-    }, 0);
+    // 2 per skill (1 MCQ + 1 OPEN) if possible
+    const uniqueSkillIds = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
+    questionCount = uniqueSkillIds.length * 2;
   }
   const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
   const expiresAtDate = durationMinutes > 0 ? new Date(Date.now() + durationMinutes * 60 * 1000) : null;
@@ -446,7 +470,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   }
   try {
     // eslint-disable-next-line no-console
-    console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE][DEVLAB]`, {
+    console.log(`[TRACE][${String(exam_type).toUpperCase()}][DEVLAB]`, {
       skills_for_coding: skillsForCoding.length,
       questions_built: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.length : 0,
       real_candidate: !!process.env.INTEGRATION_DEVLAB_DATA_REQUEST_URL,
@@ -456,26 +480,28 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   // Generate theoretical questions with medium difficulty (fixed), mixed types
   let questions = [];
   try {
-    const sourceIds = (() => {
+    const uniqueSkills = (() => {
       if (exam_type === "baseline") {
-        return (skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean);
+        return Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
       }
-      const ids = [];
-      for (const it of coverageMap || []) {
-        for (const s of (it.skills || [])) ids.push(String(s.skill_id));
-      }
-      return ids.filter(Boolean);
+      return Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
     })();
-    const uniqueSkills = Array.from(new Set(sourceIds));
     // eslint-disable-next-line no-console
     console.debug("Theoretical generation skills:", uniqueSkills);
     const items = [];
-    for (let i = 0; i < questionCount; i += 1) {
-      const skill_id = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
-      if (!skill_id) continue;
-      // mix types pseudo-random: alternate mcq/open
-      const type = i % 2 === 0 ? 'mcq' : 'open';
-      items.push({ skill_id, difficulty: 'medium', humanLanguage: 'en', type });
+    if (exam_type === "postcourse") {
+      // At least 1 MCQ and 1 OPEN per skill
+      for (const sid of uniqueSkills) {
+        items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type: 'mcq' });
+        items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type: 'open' });
+      }
+    } else {
+      for (let i = 0; i < questionCount; i += 1) {
+        const skill_id = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
+        if (!skill_id) continue;
+        const type = i % 2 === 0 ? 'mcq' : 'open';
+        items.push({ skill_id, difficulty: 'medium', humanLanguage: 'en', type });
+      }
     }
     const generated = await generateTheoreticalQuestions({ items });
 
@@ -512,29 +538,26 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     questions = validateTheoreticalQuestions(validated);
     try {
       // eslint-disable-next-line no-console
-      console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE][THEORY]`, {
-        generated: Array.isArray(generated) ? generated.length : 0,
-        validated: Array.isArray(questions) ? questions.length : 0,
-        real_candidate: !!process.env.OPENAI_API_KEY,
-      });
+      if (exam_type === "postcourse") {
+        console.log('[TRACE][POSTCOURSE][THEORY]', {
+          skills: Array.isArray(skillsArray) ? skillsArray.length : 0,
+          questions: Array.isArray(questions) ? questions.length : 0,
+        });
+      } else {
+        console.log(`[TRACE][${String(exam_type).toUpperCase()}][THEORY]`, {
+          generated: Array.isArray(generated) ? generated.length : 0,
+          validated: Array.isArray(questions) ? questions.length : 0,
+          real_candidate: !!process.env.OPENAI_API_KEY,
+        });
+      }
     } catch {}
   } catch (err) {
     // Fallback to theoretical mocks if OpenAI fails
     const { buildMockQuestions } = require("../mocks/theoryMock");
-    const skillsForMocks = (() => {
-      const arr = [];
-      if (exam_type === "baseline") {
-        for (const s of (skillsArray || [])) arr.push(String(s.skill_id));
-      } else {
-        for (const it of (coverageMap || [])) {
-          for (const s of (it.skills || [])) arr.push(String(s.skill_id));
-        }
-      }
-      return Array.from(new Set(arr.filter(Boolean)));
-    })();
-    const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, questionCount) });
-    // map mocks into unified normalized structure
-    questions = validateTheoreticalQuestions(mocks.map((m) => ({
+    const skillsForMocks = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
+    const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
+    // map mocks into unified normalized structure; MCQs only in mock; OPEN omitted if not available
+    const normalizedMcqs = mocks.map((m) => ({
       qid: m.qid,
       type: "mcq",
       skill_id: m.skill_id,
@@ -543,24 +566,17 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       stem: m.prompt?.question || "",
       options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
       correct_answer: m.prompt?.correct_answer || "",
-    })));
+    }));
+    // duplicate MCQ set once if we need two per skill in postcourse
+    const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
+    questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
   }
   // If AI returned zero items, also fallback to mocks
   if (!Array.isArray(questions) || questions.length === 0) {
     const { buildMockQuestions } = require("../mocks/theoryMock");
-    const skillsForMocks = (() => {
-      const arr = [];
-      if (exam_type === "baseline") {
-        for (const s of (skillsArray || [])) arr.push(String(s.skill_id));
-      } else {
-        for (const it of (coverageMap || [])) {
-          for (const s of (it.skills || [])) arr.push(String(s.skill_id));
-        }
-      }
-      return Array.from(new Set(arr.filter(Boolean)));
-    })();
-    const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, questionCount) });
-    questions = validateTheoreticalQuestions(mocks.map((m) => ({
+    const skillsForMocks = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
+    const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
+    const normalizedMcqs = mocks.map((m) => ({
       qid: m.qid,
       type: "mcq",
       skill_id: m.skill_id,
@@ -569,7 +585,9 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       stem: m.prompt?.question || "",
       options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
       correct_answer: m.prompt?.correct_answer || "",
-    })));
+    }));
+    const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
+    questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
   }
 
   // Final validation
@@ -1048,14 +1066,24 @@ async function submitAttempt({ attempt_id, answers }) {
   } catch {}
   try {
     // eslint-disable-next-line no-console
-    console.log('[TRACE][EXAM][SUBMIT][SUMMARY]', {
-      attempt_id: attemptIdNum,
-      exam_type: examType,
-      final_grade: Number(finalGrade),
-      totalAnswersCount,
-      nonBlankAnswersCount,
-      per_skill: perSkill.map((s) => ({ skill_id: s.skill_id, score: s.score, status: s.status })),
-    });
+    if (String(examType) === 'postcourse') {
+      console.log('[TRACE][POSTCOURSE][SUBMIT][SUMMARY]', {
+        attempt_id: attemptIdNum,
+        attempt_no: attempt.attempt_no || 1,
+        final_grade: Number(finalGrade),
+        passed,
+        skills: perSkill.map((s) => ({ skill_id: s.skill_id, score: s.score, status: s.status })),
+      });
+    } else {
+      console.log('[TRACE][EXAM][SUBMIT][SUMMARY]', {
+        attempt_id: attemptIdNum,
+        exam_type: examType,
+        final_grade: Number(finalGrade),
+        totalAnswersCount,
+        nonBlankAnswersCount,
+        per_skill: perSkill.map((s) => ({ skill_id: s.skill_id, score: s.score, status: s.status })),
+      });
+    }
   } catch {}
 
   // 10) Update Postgres exam_attempts
