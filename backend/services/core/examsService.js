@@ -436,8 +436,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     questionCount = 2;
   }
   const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
-  const expiresAtDate = durationMinutes > 0 ? new Date(Date.now() + durationMinutes * 60 * 1000) : null;
-  const expiresAtIso = expiresAtDate ? expiresAtDate.toISOString() : null;
+  // Expires-at is now set on start, not on creation
+  const expiresAtIso = null;
 
   // Insert initial attempt (attempt_no = 1)
   const policySnapshot = policy || {};
@@ -473,16 +473,16 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     return { error: "exam_creation_failed" };
   }
 
-  // Persist timing into attempt (duration_minutes, expires_at)
+  // Persist timing into attempt (duration_minutes only; expires_at set on start)
   try {
     await pool.query(
       `
         UPDATE exam_attempts
         SET duration_minutes = $1,
-            expires_at = $2
-        WHERE attempt_id = $3
+            expires_at = NULL
+        WHERE attempt_id = $2
       `,
-      [durationMinutes || null, expiresAtIso ? new Date(expiresAtIso) : null, attemptId],
+      [durationMinutes || null, attemptId],
     );
   } catch {}
 
@@ -715,7 +715,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
 async function markAttemptStarted({ attempt_id }) {
   // Load attempt, exam, and policy to enforce rules
   const { rows: attemptRows } = await pool.query(
-    `SELECT ea.attempt_id, ea.exam_id, ea.attempt_no, ea.policy_snapshot, ea.started_at, ea.expires_at, e.exam_type
+    `SELECT ea.attempt_id, ea.exam_id, ea.attempt_no, ea.policy_snapshot, ea.started_at, ea.expires_at, ea.duration_minutes, e.exam_type
      FROM exam_attempts ea
      JOIN exams e ON e.exam_id = ea.exam_id
      WHERE ea.attempt_id = $1`,
@@ -734,15 +734,6 @@ async function markAttemptStarted({ attempt_id }) {
   );
   const attemptsCount = countRows[0]?.cnt ?? 0;
 
-  // If attempt expired, block start
-  if (attempt.expires_at) {
-    const now = new Date();
-    const exp = new Date(attempt.expires_at);
-    if (now > exp) {
-      return { error: "exam_time_expired" };
-    }
-  }
-
   if (examType === "baseline") {
     // Only one attempt allowed; block if attempt_no > 1 or attemptsCount > 1
     if (attempt.attempt_no > 1 || attemptsCount > 1) {
@@ -759,17 +750,34 @@ async function markAttemptStarted({ attempt_id }) {
     }
   }
 
-  // Do not reset timer if already started
+  // Set start_time and expiry on first start; enforce expiry on subsequent calls
+  const now = new Date();
   if (!attempt.started_at) {
+    const durationMin = Number(attempt.duration_minutes || 0);
+    const expAt = Number.isFinite(durationMin) && durationMin > 0
+      ? new Date(now.getTime() + durationMin * 60 * 1000)
+      : null;
     await pool.query(
-      `UPDATE exam_attempts SET started_at = NOW() WHERE attempt_id = $1`,
-      [attempt_id],
+      `UPDATE exam_attempts SET started_at = $1, expires_at = $2 WHERE attempt_id = $3`,
+      [now, expAt, attempt_id],
     );
     try {
-      // eslint-disable-next-line no-console
+      console.log('[TRACE][EXAM][START][SET_EXPIRY]', {
+        attempt_id,
+        start_time: now.toISOString(),
+        expires_at: expAt ? expAt.toISOString() : null,
+        duration: durationMin,
+      });
       console.log('[TRACE][EXAM][STARTED]', { attempt_id, started: true });
     } catch {}
     return { ok: true };
+  }
+  // Already started: check expiry now
+  if (attempt.expires_at) {
+    const exp = new Date(attempt.expires_at);
+    if (now > exp) {
+      return { error: "exam_time_expired" };
+    }
   }
   try {
     // eslint-disable-next-line no-console
