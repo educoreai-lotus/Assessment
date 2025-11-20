@@ -81,11 +81,27 @@ export default function PostCourseExam() {
             exam_type: 'postcourse',
             course_id: courseId,
           });
+          // Always override with fresh IDs from backend
           resolvedExamId = String(created?.exam_id ?? '');
           resolvedAttemptId = created?.attempt_id ?? null;
-          if (resolvedExamId) {
-            localStorage.setItem('exam_postcourse_id', resolvedExamId);
-          }
+          console.log('🔥 NEW POSTCOURSE ATTEMPT', resolvedAttemptId, resolvedExamId);
+          // Clear any cached/baseline artifacts and reset local exam/proctoring state
+          try {
+            localStorage.removeItem('exam_baseline_id');
+            // Do NOT persist any attempt_id in storage; only exam id for convenience
+            if (resolvedExamId) localStorage.setItem('exam_postcourse_id', resolvedExamId);
+          } catch {}
+          // Reset UI and gating state to avoid reusing stale attempt info
+          proctoringStartedRef.current = false;
+          setCameraReady(false);
+          setCameraOk(false);
+          setCameraError('');
+          setQuestions([]);
+          setAnswers({});
+          setCurrentIdx(0);
+          setExpiresAtIso(null);
+          setRemainingSec(null);
+          setStrikes(0);
           if (!resolvedAttemptId) {
             throw new Error('Create response missing attempt_id');
           }
