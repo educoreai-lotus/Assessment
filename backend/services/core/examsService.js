@@ -288,53 +288,69 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   } catch {}
   const courseInt = normalizeToInt(course_id); // can be null for baseline
 
-  // Determine attempt_no based on rules
+  // Determine attempt behavior based on rules
   let attemptNo = 1;
+  let reuseAttempt = null; // { attempt_id, exam_id, attempt_no }
   if (exam_type === "baseline") {
     // Always first and only attempt
     attemptNo = 1;
   } else if (exam_type === "postcourse") {
-    // Phase 2: Smart retake skill selection across ALL postcourse attempts for this user+course
+    // New lifecycle logic: reuse active/pending, else create next attempt
     const passingGrade = Number((policy || {})?.passing_grade ?? 0);
-    const maxAttempts = Number((policy || {})?.max_attempts ?? 1);
-    const courseInt = normalizeToInt(course_id);
+    const maxAttempts = Number((policy || {})?.max_attempts ?? 0);
+    const courseIdNorm = normalizeToInt(course_id);
     if (isTest) {
       attemptNo = 1;
     } else {
-      // Fetch attempts for this user + course
-      const { rows: attemptsRows } = await pool.query(
+      const { rows: attemptsAllAsc } = await pool.query(
         `
-          SELECT ea.attempt_id, ea.attempt_no, ea.final_grade, ea.passed, e.course_id
+          SELECT ea.*, e.course_id
           FROM exam_attempts ea
           JOIN exams e ON e.exam_id = ea.exam_id
           WHERE e.user_id = $1
             AND e.exam_type = 'postcourse'
             AND e.course_id = $2
-          ORDER BY ea.attempt_no DESC
+          ORDER BY ea.attempt_no ASC
         `,
-        [userInt, courseInt],
+        [userInt, courseIdNorm],
       );
-      const latestAttemptNo = attemptsRows?.[0] ? Number(attemptsRows[0].attempt_no || 0) : 0;
-      // Enforce max attempts
-      if (Number.isFinite(maxAttempts) && latestAttemptNo >= maxAttempts) {
-        return { error: "max_attempts_reached" };
+      const classify = (row) => {
+        const submitted = row.submitted_at != null;
+        const canceled = String(row.status || '').toLowerCase() === 'canceled';
+        const started = row.started_at != null;
+        const exp = row.expires_at != null ? new Date(row.expires_at) : null;
+        const expired = !submitted && started && exp && new Date() > exp;
+        const activeOrPending = !submitted && !expired && !canceled;
+        return { submitted, canceled, expired, activeOrPending };
+      };
+      const annotated = (attemptsAllAsc || []).map(a => ({ a, c: classify(a) }));
+      const activeList = annotated.filter(x => x.c.activeOrPending).map(x => x.a);
+      if (activeList.length > 0) {
+        const pick = activeList[activeList.length - 1]; // latest active/pending
+        reuseAttempt = { attempt_id: pick.attempt_id, exam_id: pick.exam_id, attempt_no: pick.attempt_no || 1 };
+        try {
+          console.log('[TRACE][POSTCOURSE][ATTEMPT_REUSE]', { user_id: userInt, course_id: courseIdNorm, attempt_id: reuseAttempt.attempt_id, attempt_no: reuseAttempt.attempt_no });
+        } catch {}
+      } else {
+        const finals = annotated.filter(x => x.c.submitted || x.c.expired || x.c.canceled).map(x => x.a);
+        const lastFinal = finals.length > 0 ? finals[finals.length - 1] : null;
+        const lastFinalAttemptNo = lastFinal ? Number(lastFinal.attempt_no || 0) : 0;
+        const nextAttemptNo = (lastFinalAttemptNo || 0) + 1;
+        if (Number.isFinite(maxAttempts) && maxAttempts > 0 && nextAttemptNo > maxAttempts) {
+          try {
+            console.log('[TRACE][POSTCOURSE][ATTEMPT_BLOCKED]', { user_id: userInt, course_id: courseIdNorm, lastFinalAttemptNo, max_attempts: maxAttempts, reason: 'max_attempts_reached' });
+          } catch {}
+          return { error: "max_attempts_reached" };
+        }
+        attemptNo = nextAttemptNo;
       }
-      // Enforce already passed if any attempt meets passing
-      const anyPassed =
-        Array.isArray(attemptsRows) &&
-        attemptsRows.some((r) => Number(r.final_grade || 0) >= passingGrade);
-      if (anyPassed) {
-        return { error: "postcourse_already_passed" };
-      }
-      attemptNo = (latestAttemptNo || 0) + 1;
-      // Normalize coverage map now to compute skills
+      // Smart retake skills selection (unchanged), computed from coverage and acquired across attempts
       const { normalizeSkills } = require("./skillsUtils");
       const rawCoverageList = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
       const normalizedCoverageMapPre = rawCoverageList.map((item) => ({
         ...item,
         skills: normalizeSkills(item?.skills || []),
       })).filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
-      // Compute coverage skills set
       const coverageSkills = new Set();
       for (const it of normalizedCoverageMapPre) {
         for (const s of it.skills) {
@@ -342,8 +358,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
           if (sid) coverageSkills.add(sid);
         }
       }
-      // Gather prior attempt_ids
-      const priorAttemptIds = attemptsRows.map((r) => r.attempt_id).filter(Boolean);
+      const priorAttemptIds = (attemptsAllAsc || []).map((r) => r.attempt_id).filter(Boolean);
       let acquiredSkills = new Set();
       if (priorAttemptIds.length > 0) {
         const { rows: acquiredRows } = await pool.query(
@@ -361,49 +376,47 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
             .filter(Boolean),
         );
       }
-      // Compute retake skills
       const retakeSkills = Array.from(coverageSkills).filter((sid) => !acquiredSkills.has(sid));
-      // If empty, keep full coverage skills as fallback
       const useSkills = retakeSkills.length > 0 ? retakeSkills : Array.from(coverageSkills);
       try {
-        // eslint-disable-next-line no-console
         console.log('[TRACE][POSTCOURSE][RETAKE_SKILLS]', {
           coverage: coverageSkills.size,
           acquired: acquiredSkills.size,
           retake: useSkills.length,
         });
       } catch {}
-      // Reduce coverage map to retake skills only
       const reducedCoverageMap = normalizedCoverageMapPre
         .map((it) => ({
           ...it,
           skills: (it.skills || []).filter((s) => useSkills.includes(String(s.skill_id))),
         }))
         .filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
-      // Overwrite coverage payload in-memory for downstream usage
-      coveragePayload = {
-        ...(coveragePayload || {}),
-        coverage_map: reducedCoverageMap,
-      };
-      // Also set a synthetic "skillsPayload" so downstream generators can use a unified path if needed
+      coveragePayload = { ...(coveragePayload || {}), coverage_map: reducedCoverageMap };
       skillsPayload = { skills: useSkills.map((sid) => ({ skill_id: sid, skill_name: sid })) };
     }
   }
 
-  const insertExamText = `
-    INSERT INTO exams (exam_type, user_id, course_id)
-    VALUES ($1, $2, $3)
-    RETURNING exam_id
-  `;
-  let examRows;
-  try {
-    const res = await pool.query(insertExamText, [exam_type, userInt, courseInt]);
-    examRows = res.rows;
-  } catch (e) {
-    try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'invalid_user_id', message: e?.message, stage: 'insert_exam' }); } catch {}
-    return { error: "invalid_user_id" };
+  let examId;
+  let attemptId;
+  if (reuseAttempt && reuseAttempt.attempt_id && reuseAttempt.exam_id) {
+    examId = reuseAttempt.exam_id;
+    attemptId = reuseAttempt.attempt_id;
+  } else {
+    const insertExamText = `
+      INSERT INTO exams (exam_type, user_id, course_id)
+      VALUES ($1, $2, $3)
+      RETURNING exam_id
+    `;
+    let examRows;
+    try {
+      const res = await pool.query(insertExamText, [exam_type, userInt, courseInt]);
+      examRows = res.rows;
+    } catch (e) {
+      try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'invalid_user_id', message: e?.message, stage: 'insert_exam' }); } catch {}
+      return { error: "invalid_user_id" };
+    }
+    examId = examRows[0].exam_id;
   }
-  const examId = examRows[0].exam_id;
 
   // Prepare skills and coverage map (normalize shapes)
   const normalizedBaselineSkills = normalizeSkills(skillsPayload?.skills || []);
@@ -448,36 +461,41 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
 
   // Insert initial attempt (attempt_no = 1)
   const policySnapshot = policy || {};
-  const insertAttemptText = `
-    INSERT INTO exam_attempts (exam_id, attempt_no, policy_snapshot, package_ref)
-    VALUES ($1, $2, $3::jsonb, $4)
-    RETURNING attempt_id
-  `;
-  // Temporarily set package_ref after creating package
-  const tempPackageRef = null;
-  let attemptRows;
-  try {
-    const resAttempt = await pool.query(insertAttemptText, [
-      examId,
-      attemptNo,
-      JSON.stringify(policySnapshot),
-      tempPackageRef,
-    ]);
-    attemptRows = resAttempt.rows;
-  } catch (e) {
-    try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: e?.message, stage: 'insert_attempt' }); } catch {}
-    return { error: "exam_creation_failed" };
-  }
-  const attemptId = attemptRows[0].attempt_id;
-  if (isTest) {
+  if (!(reuseAttempt && reuseAttempt.attempt_id)) {
+    const insertAttemptText = `
+      INSERT INTO exam_attempts (exam_id, attempt_no, policy_snapshot, package_ref)
+      VALUES ($1, $2, $3::jsonb, $4)
+      RETURNING attempt_id
+    `;
+    const tempPackageRef = null;
+    let attemptRows;
     try {
-      // eslint-disable-next-line no-console
-      console.log('[TRACE][TEST_MODE][FORCE_CREATE]', { exam_id: examId, attempt_id: attemptId });
+      const resAttempt = await pool.query(insertAttemptText, [
+        examId,
+        attemptNo,
+        JSON.stringify(policySnapshot),
+        tempPackageRef,
+      ]);
+      attemptRows = resAttempt.rows;
+    } catch (e) {
+      try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: e?.message, stage: 'insert_attempt' }); } catch {}
+      return { error: "exam_creation_failed" };
+    }
+    attemptId = attemptRows[0].attempt_id;
+    if (isTest) {
+      try { console.log('[TRACE][TEST_MODE][FORCE_CREATE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    }
+    if (!Number.isFinite(Number(attemptId))) {
+      try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: 'attempt_id missing', stage: 'attempt_id_validation' }); } catch {}
+      return { error: "exam_creation_failed" };
+    }
+    try {
+      console.log('[TRACE][POSTCOURSE][ATTEMPT_NEW]', { user_id: userInt, course_id: courseInt, attempt_id: attemptId, attempt_no: attemptNo, max_attempts: Number((policy||{}).max_attempts ?? 0) });
     } catch {}
-  }
-  if (!Number.isFinite(Number(attemptId))) {
-    try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_creation_failed', message: 'attempt_id missing', stage: 'attempt_id_validation' }); } catch {}
-    return { error: "exam_creation_failed" };
+  } else {
+    try {
+      console.log('[TRACE][POSTCOURSE][ATTEMPT_REUSE]', { user_id: userInt, course_id: courseInt, attempt_id: attemptId, attempt_no: reuseAttempt.attempt_no });
+    } catch {}
   }
 
   // Persist timing into attempt (duration_minutes only; do NOT touch started_at/expires_at here)
