@@ -39,7 +39,7 @@ const hasLiveEnv = !!(process.env.SUPABASE_DB_URL || process.env.SUPABASE_POOLER
 
     // Assert
     expect(startRes.statusCode).toBe(403);
-    expect(startRes.body).toHaveProperty('error', 'Proctoring session not started');
+    expect(startRes.body).toHaveProperty('error', 'proctoring_not_started');
   });
 
   it('blocks submitting exam if camera not started (expects 403)', async () => {
@@ -91,7 +91,7 @@ const hasLiveEnv = !!(process.env.SUPABASE_DB_URL || process.env.SUPABASE_POOLER
 
     // Assert
     expect(submitRes.statusCode).toBe(403);
-    expect(submitRes.body).toHaveProperty('error', 'Proctoring session not started');
+    expect(submitRes.body).toHaveProperty('error', 'proctoring_not_started');
   });
 });
 
