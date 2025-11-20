@@ -480,14 +480,12 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
     return { error: "exam_creation_failed" };
   }
 
-  // Persist timing into attempt (duration_minutes only; expires_at set on start)
+  // Persist timing into attempt (duration_minutes only; do NOT touch started_at/expires_at here)
   try {
     await pool.query(
       `
         UPDATE exam_attempts
-        SET duration_minutes = $1,
-            expires_at = NULL,
-            started_at = NULL
+        SET duration_minutes = $1
         WHERE attempt_id = $2
       `,
       [durationMinutes || null, attemptId],
@@ -754,6 +752,11 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       } catch {}
       return { error: "exam_creation_failed", message: "Failed to create and persist exam package" };
     }
+    try {
+      // Explicit service-level assertion: createExam does NOT start proctoring or the exam
+      // eslint-disable-next-line no-console
+      console.log('[TRACE][CREATE] no startExam (service)', { exam_id: examId, attempt_id: attemptId });
+    } catch {}
     // End-to-end validation: Confirm package exists
     try {
       const verify = await ExamPackage.findOne({ attempt_id: String(attemptId) }).lean();
