@@ -39,7 +39,10 @@ export default function PostCourseExam() {
 
   // Clear stale attempt id on every fresh visit
   useEffect(() => {
-    try { localStorage.removeItem("postcourse_attempt_id"); } catch {}
+    try {
+      localStorage.removeItem("postcourse_attempt_id");
+      localStorage.removeItem("postcourse_exam_id");
+    } catch {}
   }, []);
 
   const initialExamId = useMemo(() => {
@@ -193,6 +196,32 @@ export default function PostCourseExam() {
         } catch (err) {
           const apiErr = err?.response?.data?.error || '';
           const statusCode = err?.response?.status;
+          if (apiErr === 'already_passed') {
+            // Redirect to latest submitted attempt
+            try {
+              const list = await examApi.attemptsByUser(userId);
+              const submitted = Array.isArray(list) ? list.filter(a => !!a.submitted_at && a.exam_type === 'postcourse') : [];
+              const latest = submitted[0] || list[0];
+              if (latest?.attempt_id) {
+                navigate(`/results/postcourse/${encodeURIComponent(latest.attempt_id)}`, { state: { notice: 'You already passed' } });
+                return;
+              }
+            } catch {}
+            throw err;
+          }
+          if (apiErr === 'max_attempts_reached') {
+            // Redirect to last submitted attempt with notice
+            try {
+              const list = await examApi.attemptsByUser(userId);
+              const submitted = Array.isArray(list) ? list.filter(a => !!a.submitted_at && a.exam_type === 'postcourse') : [];
+              const latest = submitted[0] || list[0];
+              if (latest?.attempt_id) {
+                navigate(`/results/postcourse/${encodeURIComponent(latest.attempt_id)}`, { state: { notice: 'You have used all attempts' } });
+                return;
+              }
+            } catch {}
+            throw err;
+          }
           if (statusCode === 403 || apiErr === 'exam_time_expired' || apiErr === 'proctoring_not_started') {
             // Clear stale attempt if any 403 at creation
             try {
@@ -201,7 +230,7 @@ export default function PostCourseExam() {
             } catch {}
           }
           // Fallback to most recent attempt when policy prevents new attempt
-          if (apiErr === 'max_attempts_reached' || apiErr === 'baseline_already_completed') {
+          if (apiErr === 'baseline_already_completed') {
             const list = await examApi.attemptsByUser(userId);
             const candidates = Array.isArray(list) ? list.filter(a => a.exam_type === 'postcourse') : [];
             const latest = candidates.find(a => String(a?.exam_id) === String(resolvedExamId)) || candidates[0];

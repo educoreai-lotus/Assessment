@@ -394,6 +394,13 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       }
       const retakeSkills = Array.from(coverageSkills).filter((sid) => !acquiredSkills.has(sid));
       const useSkills = retakeSkills.length > 0 ? retakeSkills : Array.from(coverageSkills);
+      // If there are prior attempts and no unmet skills remain, the learner already passed
+      if ((attemptsAllAsc || []).length > 0 && retakeSkills.length === 0) {
+        try {
+          console.log('[TRACE][POSTCOURSE][ALREADY_PASSED]', { user_id: userInt, course_id: courseIdNorm });
+        } catch {}
+        return { error: "already_passed" };
+      }
       try {
         console.log('[TRACE][POSTCOURSE][RETAKE_SKILLS]', {
           coverage: coverageSkills.size,
@@ -837,26 +844,15 @@ async function markAttemptStarted({ attempt_id }) {
   const attempt = attemptRows[0];
   const examType = attempt.exam_type;
 
-  // Count existing attempts for this exam
-  const { rows: countRows } = await pool.query(
-    `SELECT COUNT(*)::int AS cnt FROM exam_attempts WHERE exam_id = $1`,
-    [attempt.exam_id],
-  );
-  const attemptsCount = countRows[0]?.cnt ?? 0;
-
   if (examType === "baseline") {
     // Only one attempt allowed; block if attempt_no > 1 or attemptsCount > 1
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM exam_attempts WHERE exam_id = $1`,
+      [attempt.exam_id],
+    );
+    const attemptsCount = countRows[0]?.cnt ?? 0;
     if (attempt.attempt_no > 1 || attemptsCount > 1) {
       return { error: "baseline_attempt_not_allowed" };
-    }
-  } else if (examType === "postcourse") {
-    const policySnapshot = attempt.policy_snapshot || {};
-    const maxAttempts = Number(policySnapshot?.max_attempts ?? 1);
-    if (Number.isFinite(maxAttempts) && maxAttempts > 0) {
-      // If attempts already equal or exceed max, block starting
-      if (attemptsCount > maxAttempts || attempt.attempt_no > maxAttempts) {
-        return { error: "max_attempts_reached" };
-      }
     }
   }
 
@@ -868,7 +864,7 @@ async function markAttemptStarted({ attempt_id }) {
       ? new Date(now.getTime() + durationMin * 60 * 1000)
       : null;
     await pool.query(
-      `UPDATE exam_attempts SET started_at = $1, expires_at = $2 WHERE attempt_id = $3`,
+      `UPDATE exam_attempts SET status = 'started', started_at = $1, expires_at = $2 WHERE attempt_id = $3`,
       [now, expAt, attempt_id],
     );
     try {
