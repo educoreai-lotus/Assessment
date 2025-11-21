@@ -324,6 +324,22 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
         return { submitted, canceled, expired, activeOrPending };
       };
       const annotated = (attemptsAllAsc || []).map(a => ({ a, c: classify(a) }));
+      // Mark any active-but-expired attempts as expired with end time
+      try {
+        const toExpire = annotated
+          .filter(x => x.c.expired)
+          .map(x => x.a.attempt_id)
+          .filter(Boolean);
+        if (toExpire.length > 0) {
+          await pool.query(
+            `UPDATE exam_attempts SET status = 'expired', submitted_at = NOW() WHERE attempt_id = ANY($1::int[])`,
+            [toExpire],
+          );
+          try {
+            console.log('[TRACE][POSTCOURSE][ATTEMPT_MARK_EXPIRED]', { count: toExpire.length, attempts: toExpire });
+          } catch {}
+        }
+      } catch {}
       const activeList = annotated.filter(x => x.c.activeOrPending).map(x => x.a);
       if (activeList.length > 0) {
         const pick = activeList[activeList.length - 1]; // latest active/pending

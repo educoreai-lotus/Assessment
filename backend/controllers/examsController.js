@@ -16,6 +16,49 @@ const { ProctoringSession, ExamPackage } = require('../models');
 const { normalizeToInt } = require("../services/core/idNormalizer");
 const proctoringController = require('./../controllers/proctoringController');
 
+// POST /api/exams/:examId/cancel - cancel current active attempt
+exports.cancelExam = async (req, res, next) => {
+  try {
+    const { examId } = req.params;
+    const { attempt_id } = req.body || {};
+    const examIdNum = normalizeToInt(examId);
+    if (examIdNum == null) {
+      return res.status(400).json({ error: 'invalid_exam_id' });
+    }
+    const pool = require('../config/supabaseDB');
+    let targetAttempt = normalizeToInt(attempt_id);
+
+    if (!Number.isFinite(targetAttempt)) {
+      const { rows } = await pool.query(
+        `SELECT attempt_id, status, submitted_at
+         FROM exam_attempts
+         WHERE exam_id = $1
+         ORDER BY attempt_no DESC
+         LIMIT 1`,
+        [examIdNum],
+      );
+      const row = rows?.[0];
+      if (row && String(row.status || '').toLowerCase() !== 'submitted' && String(row.status || '').toLowerCase() !== 'canceled') {
+        targetAttempt = Number(row.attempt_id);
+      }
+    }
+
+    if (!Number.isFinite(targetAttempt)) {
+      return res.json({ ok: true }); // nothing to cancel
+    }
+
+    await pool.query(
+      `UPDATE exam_attempts
+       SET status = 'canceled', submitted_at = NOW()
+       WHERE attempt_id = $1`,
+      [targetAttempt],
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // GET /api/exams/:examId - package readiness/info
 exports.getExam = async (req, res, next) => {
   try {

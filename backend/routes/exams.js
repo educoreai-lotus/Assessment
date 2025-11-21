@@ -62,6 +62,33 @@ router.post('/', examsController.createExam);
  */
 router.post('/:examId/start', examsController.startExam);
 
+/**
+ * @openapi
+ * /api/exams/{examId}/cancel:
+ *   post:
+ *     summary: Cancel an active exam attempt
+ *     description: Marks the current active attempt for the given exam as cancelled and ends it.
+ *     parameters:
+ *       - in: path
+ *         name: examId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               attempt_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Cancelled
+ */
+router.post('/:examId/cancel', examsController.cancelExam);
+
 // Package readiness / exam info
 router.get('/:examId', examsController.getExam);
 
