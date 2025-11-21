@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 import { examApi } from '../services/examApi';
-import { useNavigate } from 'react-router-dom';
 
 export default function PostCourseResults() {
   const location = useLocation();
