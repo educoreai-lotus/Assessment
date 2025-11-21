@@ -48,6 +48,11 @@ export default function PostCourseResults() {
   const grade = Number(result?.final_grade || 0);
   const passingGrade = Number(result?.passing_grade || 70);
   const passed = !!result?.passed;
+  const maxAttempts =
+    (result?.policy && result.policy?.max_attempts != null ? result.policy.max_attempts : undefined) ??
+    (result?.policy_snapshot && result.policy_snapshot?.max_attempts != null ? result.policy_snapshot.max_attempts : undefined) ??
+    (result?.max_attempts != null ? result.max_attempts : 'N/A');
+  const attemptNumber = result?.attempt_no != null ? result.attempt_no : 'N/A';
 
   function fmtDate(d) {
     if (!d) return '';
@@ -97,6 +102,10 @@ export default function PostCourseResults() {
           <div className="text-sm text-neutral-400">Submitted At</div>
           <div className="text-base">{fmtDate(result?.submitted_at)}</div>
         </div>
+      </div>
+
+      <div className="mt-3 text-gray-200 text-sm font-medium">
+        Attempt {attemptNumber} of {maxAttempts}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

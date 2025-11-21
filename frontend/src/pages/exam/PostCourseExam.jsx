@@ -35,6 +35,12 @@ export default function PostCourseExam() {
   const creationStarted = useRef(false);
   const mountCountRef = useRef(0);
   const clearedOnceRef = useRef(false);
+  const mountedRef = useRef(false);
+
+  // Clear stale attempt id on every fresh visit
+  useEffect(() => {
+    try { localStorage.removeItem("postcourse_attempt_id"); } catch {}
+  }, []);
 
   const initialExamId = useMemo(() => {
     const qp = searchParams.get('examId');
@@ -148,6 +154,11 @@ export default function PostCourseExam() {
             course_id: courseId,
           });
           const { exam_id, attempt_id } = created;
+          // store separately for navigation
+          try {
+            localStorage.setItem("postcourse_exam_id", String(exam_id || ''));
+            localStorage.setItem("postcourse_attempt_id", String(attempt_id || ''));
+          } catch {}
           setAttemptId(attempt_id);
           setExamId(exam_id);
           console.log("⏳ Waiting for exam package to be ready...");
@@ -371,20 +382,8 @@ export default function PostCourseExam() {
     setAnswers((s) => ({ ...s, [id]: value }));
   }
 
-  const answeredCount = useMemo(() => {
-    if (!questions.length) return 0;
-    let count = 0;
-    for (const q of questions) {
-      const v = answers[q.id];
-      if (v != null && String(v).trim() !== '') count += 1;
-    }
-    return count;
-  }, [questions, answers]);
-
-  const progress = useMemo(() => {
-    if (!questions.length) return 0;
-    return Math.round((answeredCount / questions.length) * 100);
-  }, [answeredCount, questions]);
+  // Navigation-based counter
+  const currentIndexDisplay = currentIdx + 1;
 
   function goPrev() {
     setCurrentIdx((i) => Math.max(0, i - 1));
@@ -509,8 +508,8 @@ export default function PostCourseExam() {
                 </button>
               )}
             </div>
-            <div className="text-sm text-neutral-300">
-              Progress: {progress}% &nbsp; <span className="text-neutral-500">({answeredCount}/{questions.length} answered)</span>
+            <div className="text-gray-400 text-sm">
+              {currentIndexDisplay}/{questions.length}
             </div>
             {currentIdx < questions.length - 1 ? (
               <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk)}>
