@@ -1019,12 +1019,8 @@ async function submitAttempt({ attempt_id, answers }) {
 
   // 4) Split answers
   const allAnswers = Array.isArray(answers) ? answers : [];
-  const codingAnswers = allAnswers.filter(
-    (a) => String(a?.type || "").toLowerCase() === "code",
-  );
-  const theoreticalAnswers = allAnswers.filter(
-    (a) => String(a?.type || "").toLowerCase() !== "code",
-  );
+  const codingAnswers = allAnswers.filter((a) => String(a?.type || "").toLowerCase() === "code");
+  const theoreticalAnswers = allAnswers.filter((a) => String(a?.type || "").toLowerCase() !== "code");
   try {
     const mcqCount = theoreticalAnswers.filter(a => String(a?.type||'').toLowerCase()==='mcq').length;
     const openCount = theoreticalAnswers.filter(a => String(a?.type||'').toLowerCase()==='open').length;
@@ -1053,7 +1049,15 @@ async function submitAttempt({ attempt_id, answers }) {
     return "unassigned";
   }
 
-  // 5) Theoretical grading (internal)
+  // 5) Theoretical grading (internal) - skip unknown questions
+  const knownTheoreticalAnswers = theoreticalAnswers.filter((ans) => {
+    const qid = String(ans?.question_id || "");
+    const known = qById.has(qid);
+    if (!known) {
+      try { console.log("[WARN][SUBMIT] Question not found in package", { question_id: qid }); } catch {}
+    }
+    return known;
+  });
   function gradeTheoreticalAnswers(pkg, items) {
     const graded = [];
     for (const ans of items) {
@@ -1115,7 +1119,7 @@ async function submitAttempt({ attempt_id, answers }) {
     return graded;
   }
 
-  const theoreticalGraded = gradeTheoreticalAnswers(examPackage, theoreticalAnswers);
+  const theoreticalGraded = gradeTheoreticalAnswers(examPackage, knownTheoreticalAnswers);
 
   // 6) Coding grading (DevLab via unified envelope)
   const { gradingResults, aggregated } =

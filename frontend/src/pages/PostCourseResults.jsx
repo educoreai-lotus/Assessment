@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 import { examApi } from '../services/examApi';
+import { useNavigate } from 'react-router-dom';
 
 export default function PostCourseResults() {
   const location = useLocation();
@@ -160,6 +161,22 @@ export default function PostCourseResults() {
             Total: {Number(result.coding_results?.score_total || 0)} / {Number(result.coding_results?.score_max || 0)}
           </div>
         </div>
+      )}
+
+      {!passed && (Number(attemptNumber) < Number(maxAttempts || 0)) && (
+        <button
+          className="mt-4 px-6 py-2 rounded bg-green-600 hover:bg-green-700 text-white"
+          onClick={() => {
+            try {
+              localStorage.removeItem("postcourse_exam_id");
+              localStorage.removeItem("postcourse_attempt_id");
+              localStorage.removeItem("postcourse_answers");
+            } catch {}
+            navigate('/exam/postcourse', { replace: true });
+          }}
+        >
+          Retake Exam
+        </button>
       )}
     </div>
   );

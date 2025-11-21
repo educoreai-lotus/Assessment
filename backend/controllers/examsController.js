@@ -315,6 +315,7 @@ exports.startExam = async (req, res, next) => {
       expires_at: pkg?.metadata?.expires_at ?? null,
       started_at: startedAtVal,
       duration_seconds: durationSecondsVal,
+      package_ref: pkg?._id ? String(pkg._id) : null,
       camera_required: true,
     });
   } catch (err) {

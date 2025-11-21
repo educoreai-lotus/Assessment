@@ -42,6 +42,7 @@ export default function PostCourseExam() {
     try {
       localStorage.removeItem("postcourse_attempt_id");
       localStorage.removeItem("postcourse_exam_id");
+      localStorage.removeItem("postcourse_answers");
     } catch {}
   }, []);
 
@@ -295,6 +296,7 @@ export default function PostCourseExam() {
         setQuestions(normalized);
         setCurrentIdx(0);
         setAnswers({});
+        try { localStorage.setItem("postcourse_answers", JSON.stringify({})); } catch {}
         // Timer fields
         if (data?.expires_at) {
           setExpiresAtIso(String(data.expires_at));
@@ -424,15 +426,13 @@ export default function PostCourseExam() {
   async function handleSubmit() {
     try {
       setLoading(true);
-      const payloadAnswers = questions.map((q) => ({
-        question_id: q.originalId,
-        type: q.type === 'text' ? 'open' : q.type,
-        skill_id: q.skill_id || '',
-        answer: answers[q.id] ?? '',
-      }));
+      // Only send answers for questions in current attempt's package
+      const filteredAnswers = Object.entries(answers)
+        .filter(([questionId]) => questions.find((q) => String(q.originalId || q.id) === String(questionId)))
+        .map(([question_id, answer]) => ({ question_id, answer }));
       const result = await examApi.submit(examId, {
         attempt_id: attemptId,
-        answers: payloadAnswers,
+        answers: filteredAnswers,
       });
       navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
