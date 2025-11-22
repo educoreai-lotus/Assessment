@@ -214,6 +214,28 @@
           ],
           "commit": "feat: email alerts for exam cancellation via Resend API (admin only)",
           "updated_at": "2025-11-22"
+        },
+        {
+          "feature_id": "FEAT-AI-BASELINE-THEORY-UNIQUE-PER-ATTEMPT",
+          "name": "AI Baseline Theoretical Questions Unique Per Attempt",
+          "status": "Done",
+          "owner": "Assessment",
+          "phases": { "07": "Done" },
+          "links": {
+            "backend": [
+              "backend/services/gateways/aiGateway.js",
+              "backend/services/core/examsService.js",
+              "backend/services/mocks/theoryMock.js"
+            ]
+          },
+          "notes": [
+            "Baseline attempts now always try OpenAI generation with a per-attempt random seed embedded in the prompt.",
+            "If AI fails or is unavailable, the system falls back to existing mocks, shuffles order per attempt, and limits to requested count.",
+            "DevLab coding questions remain mock/static; coverage_map and skill logic unchanged.",
+            "Logs added: [BASELINE][AI], [BASELINE][MOCK], and [BASELINE][AI][FAIL]."
+          ],
+          "commit": "feat: new AI theoretical questions for every baseline attempt + fallback mocks when AI fails",
+          "updated_at": "2025-11-22"
         }
     ],
   

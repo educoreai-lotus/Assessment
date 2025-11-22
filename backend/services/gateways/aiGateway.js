@@ -28,7 +28,7 @@ async function callOpenAiChat({ system, user, json = true }) {
   return content;
 }
 
-function buildTheoreticalGenPrompt({ items }) {
+function buildTheoreticalGenPrompt({ items, seed }) {
   // items: array of { skill_id, difficulty, humanLanguage, type? }
   const system = [
     'You generate assessment questions.',
@@ -36,7 +36,8 @@ function buildTheoreticalGenPrompt({ items }) {
     'Each question must include: qid, type ("mcq" or "open"), stem, skill_id, difficulty (easy|medium|hard), options (array; only for mcq), correct_answer (string), explanation (string), hint (string).',
     'Hints MUST NOT reveal the exact correct answer. Explanations can justify correctness, but keep concise.',
     'Do not include any HTML or markdown in fields.',
-  ].join(' ');
+    seed ? `Generation seed: ${seed}` : null,
+  ].filter(Boolean).join(' ');
   const user = JSON.stringify({
     intent: 'generate_theoretical_questions',
     policy: {
@@ -48,8 +49,8 @@ function buildTheoreticalGenPrompt({ items }) {
   return { system, user };
 }
 
-async function generateTheoreticalQuestions({ items }) {
-  const { system, user } = buildTheoreticalGenPrompt({ items });
+async function generateTheoreticalQuestions({ items, seed }) {
+  const { system, user } = buildTheoreticalGenPrompt({ items, seed });
   const content = await callOpenAiChat({ system, user, json: true });
   let parsed = {};
   try {

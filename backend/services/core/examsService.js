@@ -625,7 +625,15 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
         { qid: 'test_open', type: 'open', skill_id: sid, difficulty: 'medium', question: `Explain ${sid}` },
       ];
     } else {
-      generated = await generateTheoreticalQuestions({ items });
+      // Always inject a per-attempt seed for baseline to enforce uniqueness
+      const seed = `${Date.now()}-${Math.random()}`;
+      generated = await generateTheoreticalQuestions({ items, seed });
+      try {
+        if (exam_type === 'baseline') {
+          // eslint-disable-next-line no-console
+          console.log('[BASELINE][AI] Using OpenAI-generated theoretical questions', { count: Array.isArray(generated) ? generated.length : 0 });
+        }
+      } catch {}
     }
 
     // AI validation per question (non-blocking if fails)
@@ -684,6 +692,8 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       } else {
         // eslint-disable-next-line no-console
         console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'ai_generation_failed', message: err?.message });
+        // eslint-disable-next-line no-console
+        console.log('[BASELINE][AI][FAIL] Reason:', err?.message);
       }
     } catch {}
     // Fallback to theoretical mocks if OpenAI fails
@@ -704,7 +714,24 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
       }));
       // duplicate MCQ set once if we need two per skill in postcourse
       const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
-      questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+      let fallback = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+      // Baseline mode: maintain same count as AI-items and shuffle order
+      if (exam_type === 'baseline') {
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[BASELINE][MOCK] Using fallback theoretical questions');
+        } catch {}
+        // Fisher-Yates shuffle
+        for (let i = fallback.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = fallback[i];
+          fallback[i] = fallback[j];
+          fallback[j] = tmp;
+        }
+        const desired = Math.max(1, Array.isArray(skillsArray) ? Math.min(fallback.length, questionCount) : questionCount);
+        fallback = fallback.slice(0, desired);
+      }
+      questions = fallback;
       try {
         if (String(exam_type).toLowerCase() === 'postcourse') {
           // eslint-disable-next-line no-console
@@ -736,7 +763,22 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
         correct_answer: m.prompt?.correct_answer || "",
       }));
       const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
-      questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+      let fallback2 = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+      if (exam_type === 'baseline') {
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[BASELINE][MOCK] Using fallback theoretical questions');
+        } catch {}
+        for (let i = fallback2.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = fallback2[i];
+          fallback2[i] = fallback2[j];
+          fallback2[j] = tmp;
+        }
+        const desired = Math.max(1, Array.isArray(skillsArray) ? Math.min(fallback2.length, questionCount) : questionCount);
+        fallback2 = fallback2.slice(0, desired);
+      }
+      questions = fallback2;
       try {
         if (String(exam_type).toLowerCase() === 'postcourse') {
           // eslint-disable-next-line no-console
