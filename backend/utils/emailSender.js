@@ -1,24 +1,16 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT),
-  secure: process.env.EMAIL_SECURE === "true",
-  auth: {
-    user: process.env.EMAIL_FROM,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function sendEmail({ to, subject, html }) {
   try {
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
+    const data = await resend.emails.send({
+      from: process.env.EMAIL_FROM,   // onboarding@resend.dev
       to,
       subject,
       html,
     });
-    console.log("[EMAIL][SENT]", { to, subject });
+    console.log("[EMAIL][SENT]", data);
     return true;
   } catch (err) {
     console.error("[EMAIL][ERROR]", err);
@@ -27,14 +19,17 @@ async function sendEmail({ to, subject, html }) {
 }
 
 async function sendTestEmail() {
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to: process.env.NOTIFY_ADMIN_EMAIL,
-    subject: "Assessment System SMTP Test",
-    text: "Your SMTP setup is working. This is a test email.",
-  });
+  try {
+    const data = await resend.emails.send({
+      from: process.env.EMAIL_FROM,
+      to: process.env.NOTIFY_ADMIN_EMAIL,
+      subject: "Test email from Resend",
+      html: "<p>Resend is working correctly.</p>",
+    });
+    console.log("[TEST_EMAIL][SENT]", data);
+  } catch (err) {
+    console.error("[TEST_EMAIL][ERROR]", err);
+  }
 }
 
 module.exports = { sendEmail, sendTestEmail };
-
-
