@@ -26,6 +26,15 @@ async function sendEmail({ to, subject, html }) {
   }
 }
 
-module.exports = { sendEmail };
+async function sendTestEmail() {
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM,
+    to: process.env.NOTIFY_ADMIN_EMAIL,
+    subject: "Assessment System SMTP Test",
+    text: "Your SMTP setup is working. This is a test email.",
+  });
+}
+
+module.exports = { sendEmail, sendTestEmail };
 
 

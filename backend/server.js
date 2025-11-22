@@ -12,6 +12,7 @@ const attemptsRouter = require('./routes/attempts');
 const packagesRouter = require('./routes/packages');
 const proctoringRouter = require('./routes/proctoring');
 const { mountSwagger } = require('./swagger');
+const testEmailRouter = require("./routes/testEmail");
 
 const PORT = process.env.PORT || 4000;
 const API_BASE = '/api/v1';
@@ -164,6 +165,7 @@ app.get('/health/mongo', async (req, res) => {
 // Mount integration endpoints EXACTLY as per integration map (no version prefix)
 app.use('/api', integrationRoutes);
 app.use('/api/results', resultsRouter);
+app.use("/api", testEmailRouter);
 
 // New Assessment API v1 routers
 app.use('/api/exams', examsRouter);
