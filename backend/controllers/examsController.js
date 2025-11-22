@@ -47,12 +47,30 @@ exports.cancelExam = async (req, res, next) => {
       return res.json({ ok: true }); // nothing to cancel
     }
 
+    const attemptRowRes = await pool.query(
+      `SELECT * FROM exam_attempts WHERE attempt_id = $1`,
+      [targetAttempt]
+    );
+    const attemptRow = attemptRowRes.rows[0];
+
     await pool.query(
       `UPDATE exam_attempts
        SET status = 'canceled', submitted_at = NOW()
        WHERE attempt_id = $1`,
       [targetAttempt],
     );
+    const { sendEmail } = require("../utils/emailSender");
+    await sendEmail({
+      to: process.env.NOTIFY_ADMIN_EMAIL,
+      subject: `Exam Canceled – User ${attemptRow.user_id}`,
+      html: `
+          <h2>Exam Canceled</h2>
+          <p><strong>User:</strong> ${attemptRow.user_id}</p>
+          <p><strong>Exam ID:</strong> ${examIdNum}</p>
+          <p><strong>Attempt ID:</strong> ${targetAttempt}</p>
+          <p><strong>Time:</strong> ${new Date().toISOString()}</p>
+      `,
+    });
     return res.json({ ok: true });
   } catch (err) {
     return next(err);
