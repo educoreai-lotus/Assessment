@@ -571,7 +571,7 @@ export default function PostCourseExam() {
       {isSubmitting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-emerald-900/40 border border-emerald-700 rounded-xl p-6 w-[320px] text-center">
-            <LoadingSpinner label="Submitting your exam..." />
+            <LoadingSpinner label="Submitting exam..." />
           </div>
         </div>
       )}
