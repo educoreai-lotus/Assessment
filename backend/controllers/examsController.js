@@ -48,30 +48,25 @@ exports.cancelExam = async (req, res, next) => {
     }
 
     const attemptRowRes = await pool.query(
-      `SELECT * FROM exam_attempts WHERE attempt_id = $1`,
+      `SELECT ea.*, e.exam_type, e.user_id FROM exam_attempts ea JOIN exams e ON e.exam_id = ea.exam_id WHERE ea.attempt_id = $1`,
       [targetAttempt]
     );
     const attemptRow = attemptRowRes.rows[0];
 
-    await pool.query(
+    const updateRes = await pool.query(
       `UPDATE exam_attempts
        SET status = 'canceled', submitted_at = NOW()
-       WHERE attempt_id = $1`,
+       WHERE attempt_id = $1 AND COALESCE(status, '') <> 'canceled'`,
       [targetAttempt],
     );
-    const { sendEmail } = require("../utils/emailSender");
-    // Fire-and-forget email; do not block the API response
-    sendEmail({
-      to: process.env.NOTIFY_ADMIN_EMAIL,
-      subject: `Exam Canceled – User ${attemptRow?.user_id}`,
-      html: `
-          <h2>Exam Canceled</h2>
-          <p><strong>User:</strong> ${attemptRow?.user_id ?? 'unknown'}</p>
-          <p><strong>Exam ID:</strong> ${examIdNum}</p>
-          <p><strong>Attempt ID:</strong> ${targetAttempt}</p>
-          <p><strong>Time:</strong> ${new Date().toISOString()}</p>
-      `,
-    });
+    const { sendAlertEmail } = require("../services/emailService");
+    if (updateRes && Number(updateRes.rowCount || 0) > 0) {
+      await sendAlertEmail({
+        to: process.env.NOTIFY_ADMIN_EMAIL,
+        subject: 'Exam Canceled - Proctoring Violation',
+        html: `<h2>Exam Canceled</h2> <p>An exam has been automatically terminated due to a proctoring violation.</p> <p><strong>User ID:</strong> ${attemptRow?.user_id ?? 'unknown'}</p> <p><strong>Attempt ID:</strong> ${targetAttempt}</p> <p><strong>Exam Type:</strong> ${attemptRow?.exam_type ?? 'unknown'}</p> <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>`,
+      });
+    }
     return res.json({ ok: true });
   } catch (err) {
     return next(err);

@@ -193,6 +193,27 @@
             "Coding questions are stored in examPackage.coding_questions with skills, humanLanguage, difficulty, and requested_at metadata."
           ],
           "updated_at": "2025-11-16"
+        },
+        {
+          "feature_id": "FEAT-EXAM-CANCELLATION-EMAIL-ALERTS",
+          "name": "Email Alerts on Exam Cancellation (Admin Only)",
+          "status": "Done",
+          "owner": "Assessment",
+          "phases": { "07": "Done" },
+          "links": {
+            "backend": [
+              "backend/services/emailService.js",
+              "backend/controllers/proctoringController.js",
+              "backend/controllers/examsController.js"
+            ]
+          },
+          "notes": [
+            "Sends admin-only Resend email to NOTIFY_ADMIN_EMAIL when an attempt is canceled (proctoring violations or manual cancel).",
+            "Idempotent guards ensure a single email per canceled attempt (rowCount check on status transition).",
+            "Logs “Email sent successfully” on success; warns if env vars missing."
+          ],
+          "commit": "feat: email alerts for exam cancellation via Resend API (admin only)",
+          "updated_at": "2025-11-22"
         }
     ],
   

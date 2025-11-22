@@ -1,5 +1,6 @@
 const pool = require('../config/supabaseDB');
 const { ProctoringSession, ProctoringViolation, Incident } = require('../models');
+const { sendAlertEmail } = require('../services/emailService');
 
 exports.startCamera = async (req, res, next) => {
   try {
@@ -109,12 +110,36 @@ exports.reportFocusViolation = async (req, res, next) => {
         );
       } catch {}
 
-      await pool.query(
-        `UPDATE exam_attempts SET status = 'canceled' WHERE attempt_id = $1`,
+      const updateRes = await pool.query(
+        `UPDATE exam_attempts SET status = 'canceled' WHERE attempt_id = $1 AND COALESCE(status, '') <> 'canceled'`,
         [attempt_id],
       );
       doc.events.push({ type: 'exam_canceled', timestamp: new Date() });
       await doc.save();
+
+      if (updateRes && Number(updateRes.rowCount || 0) > 0) {
+        try {
+          const { rows: metaRows } = await pool.query(
+            `SELECT ea.attempt_id, ea.exam_id, e.exam_type, e.user_id
+             FROM exam_attempts ea
+             JOIN exams e ON e.exam_id = ea.exam_id
+             WHERE ea.attempt_id = $1`,
+            [attempt_id],
+          );
+          const meta = metaRows && metaRows[0] ? metaRows[0] : {};
+          const user_id = meta?.user_id ?? 'unknown';
+          const attempt_id_num = meta?.attempt_id ?? attempt_id;
+          const exam_type = meta?.exam_type ?? 'unknown';
+          await sendAlertEmail({
+            to: process.env.NOTIFY_ADMIN_EMAIL,
+            subject: 'Exam Canceled - Proctoring Violation',
+            html: `<h2>Exam Canceled</h2> <p>An exam has been automatically terminated due to a proctoring violation.</p> <p><strong>User ID:</strong> ${user_id}</p> <p><strong>Attempt ID:</strong> ${attempt_id_num}</p> <p><strong>Exam Type:</strong> ${exam_type}</p> <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>`,
+          });
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('[PROCTORING][ALERT_EMAIL][ERROR]', e?.message || e);
+        }
+      }
       return res.json({ cancelled: true });
     }
 
