@@ -69,6 +69,7 @@ export default function PostCourseExam() {
 
   const [loading, setLoading] = useState(true);
   const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const [examId, setExamId] = useState(initialExamId);
@@ -424,7 +425,10 @@ export default function PostCourseExam() {
   }
 
   async function handleSubmit() {
+    if (isSubmitting) return;
     try {
+      console.trace('[UI][SUBMIT][START]');
+      setIsSubmitting(true);
       setLoading(true);
       // Only send answers for questions in current attempt's package
       const filteredAnswers = Object.entries(answers)
@@ -434,10 +438,13 @@ export default function PostCourseExam() {
         attempt_id: attemptId,
         answers: filteredAnswers,
       });
+      console.trace('[UI][SUBMIT][DONE]');
       navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
+      console.trace('[UI][SUBMIT][ERROR] Error:', e?.message || e);
       setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
+      setIsSubmitting(false);
       setLoading(false);
     }
   }
@@ -538,14 +545,14 @@ export default function PostCourseExam() {
               )}
             </div>
             <div className="text-gray-400 text-sm">
-              {currentIndexDisplay}/{questions.length}
+              Question {currentIndexDisplay} of {questions.length}
             </div>
             {currentIdx < questions.length - 1 ? (
-              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk)}>
+              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
                 Next
               </button>
             ) : (
-              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !(cameraReady && cameraOk)}>
+              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
                 Submit
               </button>
             )}
@@ -560,6 +567,14 @@ export default function PostCourseExam() {
       ) : (
         <LoadingSpinner label="Preparing questions..." />
       ))}
+
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-emerald-900/40 border border-emerald-700 rounded-xl p-6 w-[320px] text-center">
+            <LoadingSpinner label="Submitting your exam..." />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

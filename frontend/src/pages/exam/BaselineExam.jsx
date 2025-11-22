@@ -28,6 +28,7 @@ export default function BaselineExam() {
   const [starting, setStarting] = useState(true);
   const [startingCamera, setStartingCamera] = useState(false);
   const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const liveStreamRef = useRef(null);
   const [expiresAtIso, setExpiresAtIso] = useState(null);
   const [remainingSec, setRemainingSec] = useState(null);
@@ -234,7 +235,10 @@ export default function BaselineExam() {
   }
 
   async function handleSubmit() {
+    if (isSubmitting) return;
     try {
+      console.trace('[UI][SUBMIT][START]');
+      setIsSubmitting(true);
       setLoading(true);
       const payloadAnswers = questions.map((q) => ({
         question_id: q.originalId,
@@ -246,10 +250,13 @@ export default function BaselineExam() {
         attempt_id: attemptId,
         answers: payloadAnswers,
       });
+      console.trace('[UI][SUBMIT][DONE]');
       alert('Submitted! Check results.');
     } catch (e) {
+      console.trace('[UI][SUBMIT][ERROR] Error:', e?.message || e);
       setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
+      setIsSubmitting(false);
       setLoading(false);
     }
   }
@@ -314,17 +321,25 @@ export default function BaselineExam() {
               )}
             </div>
             <div className="text-sm text-neutral-400">
-              {currentIdx + 1} / {questions.length}
+              Question {currentIdx + 1} of {questions.length}
             </div>
             {currentIdx < questions.length - 1 ? (
-              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading}>
+              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || isSubmitting}>
                 Next
               </button>
             ) : (
-              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !cameraOk}>
+              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !cameraOk || isSubmitting}>
                 Submit
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-emerald-900/40 border border-emerald-700 rounded-xl p-6 w-[320px] text-center">
+            <LoadingSpinner label="Submitting your exam..." />
           </div>
         </div>
       )}
