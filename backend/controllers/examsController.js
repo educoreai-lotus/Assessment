@@ -60,17 +60,20 @@ exports.cancelExam = async (req, res, next) => {
       [targetAttempt],
     );
     const { sendEmail } = require("../utils/emailSender");
-    await sendEmail({
-      to: process.env.NOTIFY_ADMIN_EMAIL,
-      subject: `Exam Canceled – User ${attemptRow.user_id}`,
-      html: `
-          <h2>Exam Canceled</h2>
-          <p><strong>User:</strong> ${attemptRow.user_id}</p>
-          <p><strong>Exam ID:</strong> ${examIdNum}</p>
-          <p><strong>Attempt ID:</strong> ${targetAttempt}</p>
-          <p><strong>Time:</strong> ${new Date().toISOString()}</p>
-      `,
-    });
+    // Fire-and-forget email; do not block the API response
+    Promise.resolve().then(() =>
+      sendEmail({
+        to: process.env.NOTIFY_ADMIN_EMAIL,
+        subject: `Exam Canceled – User ${attemptRow?.user_id}`,
+        html: `
+            <h2>Exam Canceled</h2>
+            <p><strong>User:</strong> ${attemptRow?.user_id ?? 'unknown'}</p>
+            <p><strong>Exam ID:</strong> ${examIdNum}</p>
+            <p><strong>Attempt ID:</strong> ${targetAttempt}</p>
+            <p><strong>Time:</strong> ${new Date().toISOString()}</p>
+        `,
+      }).catch((e) => console.error('[EMAIL][ERROR][CANCEL_EXAM]', e))
+    );
     return res.json({ ok: true });
   } catch (err) {
     return next(err);
