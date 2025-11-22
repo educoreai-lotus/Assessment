@@ -6,7 +6,7 @@ const notifyAdminEmail = process.env.NOTIFY_ADMIN_EMAIL || null;
 
 if (!resendApiKey) {
   // eslint-disable-next-line no-console
-  console.warn('[EmailService][WARN] RESEND_API_KEY is not set; emails will fail to send.');
+  console.warn('[EmailService][WARN] RESEND_API_KEY is not set; using mock sender for CI/tests.');
 }
 if (!emailFrom) {
   // eslint-disable-next-line no-console
@@ -17,7 +17,22 @@ if (!notifyAdminEmail) {
   console.warn('[EmailService][WARN] NOTIFY_ADMIN_EMAIL is not set; admin alerts will have no recipient.');
 }
 
-const resend = new Resend(resendApiKey);
+let resend = null;
+if (resendApiKey) {
+  resend = new Resend(resendApiKey);
+} else {
+  // Safe mock for CI/tests where API key is absent
+  resend = {
+    emails: {
+      // Keep signature compatible with Resend.emails.send
+      send: async () => {
+        // eslint-disable-next-line no-console
+        console.warn('[EmailService][Mock] Email skipped because RESEND_API_KEY is not set.');
+        return { ok: false, skipped: true };
+      },
+    },
+  };
+}
 
 async function sendAlertEmail({ to, subject, html }) {
   try {
