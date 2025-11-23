@@ -55,3 +55,21 @@ async function sendAlertEmail({ to, subject, html }) {
 module.exports = { sendAlertEmail };
 
 
+// One-time direct-run test trigger (executes only when this file is run directly)
+if (require.main === module) {
+  (async () => {
+    try {
+      const result = await sendAlertEmail({
+        to: "khawlass410@gmail.com",
+        subject: "EduCore Email Test — It Works 🎉",
+        html: "<h2>Success!</h2><p>If you received this email, Resend is fully configured and working.</p>"
+      });
+      // eslint-disable-next-line no-console
+      console.log("[EmailService][SmokeTest] result:", result);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[EmailService][SmokeTest][ERROR]", e?.message || e);
+    }
+  })();
+}
+
