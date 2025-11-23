@@ -53,6 +53,10 @@ export default function PostCourseResults() {
     (result?.policy_snapshot && result.policy_snapshot?.max_attempts != null ? result.policy_snapshot.max_attempts : undefined) ??
     (result?.max_attempts != null ? result.max_attempts : 'N/A');
   const attemptNumber = result?.attempt_no != null ? result.attempt_no : 'N/A';
+  const attemptsUsed = Number(attemptNumber);
+  const attemptsLimit = Number(maxAttempts);
+  const attemptsRemaining = attemptsLimit - attemptsUsed;
+  const hasAttemptsLeft = attemptsRemaining > 0;
 
   function fmtDate(d) {
     if (!d) return '';
@@ -107,6 +111,11 @@ export default function PostCourseResults() {
       <div className="mt-3 text-gray-200 text-sm font-medium">
         Attempt {attemptNumber} of {maxAttempts}
       </div>
+      {!hasAttemptsLeft && (
+        <div className="text-red-300 text-sm">
+          You have used all allowed attempts ({attemptsLimit}/{attemptsLimit}).
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="card p-5">
@@ -162,20 +171,29 @@ export default function PostCourseResults() {
         </div>
       )}
 
-      {!passed && (Number(attemptNumber) < Number(maxAttempts || 0)) && (
-        <button
-          className="mt-4 px-6 py-2 rounded bg-green-600 hover:bg-green-700 text-white"
-          onClick={() => {
-            try {
-              localStorage.removeItem("postcourse_exam_id");
-              localStorage.removeItem("postcourse_attempt_id");
-              localStorage.removeItem("postcourse_answers");
-            } catch {}
-            navigate('/exam/postcourse', { replace: true });
-          }}
-        >
-          Retake Exam
-        </button>
+      {attemptId && (
+        hasAttemptsLeft && !passed ? (
+          <button
+            className="mt-4 px-6 py-2 rounded bg-emeraldbrand-800 hover:bg-emeraldbrand-700 text-white"
+            onClick={() => {
+              try {
+                localStorage.removeItem("postcourse_exam_id");
+                localStorage.removeItem("postcourse_attempt_id");
+                localStorage.removeItem("postcourse_answers");
+              } catch {}
+              navigate('/exam/postcourse', { replace: true });
+            }}
+          >
+            Retake Exam (Remaining: {attemptsRemaining})
+          </button>
+        ) : (
+          <button
+            className="mt-4 px-6 py-2 rounded bg-gray-700 text-gray-400 cursor-not-allowed"
+            disabled
+          >
+            No Attempts Left ({attemptsLimit}/{attemptsLimit})
+          </button>
+        )
       )}
     </div>
   );
