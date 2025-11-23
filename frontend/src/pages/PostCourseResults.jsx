@@ -49,10 +49,13 @@ export default function PostCourseResults() {
   const passingGrade = Number(result?.passing_grade || 70);
   const passed = !!result?.passed;
   const maxAttempts =
-    (result?.policy && result.policy?.max_attempts != null ? result.policy.max_attempts : undefined) ??
-    (result?.policy_snapshot && result.policy_snapshot?.max_attempts != null ? result.policy_snapshot.max_attempts : undefined) ??
-    (result?.max_attempts != null ? result.max_attempts : 'N/A');
-  const attemptNumber = result?.attempt_no != null ? result.attempt_no : 'N/A';
+    Number(
+      result?.policy?.max_attempts ??
+      result?.policy_snapshot?.max_attempts ??
+      result?.max_attempts ??
+      (result?.exam_type === 'baseline' ? 1 : 3)
+    );
+  const attemptNumber = Number(result?.attempt_no ?? 1);
   const attemptsUsed = Number(attemptNumber);
   const attemptsLimit = Number(maxAttempts);
   const attemptsRemaining = attemptsLimit - attemptsUsed;
@@ -111,7 +114,7 @@ export default function PostCourseResults() {
       <div className="mt-3 text-gray-200 text-sm font-medium">
         Attempt {attemptNumber} of {maxAttempts}
       </div>
-      {!hasAttemptsLeft && (
+      {attemptNumber >= maxAttempts && (
         <div className="text-red-300 text-sm">
           You have used all allowed attempts ({attemptsLimit}/{attemptsLimit}).
         </div>

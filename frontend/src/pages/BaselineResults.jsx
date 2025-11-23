@@ -48,6 +48,14 @@ export default function BaselineResults() {
   const grade = Number(result?.final_grade || 0);
   const passingGrade = Number(result?.passing_grade || 70);
   const passed = !!result?.passed;
+  const maxAttempts =
+    Number(
+      result?.policy?.max_attempts ??
+      result?.policy_snapshot?.max_attempts ??
+      result?.max_attempts ??
+      (result?.exam_type === 'baseline' ? 1 : 3)
+    );
+  const attemptNumber = Number(result?.attempt_no ?? 1);
 
   function fmtDate(d) {
     if (!d) return '';
@@ -94,6 +102,10 @@ export default function BaselineResults() {
         <div className="mt-1 text-xs text-neutral-500">
           Submitted at: {fmtDate(result?.submitted_at)}
         </div>
+      </div>
+
+      <div className="mt-3 text-gray-200 text-sm font-medium">
+        Attempt {attemptNumber} of {1}
       </div>
 
       {Array.isArray(result?.skills) && result.skills.length > 0 && (
