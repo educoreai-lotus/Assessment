@@ -48,14 +48,18 @@ export default function BaselineResults() {
   const grade = Number(result?.final_grade || 0);
   const passingGrade = Number(result?.passing_grade || 70);
   const passed = !!result?.passed;
-  const maxAttempts =
-    Number(
-      result?.policy?.max_attempts ??
-      result?.policy_snapshot?.max_attempts ??
-      result?.max_attempts ??
-      (result?.exam_type === 'baseline' ? 1 : 3)
-    );
-  const attemptNumber = Number(result?.attempt_no ?? 1);
+  const isBaseline = result?.exam_type === 'baseline';
+  const rawMaxAttempts =
+    result?.max_attempts ??
+    result?.policy?.max_attempts ??
+    result?.policy_snapshot?.max_attempts ??
+    (isBaseline ? 1 : 3);
+  const maxAttempts = Number.isFinite(Number(rawMaxAttempts))
+    ? Number(rawMaxAttempts)
+    : (isBaseline ? 1 : 3);
+  const attemptNumber = Number.isFinite(Number(result?.attempt_no))
+    ? Number(result?.attempt_no)
+    : 1;
 
   function fmtDate(d) {
     if (!d) return '';

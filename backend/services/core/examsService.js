@@ -1447,6 +1447,13 @@ async function submitAttempt({ attempt_id, answers }) {
   );
   safeSendSummary(protoSummary).catch(() => {});
 
+  // Compute safe attempts metadata for response
+  const policySnapshot = attempt.policy_snapshot || {};
+  const defaultMaxAttempts = examType === 'baseline' ? 1 : 3;
+  const maxAttempts = Number.isFinite(Number(policySnapshot?.max_attempts))
+    ? Number(policySnapshot.max_attempts)
+    : defaultMaxAttempts;
+
   return {
     user_id: attempt.user_id != null ? Number(attempt.user_id) : null,
     exam_type: examType,
@@ -1458,6 +1465,9 @@ async function submitAttempt({ attempt_id, answers }) {
     passed,
     skills: perSkill,
     submitted_at: submittedAtIso,
+    // Attempts info for frontend robustness
+    max_attempts: maxAttempts,
+    policy_snapshot: policySnapshot,
   };
 }
 

@@ -86,12 +86,17 @@ async function getAttemptDetail(attemptId) {
     submitted_at: a.submitted_at ? new Date(a.submitted_at).toISOString() : null,
   };
   if (a.exam_type === 'postcourse') {
+    const rawMax = policy && policy.max_attempts;
+    const defaultMaxAttempts = 3;
+    const maxAttempts = Number.isFinite(Number(rawMax))
+      ? Number(rawMax)
+      : defaultMaxAttempts;
     return {
       ...base,
       course_id: a.course_id != null ? Number(a.course_id) : null,
       course_name: courseName,
       attempt_no: a.attempt_no,
-      max_attempts: Number(policy?.max_attempts ?? 0) || undefined,
+      max_attempts: maxAttempts,
     };
   }
   return base;
