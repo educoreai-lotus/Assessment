@@ -57,7 +57,7 @@ export default function Navbar() {
           <NavLink to="/exam/baseline" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Baseline</NavLink>
           <NavLink to="/exam/postcourse" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Post-Course</NavLink>
           <NavLink to="/results" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Results</NavLink>
-          <NavLink to="/dev/health" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Dev/Health</NavLink>
+          {/* Dev/Health removed from navbar */}
         </nav>
         <div className="flex items-center">
           <button
