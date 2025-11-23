@@ -235,32 +235,24 @@ export default function BaselineExam() {
 
   async function handleSubmit() {
     if (isSubmitting) return;
+    console.trace('[UI][SUBMIT][START]');
+    setIsSubmitting(true);
     try {
-      console.trace('[UI][SUBMIT][START]');
-      setIsSubmitting(true);
-      const payloadAnswers = questions.map((q) => ({
+      const payloadAnswers = questions.map(q => ({
         question_id: q.originalId,
         type: q.type === 'text' ? 'open' : q.type,
         skill_id: q.skill_id || '',
         answer: answers[q.id] ?? '',
       }));
-      const exam_id = localStorage.getItem('exam_baseline_id') || examId;
-      const result = await examApi.submit(exam_id, {
+      await examApi.submit(localStorage.getItem('exam_baseline_id') || examId, {
         attempt_id: attemptId,
         answers: payloadAnswers,
       });
       console.trace('[UI][SUBMIT][DONE]');
-      navigate(`/results/baseline/${encodeURIComponent(attemptId)}`, {
-        state: { result },
-      });
+      navigate(`/results/baseline/${encodeURIComponent(attemptId)}`);
     } catch (e) {
-      console.trace('[UI][SUBMIT][ERROR]', e);
-      setError(
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
-        e?.message ||
-        'Submit failed'
-      );
+      console.trace('[UI][SUBMIT][ERROR]', e?.message || e);
+      setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
       setIsSubmitting(false);
     }

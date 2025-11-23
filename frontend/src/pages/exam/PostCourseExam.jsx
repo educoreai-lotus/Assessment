@@ -433,7 +433,6 @@ export default function PostCourseExam() {
     try {
       console.trace('[UI][SUBMIT][START]');
       setIsSubmitting(true);
-      setLoading(true);
       // Only send answers for questions in current attempt's package
       const filteredAnswers = Object.entries(answers)
         .filter(([questionId]) => questions.find((q) => String(q.originalId || q.id) === String(questionId)))
@@ -449,7 +448,6 @@ export default function PostCourseExam() {
       setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
       setIsSubmitting(false);
-      setLoading(false);
     }
   }
 
