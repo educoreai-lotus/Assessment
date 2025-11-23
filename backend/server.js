@@ -13,6 +13,7 @@ const packagesRouter = require('./routes/packages');
 const proctoringRouter = require('./routes/proctoring');
 const { mountSwagger } = require('./swagger');
 const testEmailRouter = require("./routes/testEmail");
+const emailTestRoute = require("./routes/emailTest");
 
 const PORT = process.env.PORT || 4000;
 const API_BASE = '/api/v1';
@@ -166,6 +167,7 @@ app.get('/health/mongo', async (req, res) => {
 app.use('/api', integrationRoutes);
 app.use('/api/results', resultsRouter);
 app.use("/api", testEmailRouter);
+app.use("/api/test-email", emailTestRoute);
 
 // New Assessment API v1 routers
 app.use('/api/exams', examsRouter);
