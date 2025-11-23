@@ -32,6 +32,10 @@ export default function BaselineExam() {
   const liveStreamRef = useRef(null);
   const [expiresAtIso, setExpiresAtIso] = useState(null);
   const [remainingSec, setRemainingSec] = useState(null);
+  const answeredCount = useMemo(() =>
+    Object.values(answers).filter(v => v !== '' && v != null).length,
+  [answers]);
+  const totalCount = questions.length;
 
   useEffect(() => {
     let mounted = true;
@@ -218,11 +222,6 @@ export default function BaselineExam() {
     };
   }, [remainingSec]);
 
-  const progress = useMemo(() => {
-    if (!questions.length) return 0;
-    return Math.round(((currentIdx + 1) / questions.length) * 100);
-  }, [currentIdx, questions]);
-
   function handleAnswer(id, value) {
     setAnswers((s) => ({ ...s, [id]: value }));
   }
@@ -239,25 +238,31 @@ export default function BaselineExam() {
     try {
       console.trace('[UI][SUBMIT][START]');
       setIsSubmitting(true);
-      setLoading(true);
       const payloadAnswers = questions.map((q) => ({
         question_id: q.originalId,
         type: q.type === 'text' ? 'open' : q.type,
         skill_id: q.skill_id || '',
         answer: answers[q.id] ?? '',
       }));
-      await examApi.submit(localStorage.getItem('exam_baseline_id') || examId, {
+      const exam_id = localStorage.getItem('exam_baseline_id') || examId;
+      const result = await examApi.submit(exam_id, {
         attempt_id: attemptId,
         answers: payloadAnswers,
       });
       console.trace('[UI][SUBMIT][DONE]');
-      alert('Submitted! Check results.');
+      navigate(`/results/baseline/${encodeURIComponent(attemptId)}`, {
+        state: { result },
+      });
     } catch (e) {
-      console.trace('[UI][SUBMIT][ERROR] Error:', e?.message || e);
-      setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
+      console.trace('[UI][SUBMIT][ERROR]', e);
+      setError(
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        'Submit failed'
+      );
     } finally {
       setIsSubmitting(false);
-      setLoading(false);
     }
   }
 
@@ -268,7 +273,9 @@ export default function BaselineExam() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Baseline Exam</h2>
         <div className="flex items-center gap-4">
-          <div className="text-sm text-neutral-300">Progress: {progress}%</div>
+          <div className="text-sm text-neutral-300">
+            {answeredCount}/{totalCount} answered
+          </div>
           <div className="px-3 py-1 rounded-md bg-emerald-900/50 border border-emerald-700 text-emerald-200 font-mono">
             {Number.isFinite(remainingSec) && remainingSec != null
               ? new Date(remainingSec * 1000).toISOString().substr(11, 8)

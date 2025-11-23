@@ -89,6 +89,10 @@ export default function PostCourseExam() {
   const [expiresAtIso, setExpiresAtIso] = useState(null);
   const [remainingSec, setRemainingSec] = useState(null);
   const recreateOnceRef = useRef(false);
+  const answeredCount = useMemo(() =>
+    Object.values(answers).filter(v => v !== '' && v != null).length,
+  [answers]);
+  const totalCount = questions.length;
 
   useEffect(() => {
     let mounted = true;
@@ -494,6 +498,9 @@ export default function PostCourseExam() {
         <div className="flex items-center gap-4">
           <div className="text-xs text-neutral-400">
             Camera: {cameraReady && cameraOk ? 'active' : (cameraError ? 'error' : 'starting...')}
+          </div>
+          <div className="text-sm text-neutral-300">
+            {answeredCount}/{totalCount} answered
           </div>
           <div className="px-3 py-1 rounded-md bg-emerald-900/50 border border-emerald-700 text-emerald-200 font-mono">
             {Number.isFinite(remainingSec) && remainingSec != null
