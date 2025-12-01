@@ -1,11 +1,10 @@
 {
   "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "backend/Dockerfile",
-    "buildContext": "backend"
+    "builder": "docker",
+    "dockerfile": "Dockerfile"
   },
   "deploy": {
-    "startCommand": ""
+    "restartPolicyType": "always"
   }
 }
 
