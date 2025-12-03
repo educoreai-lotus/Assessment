@@ -89,6 +89,8 @@ const hasLiveEnv = !!(process.env.SUPABASE_DB_URL || process.env.SUPABASE_POOLER
       })
       .set('Content-Type', 'application/json');
 
+    expect(submitRes.statusCode).not.toBe(500);
+
     if (submitRes.statusCode === 200) {
       expect(submitRes.body).toHaveProperty('attempt_id', attempt_id);
       expect(submitRes.body).toHaveProperty('submitted_at');
