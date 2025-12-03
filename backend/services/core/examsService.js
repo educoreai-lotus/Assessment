@@ -1189,53 +1189,37 @@ async function submitAttempt({ attempt_id, answers }) {
           source: "theoretical",
         });
       } else {
-        // OPEN-TEXT: Try AI grading first; safe fallback to legacy heuristic (60/0)
-        const nonBlank = rawAnswer.trim().length > 0;
+        // OPEN-TEXT: Deterministic heuristic grading (no randomness, no external AI)
+        const trimmed = rawAnswer.trim();
         let score = 0;
-        let status = nonBlank ? "partial" : "blank";
-        let source = "theoretical";
-        let aiReason = null;
+        let status = "not_acquired";
+        const correctAnswer =
+          (q && q.prompt && q.prompt.correct_answer != null
+            ? String(q.prompt.correct_answer)
+            : (q && q.correct_answer != null
+              ? String(q.correct_answer)
+              : ""));
 
-        if (nonBlank) {
-          try {
-            const questionText =
-              (q && q.prompt && typeof q.prompt.question === "string" && q.prompt.question) ||
-              (typeof q?.question === "string" ? q.question : "");
-            const correctAnswer =
-              (q && q.prompt && q.prompt.correct_answer != null
-                ? String(q.prompt.correct_answer)
-                : (q && q.correct_answer != null
-                  ? String(q.correct_answer)
-                  : ""));
-            const ai = await gradeOpenAnswerWithAI({
-              question: questionText,
-              correctAnswer,
-              userAnswer: rawAnswer,
-              skillId,
-              examType,
-            });
-            if (ai && Number.isFinite(Number(ai.score))) {
-              score = Math.max(0, Math.min(100, Number(ai.score)));
-              if (score >= 85) status = "correct";
-              else if (score >= 50) status = "partial";
-              else status = "incorrect";
-              source = "theoretical+ai";
-              aiReason = String(ai.reason || "").slice(0, 500);
-            } else {
-              // Fallback to old heuristic if AI response invalid
-              score = 60;
-              status = "partial";
-            }
-          } catch (err) {
-            // On ANY AI error, fallback to previous behavior (60/0)
+        if (trimmed.length >= 10) {
+          const tokenize = (s) => Array.from(new Set(String(s || '')
+            .toLowerCase()
+            .split(/[^a-z0-9]+/g)
+            .filter(w => w && w.length >= 4)));
+          const kw = tokenize(correctAnswer);
+          const words = tokenize(trimmed);
+          const matched = kw.filter(k => words.includes(k)).length;
+          const ratio = kw.length > 0 ? matched / kw.length : 0;
+          if (ratio >= 0.8) {
+            score = 100;
+          } else if (ratio >= 0.5) {
             score = 60;
-            status = "partial";
-            source = "theoretical";
+          } else {
+            score = 0;
           }
+          status = score >= 70 ? "acquired" : "not_acquired";
         } else {
-          // Blank answer remains 0/blank
           score = 0;
-          status = "blank";
+          status = "not_acquired";
         }
 
         graded.push({
@@ -1245,40 +1229,8 @@ async function submitAttempt({ attempt_id, answers }) {
           raw_answer: rawAnswer,
           score,
           status,
-          source,
+          source: "theoretical",
         });
-
-        // Audit trail for AI attempts (non-test environments)
-        if (process.env.NODE_ENV !== "test") {
-          try {
-            const correctAnswerForLog =
-              (q && q.prompt && q.prompt.correct_answer != null
-                ? String(q.prompt.correct_answer)
-                : (q && q.correct_answer != null
-                  ? String(q.correct_answer)
-                  : ""));
-            AiAuditTrail.create({
-              exam_id: String(attempt.exam_id),
-              attempt_id: String(attemptIdNum),
-              event_type: "grading",
-              model: { provider: "openai", name: process.env.AI_MODEL || "gpt-4o-mini", version: "v1" },
-              prompt: {
-                question_id: qid,
-                type: "open",
-                skill_id: skillId,
-                user_answer: rawAnswer,
-                correct_answer: correctAnswerForLog,
-              },
-              response: {
-                decision: status,
-                score,
-                reason: aiReason,
-                source,
-              },
-              status: "success",
-            }).catch(() => {});
-          } catch {}
-        }
       }
     }
     return graded;

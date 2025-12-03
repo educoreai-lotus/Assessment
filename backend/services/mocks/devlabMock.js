@@ -36,23 +36,41 @@ exports.mockRequestTheoreticalValidation = async () => {
   };
 };
 
-// Mock grading for coding answers with realistic scores (60–100) and averaged final grade
+// Deterministic coding grading mock (no randomness)
 exports.mockGradeCodingAnswers = async (payload) => {
   const answers = Array.isArray(payload?.answers) ? payload.answers : [];
   const results = answers.map((a) => {
-    const score = Math.floor(Math.random() * 41) + 60; // 60–100
+    const code = (a && typeof a.code_answer === 'string') ? a.code_answer : '';
+    const normalized = code.toLowerCase();
+    const requiredKeywords = ['function', 'return', 'for', 'while', 'map', 'filter', 'reduce', 'async'];
+    const matches = requiredKeywords.filter(k => normalized.includes(k)).length;
+
+    let score = 0;
+    const implementsAdd = /\breturn\s+[^;]*\b[a-zA-Z_]\w*\s*\+\s*[a-zA-Z_]\w*/.test(normalized) || /\ba\s*\+\s*b\b/.test(normalized);
+    if (implementsAdd) {
+      score = 100; // expected algorithm detected
+    } else if (matches >= 3) {
+      score = 70; // reasonable structural match
+    } else if (matches >= 1) {
+      score = 40; // partial structure
+    } else {
+      score = 0; // no recognizable structure
+    }
+
     const status = score >= 70 ? 'acquired' : 'not_acquired';
     return {
-      question_id: String(a.question_id || ''),
-      skill_id: String(a.skill_id || ''),
+      question_id: String(a?.question_id || ''),
+      skill_id: String(a?.skill_id || ''),
       score,
       status,
       feedback: status === 'acquired' ? 'Meets requirements.' : 'Needs improvement.',
     };
   });
+
   const final_grade = results.length > 0
     ? Math.round(results.reduce((acc, r) => acc + r.score, 0) / results.length)
     : 0;
+
   return { success: true, results, final_grade };
 };
 
