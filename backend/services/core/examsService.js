@@ -1215,9 +1215,8 @@ async function submitAttempt({ attempt_id, answers }) {
           if (ratio > 0.7) {
             score = 100;
           } else if (ratio >= 0.3) {
-            // map deterministically to 40–70 band based on percentage
             const pct = Math.round(ratio * 100);
-            score = Math.max(40, Math.min(70, pct));
+            score = pct; // direct percentage in 30–70 range
           } else {
             score = 0;
           }
