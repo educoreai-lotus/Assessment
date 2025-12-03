@@ -1,39 +1,61 @@
-const axios = require('axios');
 const { mockFetchCoverage, mockPushExamResults } = require('../mocks/courseBuilderMock');
 
-function getBaseUrl() {
-  const base = process.env.COURSE_BUILDER_BASE_URL;
-  if (!base) throw new Error('COURSE_BUILDER_BASE_URL not set');
-  return base.replace(/\/+$/, '');
-}
-
-async function tryFetchCoverageReal(params) {
-  const base = getBaseUrl();
-  const url = `${base}/api/course-builder/coverage`;
-  const { data } = await axios.get(url, { params, timeout: 10000 });
-  return data;
+function getCoordinatorUrl() {
+  const base = process.env.COORDINATOR_URL;
+  if (!base) throw new Error('COORDINATOR_URL not set');
+  return String(base).replace(/\/+$/, '');
 }
 
 async function safeFetchCoverage(params) {
   try {
-    return await tryFetchCoverageReal(params);
+    const url = `${getCoordinatorUrl()}/api/fill-content-metrics/`;
+    const body = {
+      requester_service: 'assessment-service',
+      payload: {
+        action: 'fetch course coverage map from Course Builder',
+        ...(params || {}),
+      },
+      response: {
+        learner_id: null,
+        course_id: null,
+        course_name: null,
+        coverage_map: [],
+      },
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await resp.json().catch(() => ({}));
+    const data = json && json.success ? json.data : (json && json.response) || {};
+    return data;
   } catch (err) {
-    console.warn('CourseBuilder coverage fetch failed, using mock. Reason:', err?.message || err);
+    console.warn('CourseBuilder coverage fetch via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockFetchCoverage(params || {});
   }
 }
 
-// Phase 08.5 – Outgoing results push with envelope to metrics URL
+// Outgoing results push through Coordinator
 async function sendCourseBuilderExamResults(payloadObj) {
+  const url = `${getCoordinatorUrl()}/api/fill-content-metrics/`;
   const body = {
-    service_requester: 'Assessment',
-    payload: payloadObj || {},
-    response: {},
+    requester_service: 'assessment-service',
+    payload: {
+      action: 'push post-course exam results to Course Builder',
+      ...(payloadObj || {}),
+    },
+    response: {
+      ok: true,
+    },
   };
-  const url = process.env.INTEGRATION_COURSEBUILDER_FILL_METRICS_URL;
-  if (!url) throw new Error('INTEGRATION_COURSEBUILDER_FILL_METRICS_URL not set');
-  const { data } = await axios.post(url, body, { timeout: 15000 });
-  return data;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await resp.json().catch(() => ({}));
+  return json && json.success ? json.data : (json && json.response) || {};
 }
 
 // Backward-compatible safe wrapper (uses mock on failure)
@@ -41,7 +63,7 @@ async function safePushExamResults(payload) {
   try {
     return await sendCourseBuilderExamResults(payload);
   } catch (err) {
-    console.warn('CourseBuilder push results failed, using mock. Reason:', err?.message || err);
+    console.warn('CourseBuilder push results via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockPushExamResults(payload);
   }
 }

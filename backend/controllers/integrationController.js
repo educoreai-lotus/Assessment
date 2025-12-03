@@ -376,17 +376,27 @@ exports.universalIntegrationHandler = async (req, res) => {
     if (raced && typeof raced === 'object' && !Object.is(raced, Symbol('timeout'))) {
       result = raced;
     } else {
-      return res.json({
+      const envelope = {
         service_requester: 'Assessment',
         payload: parsedPayload,
         response: { answer: [] },
+      };
+      return res.json({
+        success: true,
+        data: envelope.response,
+        ...envelope,
       });
     }
 
-    return res.json({
+    const envelope = {
       service_requester: 'Assessment',
       payload: parsedPayload,
       response: result || {},
+    };
+    return res.json({
+      success: true,
+      data: envelope.response,
+      ...envelope,
     });
 
   } catch (err) {

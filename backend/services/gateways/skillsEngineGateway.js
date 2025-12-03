@@ -1,41 +1,62 @@
-const axios = require('axios');
 const { mockFetchBaselineSkills, mockPushAssessmentResults } = require('../mocks/skillsEngineMock');
 
-function getBaseUrl() {
-  const base = process.env.SKILLS_ENGINE_BASE_URL;
-  if (!base) throw new Error('SKILLS_ENGINE_BASE_URL not set');
-  return base.replace(/\/+$/, '');
-}
-
-async function tryFetchBaselineSkillsReal(params) {
-  const base = getBaseUrl();
-  const url = `${base}/api/skills-engine/baseline-readiness`;
-  const { data } = await axios.get(url, { params, timeout: 10000 });
-  return data;
+function getCoordinatorUrl() {
+  const base = process.env.COORDINATOR_URL;
+  if (!base) throw new Error('COORDINATOR_URL not set');
+  return String(base).replace(/\/+$/, '');
 }
 
 async function safeFetchBaselineSkills(params) {
   try {
-    return await tryFetchBaselineSkillsReal(params);
+    const url = `${getCoordinatorUrl()}/api/fill-content-metrics/`;
+    const body = {
+      requester_service: 'assessment-service',
+      payload: {
+        action: 'fetch baseline readiness skills from Skills Engine',
+        ...(params || {}),
+      },
+      response: {
+        skills: [],
+        passing_grade: 0,
+      },
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await resp.json().catch(() => ({}));
+    const data = json && json.success ? json.data : (json && json.response) || {};
+    return data;
   } catch (err) {
-    console.warn('SkillsEngine baseline fetch failed, using mock. Reason:', err?.message || err);
+    console.warn('SkillsEngine baseline fetch via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockFetchBaselineSkills(params || {});
   }
 }
 
 async function safePushAssessmentResults(payload) {
   try {
-    const base = getBaseUrl();
-    const url = `${base}/api/skills-engine/assessment-results`;
-    const envelope = {
-      service_requester: 'Assessment',
-      payload: payload || {},
-      response: {},
+    const url = `${getCoordinatorUrl()}/api/fill-content-metrics/`;
+    const body = {
+      requester_service: 'assessment-service',
+      payload: {
+        action: 'push assessment results to Skills Engine',
+        ...(payload || {}),
+      },
+      response: {
+        ok: true,
+      },
     };
-    const { data } = await axios.post(url, envelope, { timeout: 15000 });
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await resp.json().catch(() => ({}));
+    const data = json && json.success ? json.data : (json && json.response) || {};
     return data;
   } catch (err) {
-    console.warn('SkillsEngine push results failed, using mock. Reason:', err?.message || err);
+    console.warn('SkillsEngine push results via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockPushAssessmentResults(payload);
   }
 }
