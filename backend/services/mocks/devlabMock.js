@@ -36,27 +36,24 @@ exports.mockRequestTheoreticalValidation = async () => {
   };
 };
 
-// Deterministic mock grading for coding answers
+// Mock grading for coding answers with realistic scores (60–100) and averaged final grade
 exports.mockGradeCodingAnswers = async (payload) => {
   const answers = Array.isArray(payload?.answers) ? payload.answers : [];
   const results = answers.map((a) => {
-    const code = a?.code_answer ? String(a.code_answer) : '';
-    // Simple deterministic scoring: base on length and presence of async/function keywords
-    let score = 50;
-    if (/\bfunction\b/.test(code)) score += 15;
-    if (/\basync\b/.test(code)) score += 15;
-    score += Math.min(20, Math.floor(code.length / 50)); // +1 per 50 chars up to +20
-    if (score > 100) score = 100;
-    const status = score >= 70 ? 'passed' : 'failed';
+    const score = Math.floor(Math.random() * 41) + 60; // 60–100
+    const status = score >= 70 ? 'acquired' : 'not_acquired';
     return {
       question_id: String(a.question_id || ''),
       skill_id: String(a.skill_id || ''),
       score,
       status,
-      feedback: status === 'passed' ? 'Meets requirements.' : 'Needs improvement.',
+      feedback: status === 'acquired' ? 'Meets requirements.' : 'Needs improvement.',
     };
   });
-  return { results };
+  const final_grade = results.length > 0
+    ? Math.round(results.reduce((acc, r) => acc + r.score, 0) / results.length)
+    : 0;
+  return { success: true, results, final_grade };
 };
 
 
