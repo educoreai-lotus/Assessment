@@ -4,19 +4,15 @@ function getCoordinatorUrl() {
 	return String(base).replace(/\/+$/, '');
 }
 
+const { postToCoordinator } = require('./coordinatorClient');
+
 async function sendToDevlabEnvelope(payloadObj) {
-	const url = `${getCoordinatorUrl()}/api/fill-content-metrics/`;
 	const envelope = {
 		requester_service: 'assessment-service',
 		payload: payloadObj || {},
 		response: { answer: [] },
 	};
-	const resp = await fetch(url, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(envelope),
-	});
-	const json = await resp.json().catch(() => ({}));
+	const { data: json } = await postToCoordinator(envelope).catch(() => ({ data: {} }));
 	return json && json.success ? json.data : (json && json.response) || {};
 }
 

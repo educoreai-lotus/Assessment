@@ -1,4 +1,5 @@
 const { mockFetchPolicy, mockPushExamResults } = require('../mocks/directoryMock');
+const { postToCoordinator } = require('./coordinatorClient');
 
 function getCoordinatorUrl() {
   const base = process.env.COORDINATOR_URL;
@@ -8,7 +9,6 @@ function getCoordinatorUrl() {
 
 async function safeFetchPolicy(examType) {
   try {
-    const url = `${getCoordinatorUrl()}/api/fill-content-metrics/`;
     const body = {
       requester_service: 'assessment-service',
       payload: {
@@ -20,12 +20,7 @@ async function safeFetchPolicy(examType) {
         max_attempts: 0,
       },
     };
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const json = await resp.json().catch(() => ({}));
+    const { data: json } = await postToCoordinator(body).catch(() => ({ data: {} }));
     const success = !!json && (json.success === true || typeof json.response === 'object');
     const data = json && json.success ? json.data : (json && json.response) || {};
     const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
@@ -43,7 +38,6 @@ async function safeFetchPolicy(examType) {
 
 async function safePushExamResults(payload) {
   try {
-    const url = `${getCoordinatorUrl()}/api/fill-content-metrics/`;
     const body = {
       requester_service: 'assessment-service',
       payload: {
@@ -54,12 +48,7 @@ async function safePushExamResults(payload) {
         ok: true,
       },
     };
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const json = await resp.json().catch(() => ({}));
+    const { data: json } = await postToCoordinator(body).catch(() => ({ data: {} }));
     const data = json && json.success ? json.data : (json && json.response) || {};
     const success = !!json && (json.success === true || typeof json.response === 'object');
     const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
