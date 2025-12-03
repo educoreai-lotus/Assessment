@@ -1185,11 +1185,11 @@ async function submitAttempt({ attempt_id, answers }) {
           type: "mcq",
           raw_answer: rawAnswer,
           score: ok ? 100 : 0,
-          status: ok ? "correct" : "incorrect",
+          status: ok ? "acquired" : "not_acquired",
           source: "theoretical",
         });
       } else {
-        // OPEN-TEXT: Deterministic heuristic grading (no randomness, no external AI)
+        // OPEN-TEXT: Deterministic keyword-based grading (no randomness, no external AI)
         const trimmed = rawAnswer.trim();
         let score = 0;
         let status = "not_acquired";
@@ -1201,21 +1201,28 @@ async function submitAttempt({ attempt_id, answers }) {
               : ""));
 
         if (trimmed.length >= 10) {
+          const stopwords = new Set([
+            "the","is","are","a","an","and","or","of","for","to","in","on","at","by","with","as","this","that","these","those","be","been","being"
+          ]);
           const tokenize = (s) => Array.from(new Set(String(s || '')
             .toLowerCase()
             .split(/[^a-z0-9]+/g)
-            .filter(w => w && w.length >= 4)));
+            .filter(w => w && w.length >= 2 && !stopwords.has(w))));
           const kw = tokenize(correctAnswer);
           const words = tokenize(trimmed);
           const matched = kw.filter(k => words.includes(k)).length;
           const ratio = kw.length > 0 ? matched / kw.length : 0;
-          if (ratio >= 0.8) {
+          if (ratio > 0.7) {
             score = 100;
-          } else if (ratio >= 0.5) {
-            score = 60;
+          } else if (ratio >= 0.3) {
+            // map deterministically to 40–70 band based on percentage
+            const pct = Math.round(ratio * 100);
+            score = Math.max(40, Math.min(70, pct));
           } else {
             score = 0;
           }
+          if (score > 100) score = 100;
+          if (score < 0) score = 0;
           status = score >= 70 ? "acquired" : "not_acquired";
         } else {
           score = 0;
@@ -1339,8 +1346,10 @@ async function submitAttempt({ attempt_id, answers }) {
   let perSkillScores = perSkill.map((s) => Number(s.score || 0));
   let finalGrade =
     perSkillScores.length > 0
-      ? perSkillScores.reduce((a, b) => a + b, 0) / perSkillScores.length
+      ? Math.round(perSkillScores.reduce((a, b) => a + b, 0) / perSkillScores.length)
       : 0;
+  if (finalGrade > 100) finalGrade = 100;
+  if (finalGrade < 0) finalGrade = 0;
   let passed = finalGrade >= passing;
   if (totalAnswersCount === 0 || nonBlankAnswersCount === 0) {
     for (const s of perSkill) {
