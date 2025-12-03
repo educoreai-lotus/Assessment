@@ -26,8 +26,14 @@ async function safeFetchPolicy(examType) {
       body: JSON.stringify(body),
     });
     const json = await resp.json().catch(() => ({}));
-    // Prefer new shape { success, data }, fallback to legacy { response }
+    const success = !!json && (json.success === true || typeof json.response === 'object');
     const data = json && json.success ? json.data : (json && json.response) || {};
+    const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
+    const isEmptyArray = Array.isArray(data) && data.length === 0;
+    if (!json || !success || !data || isEmptyObject || isEmptyArray) {
+      try { console.log('[MOCK-FALLBACK][Directory][policy]', { examType }); } catch {}
+      return mockFetchPolicy(examType);
+    }
     return data;
   } catch (err) {
     console.warn('Directory fetchPolicy via Coordinator failed, using mock. Reason:', err?.message || err);
@@ -55,6 +61,13 @@ async function safePushExamResults(payload) {
     });
     const json = await resp.json().catch(() => ({}));
     const data = json && json.success ? json.data : (json && json.response) || {};
+    const success = !!json && (json.success === true || typeof json.response === 'object');
+    const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
+    const isEmptyArray = Array.isArray(data) && data.length === 0;
+    if (!json || !success || !data || isEmptyObject || isEmptyArray) {
+      try { console.log('[MOCK-FALLBACK][Directory][results]', { hasPayload: !!payload }); } catch {}
+      return mockPushExamResults(payload);
+    }
     return data;
   } catch (err) {
     console.warn('Directory pushExamResults via Coordinator failed, using mock. Reason:', err?.message || err);

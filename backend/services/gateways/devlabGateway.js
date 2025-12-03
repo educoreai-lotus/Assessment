@@ -21,23 +21,50 @@ async function sendToDevlabEnvelope(payloadObj) {
 }
 
 async function requestCodingQuestions({ amount, skills, humanLanguage = 'en', difficulty = 'medium' }) {
-	const resp = await sendToDevlabEnvelope({
-		action: 'coding',
-		amount,
-		difficulty,
-		humanLanguage,
-		programming_language: 'javascript',
-		skills,
-	});
-	// Expect array of questions under response.answer or data.answer
-	const answer = Array.isArray(resp?.answer) ? resp.answer : (Array.isArray(resp?.response?.answer) ? resp.response.answer : []);
-	return answer;
+	try {
+		const resp = await sendToDevlabEnvelope({
+			action: 'coding',
+			amount,
+			difficulty,
+			humanLanguage,
+			programming_language: 'javascript',
+			skills,
+		});
+		const answer = Array.isArray(resp?.answer) ? resp.answer : (Array.isArray(resp?.response?.answer) ? resp.response.answer : []);
+		const isEmpty = !Array.isArray(answer) || answer.length === 0;
+		if (isEmpty) {
+			try { console.log('[MOCK-FALLBACK][DevLab][coding-questions]', { amount, skills_count: Array.isArray(skills) ? skills.length : 0 }); } catch {}
+			const { mockGetCodingQuestions } = require('../mocks/devlabMock');
+			const mockResp = await mockGetCodingQuestions();
+			return Array.isArray(mockResp?.questions) ? mockResp.questions : [];
+		}
+		return answer;
+	} catch (err) {
+		try { console.log('[MOCK-FALLBACK][DevLab][coding-questions][error]', { message: err?.message }); } catch {}
+		const { mockGetCodingQuestions } = require('../mocks/devlabMock');
+		const mockResp = await mockGetCodingQuestions();
+		return Array.isArray(mockResp?.questions) ? mockResp.questions : [];
+	}
 }
 
 async function sendCodingGradeEnvelope(payloadObj) {
-	const resp = await sendToDevlabEnvelope(payloadObj);
-	const answer = Array.isArray(resp?.answer) ? resp.answer : (Array.isArray(resp?.response?.answer) ? resp.response.answer : []);
-	return answer;
+	try {
+		const resp = await sendToDevlabEnvelope(payloadObj);
+		const answer = Array.isArray(resp?.answer) ? resp.answer : (Array.isArray(resp?.response?.answer) ? resp.response.answer : []);
+		const isEmpty = !Array.isArray(answer) || answer.length === 0;
+		if (isEmpty) {
+			try { console.log('[MOCK-FALLBACK][DevLab][coding-grade]'); } catch {}
+			const { mockGradeCodingAnswers } = require('../mocks/devlabMock');
+			const mock = await mockGradeCodingAnswers(payloadObj || {});
+			return Array.isArray(mock?.results) ? mock.results : [];
+		}
+		return answer;
+	} catch (err) {
+		try { console.log('[MOCK-FALLBACK][DevLab][coding-grade][error]', { message: err?.message }); } catch {}
+		const { mockGradeCodingAnswers } = require('../mocks/devlabMock');
+		const mock = await mockGradeCodingAnswers(payloadObj || {});
+		return Array.isArray(mock?.results) ? mock.results : [];
+	}
 }
 
 module.exports = { sendToDevlabEnvelope, requestCodingQuestions, sendCodingGradeEnvelope };

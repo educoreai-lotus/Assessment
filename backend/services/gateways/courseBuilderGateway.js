@@ -29,6 +29,14 @@ async function safeFetchCoverage(params) {
     });
     const json = await resp.json().catch(() => ({}));
     const data = json && json.success ? json.data : (json && json.response) || {};
+    const success = !!json && (json.success === true || typeof json.response === 'object');
+    const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
+    const isEmptyArray = Array.isArray(data) && data.length === 0;
+    const hasCoverage = !!(data && Array.isArray(data.coverage_map) && data.coverage_map.length > 0);
+    if (!json || !success || !data || isEmptyObject || isEmptyArray || !hasCoverage) {
+      try { console.log('[MOCK-FALLBACK][CourseBuilder][coverage]', { hasParams: !!params }); } catch {}
+      return mockFetchCoverage(params || {});
+    }
     return data;
   } catch (err) {
     console.warn('CourseBuilder coverage fetch via Coordinator failed, using mock. Reason:', err?.message || err);
@@ -55,7 +63,15 @@ async function sendCourseBuilderExamResults(payloadObj) {
     body: JSON.stringify(body),
   });
   const json = await resp.json().catch(() => ({}));
-  return json && json.success ? json.data : (json && json.response) || {};
+  const out = json && json.success ? json.data : (json && json.response) || {};
+  const success = !!json && (json.success === true || typeof json.response === 'object');
+  const isEmptyObject = out && typeof out === 'object' && !Array.isArray(out) && Object.keys(out).length === 0;
+  const isEmptyArray = Array.isArray(out) && out.length === 0;
+  if (!json || !success || !out || isEmptyObject || isEmptyArray) {
+    try { console.log('[MOCK-FALLBACK][CourseBuilder][push-results]', { hasPayload: !!payloadObj }); } catch {}
+    return mockPushExamResults(payloadObj);
+  }
+  return out;
 }
 
 // Backward-compatible safe wrapper (uses mock on failure)

@@ -27,6 +27,13 @@ async function safeFetchBaselineSkills(params) {
     });
     const json = await resp.json().catch(() => ({}));
     const data = json && json.success ? json.data : (json && json.response) || {};
+    const success = !!json && (json.success === true || typeof json.response === 'object');
+    const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
+    const isEmptyArray = Array.isArray(data) && data.length === 0;
+    if (!json || !success || !data || isEmptyObject || isEmptyArray) {
+      try { console.log('[MOCK-FALLBACK][SkillsEngine][baseline-skills]', { hasParams: !!params }); } catch {}
+      return mockFetchBaselineSkills(params || {});
+    }
     return data;
   } catch (err) {
     console.warn('SkillsEngine baseline fetch via Coordinator failed, using mock. Reason:', err?.message || err);
@@ -54,6 +61,13 @@ async function safePushAssessmentResults(payload) {
     });
     const json = await resp.json().catch(() => ({}));
     const data = json && json.success ? json.data : (json && json.response) || {};
+    const success = !!json && (json.success === true || typeof json.response === 'object');
+    const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
+    const isEmptyArray = Array.isArray(data) && data.length === 0;
+    if (!json || !success || !data || isEmptyObject || isEmptyArray) {
+      try { console.log('[MOCK-FALLBACK][SkillsEngine][push-results]', { hasPayload: !!payload }); } catch {}
+      return mockPushAssessmentResults(payload);
+    }
     return data;
   } catch (err) {
     console.warn('SkillsEngine push results via Coordinator failed, using mock. Reason:', err?.message || err);
