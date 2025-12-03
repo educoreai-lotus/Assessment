@@ -148,6 +148,14 @@ exports.gradeCodingAnswersForExam = async function gradeCodingAnswersForExam({
       gradingResults = [];
     }
   }
+  // Normalize results from Coordinator/gateway to include max_score for scaling
+  gradingResults = (Array.isArray(gradingResults) ? gradingResults : []).map((r) => ({
+    question_id: String(r?.question_id || ''),
+    skill_id: String(r?.skill_id || ''),
+    score: typeof r?.score === 'number' ? r.score : 0,
+    max_score: typeof r?.max_score === 'number' ? r.max_score : 100,
+    status: r?.status || 'failed',
+  }));
 
 	let score_total = 0;
 	let score_max = 0;
