@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "service": "assessment-service",
+  "database": {
+    "enums": {
+      "exam_type": ["baseline", "postcourse"]
+    },
+    "tables": [],
+    "collections": [
+      "exam_packages",
+      "exam_attempts",
+      "proctoring_events"
+    ]
+  }
+}
+

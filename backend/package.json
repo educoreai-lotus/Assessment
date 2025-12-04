@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "test": "jest --runInBand --forceExit",
-    "test:report": "jest --runInBand --json --outputFile=../artifacts/jest-results-phase08.json"
+    "test:report": "jest --runInBand --json --outputFile=../artifacts/jest-results-phase08.json",
+    "encrypt:migration": "node scripts/encrypt-migration.js",
+    "upload:migration": "node scripts/upload-migration.js"
   },
   "keywords": [],
   "author": "",
