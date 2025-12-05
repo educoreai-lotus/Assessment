@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "description": "Assessment microservice responsible for exam creation, AI question generation, proctoring, submissions, grading, and skill analytics.",
+  "tables": [
+    "exam_packages",
+    "exam_attempts",
+    "proctoring_events",
+    "skills_results"
+  ],
+  "api": {
+    "endpoints": [
+      {
+        "path": "/api/exams/create",
+        "method": "POST",
+        "description": "Create a new baseline or postcourse exam"
+      },
+      {
+        "path": "/api/exams/:id/submit",
+        "method": "POST",
+        "description": "Submit exam answers"
+      },
+      {
+        "path": "/api/exams/:id",
+        "method": "GET",
+        "description": "Get exam details"
+      }
+    ]
+  },
+  "events": {
+    "publishes": ["exam.created", "exam.completed"],
+    "subscribes": ["user.created", "course.published"]
+  }
+}
+
+
