@@ -1,9 +1,11 @@
 'use strict';
 
 describe('Coordinator connectivity - Health (ping)', () => {
+  const runLive = process.env.RUN_COORDINATOR_LIVE === 'true';
   const COORDINATOR_URL = process.env.COORDINATOR_URL || 'https://coordinator-production-e0a0.up.railway.app';
 
   beforeAll(() => {
+    if (!runLive) return;
     process.env.COORDINATOR_URL = COORDINATOR_URL;
     const fs = require('fs');
     const path = require('path');
@@ -12,7 +14,7 @@ describe('Coordinator connectivity - Health (ping)', () => {
     process.env.SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
   });
 
-  test('Ping via postToCoordinator responds with 200/202; valid JSON; no auth errors', async () => {
+  (runLive ? test : test.skip)('Ping via postToCoordinator responds with 200/202; valid JSON; no auth errors', async () => {
     jest.resetModules();
     const { postToCoordinator } = require('../../services/gateways/coordinatorClient');
 

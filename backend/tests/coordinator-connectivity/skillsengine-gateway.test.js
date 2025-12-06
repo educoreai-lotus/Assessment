@@ -1,9 +1,11 @@
 'use strict';
 
 describe('Coordinator connectivity - SkillsEngine Gateway', () => {
+  const runLive = process.env.RUN_COORDINATOR_LIVE === 'true';
   const COORDINATOR_URL = process.env.COORDINATOR_URL || 'https://coordinator-production-e0a0.up.railway.app';
 
   beforeAll(() => {
+    if (!runLive) return;
     process.env.COORDINATOR_URL = COORDINATOR_URL;
     const fs = require('fs');
     const path = require('path');
@@ -12,7 +14,7 @@ describe('Coordinator connectivity - SkillsEngine Gateway', () => {
     process.env.SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
   });
 
-  test('safeFetchBaselineSkills returns data or fallback; metadata.routed_to if available; no 401', async () => {
+  (runLive ? test : test.skip)('safeFetchBaselineSkills returns data or fallback; metadata.routed_to if available; no 401', async () => {
     jest.resetModules();
     const { safeFetchBaselineSkills } = require('../../services/gateways/skillsEngineGateway');
     const { postToCoordinator } = require('../../services/gateways/coordinatorClient');
@@ -41,7 +43,7 @@ describe('Coordinator connectivity - SkillsEngine Gateway', () => {
     }
   }, 45000);
 
-  test('safePushAssessmentResults returns ok or fallback; no 401', async () => {
+  (runLive ? test : test.skip)('safePushAssessmentResults returns ok or fallback; no 401', async () => {
     jest.resetModules();
     const { safePushAssessmentResults } = require('../../services/gateways/skillsEngineGateway');
     const out = await safePushAssessmentResults({ user_id: 'u_123', results: [] });

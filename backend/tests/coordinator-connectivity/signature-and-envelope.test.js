@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 describe('Coordinator connectivity - Signed outbound requests', () => {
+  const runLive = process.env.RUN_COORDINATOR_LIVE === 'true';
   const COORDINATOR_URL = process.env.COORDINATOR_URL || 'https://coordinator-production-e0a0.up.railway.app';
   const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
   let originalEnv;
@@ -12,6 +13,7 @@ describe('Coordinator connectivity - Signed outbound requests', () => {
   let lastResponse = null;
 
   beforeAll(() => {
+    if (!runLive) return;
     originalEnv = { ...process.env };
     originalFetch = global.fetch;
 
@@ -34,11 +36,12 @@ describe('Coordinator connectivity - Signed outbound requests', () => {
   }, 30000);
 
   afterAll(() => {
+    if (!runLive) return;
     process.env = originalEnv;
     global.fetch = originalFetch;
   });
 
-  test('postToCoordinator sets headers and sends a valid signature; response not 401', async () => {
+  (runLive ? test : test.skip)('postToCoordinator sets headers and sends a valid signature; response not 401', async () => {
     jest.resetModules();
     const { verifySignature } = require('../../utils/signature');
     const { postToCoordinator } = require('../../services/gateways/coordinatorClient');

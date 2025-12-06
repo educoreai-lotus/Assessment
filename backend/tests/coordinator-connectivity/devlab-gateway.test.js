@@ -1,9 +1,11 @@
 'use strict';
 
 describe('Coordinator connectivity - DevLab Gateway', () => {
+  const runLive = process.env.RUN_COORDINATOR_LIVE === 'true';
   const COORDINATOR_URL = process.env.COORDINATOR_URL || 'https://coordinator-production-e0a0.up.railway.app';
 
   beforeAll(() => {
+    if (!runLive) return;
     process.env.COORDINATOR_URL = COORDINATOR_URL;
     const fs = require('fs');
     const path = require('path');
@@ -12,7 +14,7 @@ describe('Coordinator connectivity - DevLab Gateway', () => {
     process.env.SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
   });
 
-  test('requestCodingQuestions returns data or fallback; metadata.routed_to if available; no 401', async () => {
+  (runLive ? test : test.skip)('requestCodingQuestions returns data or fallback; metadata.routed_to if available; no 401', async () => {
     jest.resetModules();
     const { requestCodingQuestions } = require('../../services/gateways/devlabGateway');
     const { postToCoordinator } = require('../../services/gateways/coordinatorClient');

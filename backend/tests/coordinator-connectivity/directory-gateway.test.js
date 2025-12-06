@@ -1,9 +1,11 @@
 'use strict';
 
 describe('Coordinator connectivity - Directory Gateway', () => {
+  const runLive = process.env.RUN_COORDINATOR_LIVE === 'true';
   const COORDINATOR_URL = process.env.COORDINATOR_URL || 'https://coordinator-production-e0a0.up.railway.app';
 
   beforeAll(() => {
+    if (!runLive) return;
     process.env.COORDINATOR_URL = COORDINATOR_URL;
     const fs = require('fs');
     const path = require('path');
@@ -12,7 +14,7 @@ describe('Coordinator connectivity - Directory Gateway', () => {
     process.env.SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
   });
 
-  test('safeFetchPolicy returns data or fallback; metadata.routed_to if available; no 401', async () => {
+  (runLive ? test : test.skip)('safeFetchPolicy returns data or fallback; metadata.routed_to if available; no 401', async () => {
     jest.resetModules();
     const { safeFetchPolicy } = require('../../services/gateways/directoryGateway');
     const { postToCoordinator } = require('../../services/gateways/coordinatorClient');
@@ -42,7 +44,7 @@ describe('Coordinator connectivity - Directory Gateway', () => {
     }
   }, 45000);
 
-  test('safePushExamResults returns ok or fallback; no 401', async () => {
+  (runLive ? test : test.skip)('safePushExamResults returns ok or fallback; no 401', async () => {
     jest.resetModules();
     const { safePushExamResults } = require('../../services/gateways/directoryGateway');
     const out = await safePushExamResults({ exam_id: 'ex_1', passed: true });

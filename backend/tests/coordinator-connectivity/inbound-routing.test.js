@@ -1,9 +1,10 @@
 'use strict';
 
 describe('Coordinator connectivity - Inbound routing to /debug/inbound (temporary)', () => {
+  const runLive = process.env.RUN_COORDINATOR_LIVE === 'true';
   const COORDINATOR_URL = process.env.COORDINATOR_URL || 'https://coordinator-production-e0a0.up.railway.app';
 
-  test('Coordinator unified proxy forwards to assessment /debug/inbound and receives { received: true }', async () => {
+  (runLive ? test : test.skip)('Coordinator unified proxy forwards to assessment /debug/inbound and receives { received: true }', async () => {
     const base = String(COORDINATOR_URL).replace(/\/+$/, '');
     const url = `${base}/api/fill-content-metrics/`;
     const payload = {
