@@ -1,5 +1,6 @@
 const { mockFetchCoverage, mockPushExamResults } = require('../mocks/courseBuilderMock');
 const { postToCoordinator } = require('./coordinatorClient');
+const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
 function getCoordinatorUrl() {
   const base = process.env.COORDINATOR_URL;
@@ -10,7 +11,7 @@ function getCoordinatorUrl() {
 async function safeFetchCoverage(params) {
   try {
     const body = {
-      requester_service: 'assessment-service',
+      requester_service: SERVICE_NAME,
       payload: {
         action: 'fetch course coverage map from Course Builder',
         ...(params || {}),
@@ -42,7 +43,7 @@ async function safeFetchCoverage(params) {
 // Outgoing results push through Coordinator
 async function sendCourseBuilderExamResults(payloadObj) {
   const body = {
-    requester_service: 'assessment-service',
+    requester_service: SERVICE_NAME,
     payload: {
       action: 'push post-course exam results to Course Builder',
       ...(payloadObj || {}),

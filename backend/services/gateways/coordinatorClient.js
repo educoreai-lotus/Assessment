@@ -10,12 +10,32 @@ if (!COORDINATOR_URL) {
   console.warn('[CoordinatorClient] COORDINATOR_URL is not set. Coordinator calls will fail.');
 }
 
-async function postToCoordinator(envelope) {
+function buildCompliantEnvelope(input) {
+  // If input already looks like an envelope, normalize it; otherwise treat as payload
+  let payload;
+  let responseTemplate;
+  if (input && typeof input === 'object' && (input.requester_service || input.payload || input.response)) {
+    payload = input.payload && typeof input.payload === 'object' ? input.payload : {};
+    responseTemplate = input.response && typeof input.response === 'object' ? input.response : { answer: '' };
+  } else {
+    payload = input && typeof input === 'object' ? input : {};
+    responseTemplate = { answer: '' };
+  }
+  return {
+    requester_service: SERVICE_NAME,
+    payload,
+    response: responseTemplate,
+  };
+}
+
+async function postToCoordinator(bodyOrEnvelope) {
   if (!COORDINATOR_URL) {
     throw new Error('COORDINATOR_URL not set');
   }
   const base = String(COORDINATOR_URL).replace(/\/+$/, '');
-  const url = `${base}/api/fill-content-metrics/`;
+  const url = `${base}/api/fill-content-metrics`;
+
+  const envelope = buildCompliantEnvelope(bodyOrEnvelope);
 
   const headers = {
     'Content-Type': 'application/json',

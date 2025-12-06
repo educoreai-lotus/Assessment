@@ -1,5 +1,6 @@
 const { mockFetchPolicy, mockPushExamResults } = require('../mocks/directoryMock');
 const { postToCoordinator } = require('./coordinatorClient');
+const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
 function getCoordinatorUrl() {
   const base = process.env.COORDINATOR_URL;
@@ -10,7 +11,7 @@ function getCoordinatorUrl() {
 async function safeFetchPolicy(examType) {
   try {
     const body = {
-      requester_service: 'assessment-service',
+      requester_service: SERVICE_NAME,
       payload: {
         action: `fetch Directory policy for exam type "${String(examType)}"`,
         exam_type: examType,
@@ -39,7 +40,7 @@ async function safeFetchPolicy(examType) {
 async function safePushExamResults(payload) {
   try {
     const body = {
-      requester_service: 'assessment-service',
+      requester_service: SERVICE_NAME,
       payload: {
         action: 'push exam results to Directory',
         ...(payload || {}),

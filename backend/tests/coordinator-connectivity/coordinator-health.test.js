@@ -3,6 +3,7 @@
 describe('Coordinator connectivity - Health (ping)', () => {
   const runLive = process.env.RUN_COORDINATOR_LIVE === 'true';
   const COORDINATOR_URL = process.env.COORDINATOR_URL || 'https://coordinator-production-e0a0.up.railway.app';
+  const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
   beforeAll(() => {
     if (!runLive) return;
@@ -19,13 +20,13 @@ describe('Coordinator connectivity - Health (ping)', () => {
     const { postToCoordinator } = require('../../services/gateways/coordinatorClient');
 
     const envelope = {
-      requester_service: 'assessment-service',
+      requester_service: SERVICE_NAME,
       payload: { action: 'ping' },
-      response: {},
+      response: { ok: true },
     };
     const { resp, data } = await postToCoordinator(envelope);
     expect(resp).toBeDefined();
-    expect([200, 201, 202].includes(Number(resp.status))).toBe(true);
+    expect([200, 202].includes(Number(resp.status))).toBe(true);
     expect(typeof data).toBe('object');
     const str = JSON.stringify(data || {});
     expect(str.toLowerCase()).not.toContain('authentication required');

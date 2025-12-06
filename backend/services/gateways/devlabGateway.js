@@ -5,13 +5,20 @@ function getCoordinatorUrl() {
 }
 
 const { postToCoordinator } = require('./coordinatorClient');
+const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
+
+function buildEnvelope(payloadObj, responseTemplate) {
+	const payload = payloadObj && typeof payloadObj === 'object' ? payloadObj : {};
+	const response = responseTemplate && typeof responseTemplate === 'object' ? responseTemplate : { answer: '' };
+	return {
+		requester_service: SERVICE_NAME,
+		payload,
+		response,
+	};
+}
 
 async function sendToDevlabEnvelope(payloadObj) {
-	const envelope = {
-		requester_service: 'assessment-service',
-		payload: payloadObj || {},
-		response: { answer: [] },
-	};
+	const envelope = buildEnvelope(payloadObj, { answer: [] });
 	const { data: json } = await postToCoordinator(envelope).catch(() => ({ data: {} }));
 	return json && json.success ? json.data : (json && json.response) || {};
 }

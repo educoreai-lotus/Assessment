@@ -1,5 +1,6 @@
 const { mockFetchBaselineSkills, mockPushAssessmentResults } = require('../mocks/skillsEngineMock');
 const { postToCoordinator } = require('./coordinatorClient');
+const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
 function getCoordinatorUrl() {
   const base = process.env.COORDINATOR_URL;
@@ -9,12 +10,13 @@ function getCoordinatorUrl() {
 
 async function safeFetchBaselineSkills(params) {
   try {
+    const payload = {
+      action: 'fetch baseline readiness skills from Skills Engine',
+      ...(params || {}),
+    };
     const body = {
-      requester_service: 'assessment-service',
-      payload: {
-        action: 'fetch baseline readiness skills from Skills Engine',
-        ...(params || {}),
-      },
+      requester_service: SERVICE_NAME,
+      payload,
       response: {
         skills: [],
         passing_grade: 0,
@@ -39,7 +41,7 @@ async function safeFetchBaselineSkills(params) {
 async function safePushAssessmentResults(payload) {
   try {
     const body = {
-      requester_service: 'assessment-service',
+      requester_service: SERVICE_NAME,
       payload: {
         action: 'push assessment results to Skills Engine',
         ...(payload || {}),

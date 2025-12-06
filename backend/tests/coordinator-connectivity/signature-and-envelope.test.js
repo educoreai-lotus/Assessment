@@ -11,6 +11,7 @@ describe('Coordinator connectivity - Signed outbound requests', () => {
   let originalFetch;
   let lastFetchOptions = null;
   let lastResponse = null;
+  let lastBody = null;
 
   beforeAll(() => {
     if (!runLive) return;
@@ -29,6 +30,11 @@ describe('Coordinator connectivity - Signed outbound requests', () => {
     const realFetch = global.fetch;
     global.fetch = async (url, options) => {
       lastFetchOptions = options || {};
+      try {
+        lastBody = JSON.parse(String(options?.body || '{}'));
+      } catch {
+        lastBody = null;
+      }
       const resp = await realFetch(url, options);
       lastResponse = resp;
       return resp;
@@ -72,6 +78,16 @@ describe('Coordinator connectivity - Signed outbound requests', () => {
     );
     expect(isValid).toBe(true);
 
+    // Body schema assertions
+    expect(lastBody && typeof lastBody === 'object').toBe(true);
+    expect(lastBody.requester_service).toBe(SERVICE_NAME);
+    expect(lastBody).toHaveProperty('payload');
+    expect(typeof lastBody.payload).toBe('object');
+    expect(lastBody).toHaveProperty('response');
+    expect(typeof lastBody.response).toBe('object');
+
+    // Status must be 200 or 202; reject only 401
+    expect([200, 202].includes(Number(lastResponse.status))).toBe(true);
     // No 401s
     expect(lastResponse && (lastResponse.status !== 401)).toBe(true);
     const str = JSON.stringify(data || {});
