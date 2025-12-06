@@ -175,6 +175,12 @@ app.use('/api/attempts', attemptsRouter);
 app.use('/api/packages', packagesRouter);
 app.use('/api/proctoring', proctoringRouter);
 
+// Temporary debug endpoint for inbound routing validation
+app.post('/debug/inbound', (req, res) => {
+  try { console.log('[DEBUG-INBOUND]', req.body); } catch {}
+  res.json({ received: true, body: req.body });
+});
+
 // Keep versioned base for future non-integration routes
 app.use(`${API_BASE}`, (req, res) => {
   res.status(404).json({ error: 'not_found' });
