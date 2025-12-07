@@ -14,6 +14,7 @@ const proctoringRouter = require('./routes/proctoring');
 const { mountSwagger } = require('./swagger');
 const testEmailRouter = require("./routes/testEmail");
 const emailTestRoute = require("./routes/emailTest");
+const aiQueryRouter = require('./routes/aiQuery');
 
 const PORT = process.env.PORT || 4000;
 const API_BASE = '/api/v1';
@@ -168,6 +169,7 @@ app.use('/api', integrationRoutes);
 app.use('/api/results', resultsRouter);
 app.use("/api", testEmailRouter);
 app.use("/api/test-email", emailTestRoute);
+app.use('/api/ai-query', aiQueryRouter);
 
 // New Assessment API v1 routers
 app.use('/api/exams', examsRouter);
