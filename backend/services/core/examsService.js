@@ -1005,10 +1005,18 @@ async function getPackageByExamId(exam_id) {
     .lean();
   if (!doc) return doc;
   if (Array.isArray(doc.questions)) {
-    doc.questions = doc.questions.map((q) => ({
-      ...q,
-      prompt: removeHintsDeep(q?.prompt),
-    }));
+    doc.questions = doc.questions.map((q) => {
+      const sanitizedPrompt = removeHintsDeep(q?.prompt);
+      if (sanitizedPrompt && typeof sanitizedPrompt === 'object') {
+        const clone = { ...sanitizedPrompt };
+        // Never expose correct_answer to client for theoretical questions
+        if (String(q?.metadata?.type || '').toLowerCase() !== 'code') {
+          delete clone.correct_answer;
+        }
+        return { ...q, prompt: clone };
+      }
+      return { ...q, prompt: sanitizedPrompt };
+    });
   }
   return doc;
 }
@@ -1019,10 +1027,18 @@ async function getPackageByAttemptId(attempt_id) {
     .lean();
   if (!doc) return doc;
   if (Array.isArray(doc.questions)) {
-    doc.questions = doc.questions.map((q) => ({
-      ...q,
-      prompt: removeHintsDeep(q?.prompt),
-    }));
+    doc.questions = doc.questions.map((q) => {
+      const sanitizedPrompt = removeHintsDeep(q?.prompt);
+      if (sanitizedPrompt && typeof sanitizedPrompt === 'object') {
+        const clone = { ...sanitizedPrompt };
+        // Never expose correct_answer to client for theoretical questions
+        if (String(q?.metadata?.type || '').toLowerCase() !== 'code') {
+          delete clone.correct_answer;
+        }
+        return { ...q, prompt: clone };
+      }
+      return { ...q, prompt: sanitizedPrompt };
+    });
   }
   return doc;
 }
@@ -1167,6 +1183,16 @@ async function submitAttempt({ attempt_id, answers }) {
   });
   async function gradeTheoreticalAnswers(pkg, items) {
     const graded = [];
+    const openAnswerGradingMode = String(policy?.open_answer_grading || process.env.OPEN_ANSWER_GRADING || 'keywords').toLowerCase();
+    const useAiGrading = openAnswerGradingMode === 'ai';
+    let aiGateway = null;
+    if (useAiGrading) {
+      try {
+        aiGateway = require("../gateways/aiGateway");
+      } catch {
+        aiGateway = null;
+      }
+    }
     for (const ans of items) {
       const qid = String(ans.question_id || "");
       const q = qById.get(qid);
@@ -1189,10 +1215,8 @@ async function submitAttempt({ attempt_id, answers }) {
           source: "theoretical",
         });
       } else {
-        // OPEN-TEXT: Deterministic keyword-based grading (no randomness, no external AI)
+        // OPEN-TEXT
         const trimmed = rawAnswer.trim();
-        let score = 0;
-        let status = "not_acquired";
         const correctAnswer =
           (q && q.prompt && q.prompt.correct_answer != null
             ? String(q.prompt.correct_answer)
@@ -1200,6 +1224,43 @@ async function submitAttempt({ attempt_id, answers }) {
               ? String(q.correct_answer)
               : ""));
 
+        // Try AI semantic grading if enabled; fallback to keyword method on failure
+        if (useAiGrading && aiGateway && typeof aiGateway.gradeOpenAnswerSemantically === 'function') {
+          try {
+            const questionForAi = {
+              type: 'open',
+              stem: String(q?.prompt?.question || q?.stem || ''),
+              correct_answer: String(correctAnswer || ''),
+              skill_id: skillId,
+            };
+            const aiRespRaw = await aiGateway.gradeOpenAnswerSemantically(questionForAi, rawAnswer);
+            let aiParsed = {};
+            try {
+              aiParsed = typeof aiRespRaw === 'string' ? JSON.parse(aiRespRaw) : (aiRespRaw || {});
+            } catch {
+              aiParsed = aiRespRaw || {};
+            }
+            const aiScore = Number(aiParsed?.score);
+            const finalScore = Number.isFinite(aiScore) ? Math.max(0, Math.min(100, aiScore)) : 0;
+            const status = finalScore >= passing ? "acquired" : "not_acquired";
+            graded.push({
+              question_id: qid,
+              skill_id: skillId,
+              type: "open",
+              raw_answer: rawAnswer,
+              score: finalScore,
+              status,
+              source: "theoretical",
+            });
+            continue;
+          } catch {
+            // fall through to keyword-based fallback
+          }
+        }
+
+        // Deterministic keyword-based fallback
+        let score = 0;
+        let status = "not_acquired";
         if (trimmed.length >= 10) {
           const stopwords = new Set([
             "the","is","are","a","an","and","or","of","for","to","in","on","at","by","with","as","this","that","these","those","be","been","being"

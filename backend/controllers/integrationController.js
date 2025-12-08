@@ -341,6 +341,21 @@ exports.universalIntegrationHandler = async (req, res) => {
       parsedPayload = {};
     }
 
+    // Early handling for DevLab/content-studio theoretical generation and grading
+    // Accept ANY requester_service and route generate-questions/grade-theoretical
+    const actionLower = String(parsedPayload?.action || '').toLowerCase();
+    if (actionLower === 'generate-questions') {
+      const pkg = await devlabService.buildTheoreticalQuestionsPackageForDevlab(parsedPayload);
+      return res.json({ success: true, data: pkg });
+    }
+    if (actionLower === 'grade-theoretical') {
+      const question_id = String(parsedPayload?.question_id || '');
+      const user_answer = parsedPayload?.user_answer != null ? String(parsedPayload.user_answer) : '';
+      const { gradeDevLabTheoreticalAnswer } = require('../services/integrations/devlabService');
+      const { correct } = gradeDevLabTheoreticalAnswer({ question_id, user_answer });
+      return res.json({ success: true, data: { correct } });
+    }
+
     let result;
 
     const withTimeout = (p, ms = 300) => Promise.race([p, new Promise((resolve) => setTimeout(() => resolve(Symbol('timeout')), ms))]);

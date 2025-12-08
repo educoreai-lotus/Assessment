@@ -30,21 +30,42 @@ async function callOpenAiChat({ system, user, json = true }) {
 
 function buildTheoreticalGenPrompt({ items, seed }) {
   // items: array of { skill_id, difficulty, humanLanguage, type? }
-  const system = [
-    'You generate assessment questions.',
-    'Output strictly as JSON with { "questions": [ ... ] }.',
-    'Each question must include: qid, type ("mcq" or "open"), stem, skill_id, difficulty (easy|medium|hard), options (array; only for mcq), correct_answer (string), explanation (string), hint (string).',
-    'Hints MUST NOT reveal the exact correct answer. Explanations can justify correctness, but keep concise.',
-    'Do not include any HTML or markdown in fields.',
-    seed ? `Generation seed: ${seed}` : null,
-  ].filter(Boolean).join(' ');
+  const system = `
+You are a professional assessment question generator specializing in high-stakes exams.
+You produce *medium difficulty*, *scenario-based*, *skill-aligned*, *non-trivial* theoretical questions.
+
+Your output MUST be STRICT JSON:
+{
+  "questions": [ ... ]
+}
+
+Each question MUST include:
+- qid (string)
+- type ("mcq" or "open")
+- stem (string)
+- options (array for mcq)
+- correct_answer (string)
+- explanation (string)
+- skill_id (string)
+- difficulty ("medium")
+- hint (string) — subtle guidance only, never reveal the correct answer.
+
+Rules:
+- Never output HTML or markdown.
+- Never produce trivial or factual questions.
+- Always tie the question to a realistic scenario.
+- MCQ must have 1 correct option only.
+- OPEN questions must require reasoning.
+- Language must be formal and clear.
+`;
   const user = JSON.stringify({
     intent: 'generate_theoretical_questions',
     policy: {
-      difficulty_policy: 'respect requested difficulty per item',
+      difficulty_policy: 'always medium for exams',
       type_mix: 'mcq or open as specified; if unspecified, choose reasonably',
     },
     items,
+    seed,
   });
   return { system, user };
 }
@@ -66,7 +87,8 @@ async function generateTheoreticalQuestions({ items, seed }) {
       type,
       stem: String(q?.stem || ''),
       skill_id: String(q?.skill_id || ''),
-      difficulty: String(q?.difficulty || 'medium'),
+      // Enforce exam policy: theoretical questions are always medium
+      difficulty: 'medium',
       options: Array.isArray(q?.options) ? q.options.map(String) : (type === 'mcq' ? [] : undefined),
       correct_answer: q?.correct_answer != null ? String(q.correct_answer) : '',
       explanation: q?.explanation != null ? String(q.explanation) : '',
@@ -76,15 +98,28 @@ async function generateTheoreticalQuestions({ items, seed }) {
 }
 
 function buildValidationPrompt({ question }) {
-  const system = [
-    'You validate assessment questions for quality gates.',
-    'Return strict JSON { "valid": boolean, "reasons": string[] }.',
-    'Criteria: clarity, fairness, no hallucination, difficulty matches requested, skill_id relevance.',
-  ].join(' ');
+  const system = `
+You validate high-stakes theoretical exam questions.
+Return STRICT JSON:
+{
+  "valid": boolean,
+  "reasons": [string]
+}
+
+Reasons may include:
+- unclear wording
+- ambiguous options
+- incorrect domain knowledge
+- weak distractors
+- difficulty mismatch
+- irrelevant skill alignment
+
+Be strict. If a question would fail a real certification exam review, mark it invalid.
+`;
   const user = JSON.stringify({
     intent: 'validate_question',
     question,
-    criteria: ['clarity', 'fairness', 'no_hallucination', 'difficulty_match', 'skill_relevance'],
+    criteria: ['clarity', 'ambiguity', 'domain_knowledge', 'distractors', 'difficulty', 'skill_alignment'],
   });
   return { system, user };
 }
@@ -103,9 +138,74 @@ async function validateQuestion({ question }) {
   return { valid, reasons };
 }
 
+// --- Semantic grading for open-ended answers (exam) ---
+async function gradeOpenAnswerSemantically(question, studentAnswer) {
+  // Use model with json:true
+  const system = `
+You are a semantic grading engine for open-ended exam answers.
+Output STRICT JSON:
+{ "score": number, "reason": string }
+
+Scoring rubric:
+- 100 = fully correct and well-reasoned
+- 70–90 = mostly correct with minor gaps
+- 40–60 = partially correct
+- 10–30 = major gaps, shallow reasoning
+- 0 = unrelated or incorrect
+
+Judge based on:
+- conceptual correctness,
+- reasoning quality,
+- completeness relative to question.correct_answer.
+
+Never reveal internal chain-of-thought.
+Never apologize.
+`;
+  const user = JSON.stringify({
+    question,
+    studentAnswer,
+  });
+  return await callOpenAiChat({ system, user, json:true });
+}
+
+async function generateDevLabTheoreticalQuestions(params) {
+  const system = `You generate structured theoretical questions for an interactive learning platform.
+
+Output strict JSON: { "questions": [...] }.
+
+Each question must include:
+id, type, stem, skill_id, difficulty, options (if mcq), correct_answer, explanation, hints(3).
+
+User difficulty MUST cycle automatically: easy → medium → hard → expert → repeat.
+
+NO HTML. NO markdown.`;
+  const amount = Number(params?.amount || 1);
+  const user = JSON.stringify({
+    intent: 'generate_devlab_theoretical',
+    topic_id: String(params?.topic_id || ''),
+    topic_name: String(params?.topic_name || ''),
+    skills: Array.isArray(params?.skills) ? params.skills.map(String) : [],
+    amount,
+    question_type: params?.question_type ? String(params.question_type) : undefined,
+    humanLanguage: String(params?.humanLanguage || 'en'),
+  });
+  const content = await callOpenAiChat({ system, user, json: true });
+  let parsed = {};
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    parsed = { questions: [] };
+  }
+  const arr = Array.isArray(parsed?.questions) ? parsed.questions : [];
+  // Return only parsed JSON questions array
+  return arr;
+}
+
 module.exports = {
   generateTheoreticalQuestions,
   validateQuestion,
+  gradeOpenAnswerSemantically,
+  generateDevLabTheoreticalQuestions,
 };
 
 

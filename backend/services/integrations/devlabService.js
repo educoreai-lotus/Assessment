@@ -1,5 +1,9 @@
 // Phase 08.2 – Build coding questions using unified envelope via gateway
 const devlabGateway = require('../gateways/devlabGateway');
+const aiGateway = require('../gateways/aiGateway');
+
+// In-memory store for DevLab theoretical correct answers (non-persistent; process-scoped)
+const _devlabTheoryStore = new Map(); // key: question_id, value: { correct_answer: string }
 
 exports.buildCodingQuestionsForExam = async ({
   amount,
@@ -172,6 +176,130 @@ exports.gradeCodingAnswersForExam = async function gradeCodingAnswersForExam({
 	};
 };
 
+// Build DevLab theoretical questions using AI gateway
+async function buildTheoreticalQuestionsForDevLab({
+  topic_id,
+  topic_name,
+  skills,
+  amount,
+  question_type,
+  humanLanguage,
+}) {
+  const params = {
+    topic_id,
+    topic_name,
+    skills: Array.isArray(skills) ? skills : [],
+    amount: Number.isFinite(Number(amount)) && Number(amount) > 0 ? Number(amount) : 1,
+    question_type,
+    humanLanguage: humanLanguage || 'en',
+  };
+  const out = await aiGateway.generateDevLabTheoreticalQuestions(params);
+  // Normalize minimal shape (pass-through is fine; fields already normalized in gateway)
+  return Array.isArray(out) ? out : [];
+}
+exports.buildTheoreticalQuestionsForDevLab = buildTheoreticalQuestionsForDevLab;
+
+// Build a FULL AJAX-enabled DevLab theoretical package
+async function buildTheoreticalQuestionsPackageForDevlab({
+  topic_id,
+  topic_name,
+  skills,
+  amount,
+  humanLanguage,
+  theoretical_question_type,
+}) {
+  const generated = await aiGateway.generateDevLabTheoreticalQuestions({
+    topic_id,
+    topic_name,
+    skills,
+    amount,
+    humanLanguage,
+    question_type: theoretical_question_type,
+  });
+  const questions = (Array.isArray(generated) ? generated : []).map((q) => {
+    const id = String(q?.id || '');
+    const stem = String(q?.stem || '');
+    const options = Array.isArray(q?.options) ? q.options : [];
+    const correct_answer = q?.correct_answer != null ? String(q.correct_answer) : '';
+    const explanation = q?.explanation != null ? String(q.explanation) : '';
+    const hints = Array.isArray(q?.hints) ? q.hints.map(String) : [];
+    const type = String(q?.type || 'mcq').toLowerCase() === 'open' ? 'open' : 'mcq';
+    const difficulty = String(q?.difficulty || '').toLowerCase();
+    const skill_id = String(q?.skill_id || '');
+
+    // Store correct answers in memory for grading callback
+    if (id) {
+      _devlabTheoryStore.set(id, { correct_answer });
+    }
+
+    return {
+      id,
+      type,
+      difficulty,
+      skill_id,
+      topic_id,
+      topic_name,
+      stem,
+      options,
+      correct_answer,
+      explanation,
+      hints,
+      html_snippet: `
+      <div class="question-card">
+        <p>${stem}</p>
+        <input id="answer_${id}" />
+        <button id="check_${id}">Check</button>
+        <div id="result_${id}"></div>
+      </div>
+    `,
+      javascript_snippet: `
+      document.getElementById("check_${id}").addEventListener("click", async () => {
+        const ans = document.getElementById("answer_${id}").value.trim();
+        const resBox = document.getElementById("result_${id}");
+        const result = await fetch("/api/fill-content-metrics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requester_service: "devlab-service",
+            payload: {
+              action: "grade-theoretical",
+              question_id: "${id}",
+              user_answer: ans
+            },
+            response: {}
+          })
+        }).then(r => r.json());
+        resBox.textContent = result?.data?.correct ? "Correct!" : "Try again";
+      });
+    `,
+      ajax_request_example: `
+      fetch("/api/fill-content-metrics", {
+        method: "POST",
+        body: JSON.stringify({
+          requester_service: "devlab-service",
+          payload: {
+            action: "grade-theoretical",
+            question_id: "${id}",
+            user_answer: "ANSWER"
+          }
+        })
+      });
+    `,
+    };
+  });
+  return { questions };
+}
+exports.buildTheoreticalQuestionsPackageForDevlab = buildTheoreticalQuestionsPackageForDevlab;
+
+// Grade a DevLab theoretical answer using in-memory store
+function gradeDevLabTheoreticalAnswer({ question_id, user_answer }) {
+  const record = _devlabTheoryStore.get(String(question_id || ''));
+  const correct = record ? String(record.correct_answer || '') : '';
+  const ans = user_answer != null ? String(user_answer) : '';
+  return { correct: ans === correct };
+}
+exports.gradeDevLabTheoreticalAnswer = gradeDevLabTheoreticalAnswer;
+
 // Phase 08.6 – Universal inbound handler
 exports.handleInbound = async (payload, responseTemplate) => {
 	const resp =
@@ -191,6 +319,40 @@ exports.handleInbound = async (payload, responseTemplate) => {
 
   try {
     const action = String(payload?.action || '').toLowerCase();
+
+    if (action === 'generate-questions') {
+      // New DevLab theoretical generation via AI
+      let params = payload || {};
+      // In case nested payload is present from coordinator
+      if (!params.topic_id && payload?.payload && typeof payload.payload === 'object') {
+        params = { ...payload.payload };
+      }
+      const topic_id = params?.topic_id != null ? String(params.topic_id) : '';
+      const topic_name = params?.topic_name != null ? String(params.topic_name) : '';
+      const skills = Array.isArray(params?.skills) ? params.skills : [];
+      const amount = Number(params?.amount || 1);
+      const question_type = params?.question_type != null ? String(params.question_type) : undefined;
+      const humanLanguage = params?.humanLanguage != null ? String(params.humanLanguage) : 'en';
+
+      const questions = await buildTheoreticalQuestionsForDevLab({
+        topic_id,
+        topic_name,
+        skills,
+        amount,
+        question_type,
+        humanLanguage,
+      });
+
+      return { success: true, data: { questions } };
+    }
+
+    if (action === 'grade-theoretical') {
+      const question_id = String(payload?.question_id || '');
+      const user_answer = payload?.user_answer != null ? String(payload.user_answer) : '';
+      const { correct } = gradeDevLabTheoreticalAnswer({ question_id, user_answer });
+      return { success: true, data: { correct } };
+    }
+
     if (action !== 'theoretical') {
       return {
         service_requester: 'Assessment',
