@@ -6,6 +6,7 @@ on:
 
 jobs:
   build:
+    if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -75,3 +76,12 @@ jobs:
           echo "${{ steps.meta_backend.outputs.tags }}"
           echo "Frontend tags:"
           echo "${{ steps.meta_frontend.outputs.tags }}"
+
+  no-secrets:
+    if: ${{ secrets.DOCKERHUB_USERNAME == '' || secrets.DOCKERHUB_TOKEN == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip build and push (Docker Hub secrets missing)
+        run: |
+          echo "Skipping Docker image build and push because DOCKERHUB_USERNAME and/or DOCKERHUB_TOKEN are not set as repository secrets."
+          echo "Add secrets in GitHub → Settings → Secrets and variables → Actions, then push to main again."
