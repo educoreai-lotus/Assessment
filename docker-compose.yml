@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   backend:
-    build: ./backend
+    image: khawla/assessment-backend:latest
     container_name: assessment-backend
     ports:
       - "4000:4000"
@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    image: khawla/assessment-frontend:latest
     container_name: assessment-frontend
     ports:
       - "3000:80"
