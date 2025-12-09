@@ -7,7 +7,7 @@ on:
 jobs:
   build:
     # ✅ VALID: checks secrets exist (not empty, not null)
-    if: secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN
+    if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
     runs-on: ubuntu-latest
 
     steps:
@@ -78,7 +78,7 @@ jobs:
 
   no-secrets:
     # ❗ NOTE: Use negation ONLY — NOT == ''
-    if: !(secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN)
+    if: ${{ !(secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN) }}
     runs-on: ubuntu-latest
 
     steps:
