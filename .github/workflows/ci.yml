@@ -1,56 +1,106 @@
-name: CI – Assessment Microservice
+name: CI – PR Validation
 
 on:
-  push:
-    branches: [ "main" ]
   pull_request:
 
 jobs:
-  build-test:
+  backend-tests:
+    name: Backend tests with coverage
     runs-on: ubuntu-latest
-
-    env:
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      INTEGRATION_DEVLAB_DATA_REQUEST_URL: ${{ secrets.INTEGRATION_DEVLAB_DATA_REQUEST_URL }}
-      INTEGRATION_COURSEBUILDER_FILL_METRICS_URL: ${{ secrets.INTEGRATION_COURSEBUILDER_FILL_METRICS_URL }}
-      INTEGRATION_LA_FILL_METRICS_URL: ${{ secrets.INTEGRATION_LA_FILL_METRICS_URL }}
-      INTEGRATION_MANG_FILL_METRICS_URL: ${{ secrets.INTEGRATION_MANG_FILL_METRICS_URL }}
-      COORDINATOR_URL: http://localhost:9999
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v3
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
 
-      # Backend
       - name: Install backend dependencies
         working-directory: backend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
-      - name: Run backend tests
+      - name: Run Jest with coverage
         working-directory: backend
         env:
           NODE_ENV: test
-          MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
-        run: npm test --if-present
+        run: npm test --if-present -- --coverage
 
-      # Frontend
+      - name: Upload coverage artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-${{ github.run_id }}
+          path: backend/coverage
+
+  frontend-quality:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
 
       - name: Build frontend
         working-directory: frontend
         run: npm run build
 
-      - name: CI complete
-        run: echo "CI pipeline finished."
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.run_id }}
+          path: frontend/dist
 
+  docker-validate:
+    name: Validate Docker builds (no push)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build backend image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          load: true
+          tags: khawla/assessment-backend:pr-${{ github.sha }}
+
+      - name: Build frontend image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          load: true
+          tags: khawla/assessment-frontend:pr-${{ github.sha }}
 
