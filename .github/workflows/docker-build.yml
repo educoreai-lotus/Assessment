@@ -27,7 +27,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            khawla/assessment-backend
+            khawlabusaleh/assessment-backend
           tags: |
             type=raw,value=latest
             type=sha
@@ -39,7 +39,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            khawla/assessment-frontend
+            khawlabusaleh/assessment-frontend
           tags: |
             type=raw,value=latest
             type=sha
