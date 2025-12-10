@@ -1,0 +1,19 @@
+﻿{
+    "version":  "1.0.0",
+    "serviceName":  "assessment-service",
+    "description":  "AI-powered assessment engine providing baseline \u0026 post-course exams",
+    "metadata":  {
+                     "capabilities":  [
+                                          "generate_exam_packages",
+                                          "ai_question_generation",
+                                          "ai_grading",
+                                          "skill_assessment",
+                                          "proctoring_events",
+                                          "exam_attempt_tracking"
+                                      ],
+                     "owner":  "Khawla",
+                     "team":  "Assessment"
+                 },
+    "endpoint":  "https://assessment-production-2cad.up.railway.app",
+    "healthCheck":  "/health"
+}
