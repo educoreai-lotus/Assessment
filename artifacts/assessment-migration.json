@@ -1,142 +1,112 @@
 ﻿{
+
   "migrationFile": {
+
     "version": "1.0.0",
-    "description": "Migration spec for Assessment microservice",
+
+    "description": "Assessment service migration file",
+
     "database": {
+
       "tables": [
+
         {
-          "name": "users",
-          "schema": {
-            "id": "integer",
-            "email": "string",
-            "created_at": "timestamp"
-          }
-        },
-        {
+
           "name": "exams",
+
           "schema": {
-            "id": "integer",
-            "exam_type": "string",
-            "user_id": "integer",
-            "created_at": "timestamp",
-            "duration_minutes": "integer",
-            "expires_at": "timestamp"
+
+            "id": "uuid"
+
           }
+
         },
+
         {
+
           "name": "exam_attempts",
+
           "schema": {
-            "id": "integer",
-            "exam_id": "integer",
-            "attempt_no": "integer",
-            "submitted_at": "timestamp",
-            "final_grade": "integer",
-            "passed": "boolean"
+
+            "id": "uuid"
+
           }
+
         },
+
         {
+
           "name": "attempt_skills",
+
           "schema": {
-            "id": "integer",
-            "attempt_id": "integer",
-            "skill_id": "string",
-            "skill_name": "string",
-            "score": "integer",
-            "status": "string"
+
+            "id": "uuid"
+
           }
-        },
-        {
-          "name": "outbox_integrations",
-          "schema": {
-            "id": "uuid",
-            "event_type": "string",
-            "payload": "json",
-            "created_at": "timestamp",
-            "sent": "boolean"
-          }
+
         }
+
       ],
+
       "migrations": [
-        "001_create_users",
-        "002_create_exams",
-        "003_create_attempts",
-        "004_create_attempt_skills",
-        "005_create_outbox_integrations"
+
+        "001_create_exams",
+
+        "002_create_exam_attempts",
+
+        "003_create_attempt_skills"
+
       ]
+
     },
+
     "api": {
+
       "endpoints": [
+
         {
+
           "path": "/api/exams",
-          "method": "POST",
-          "description": "Create a new exam session",
-          "requestSchema": {
-            "required": [
-              "exam_type",
-              "userId"
-            ],
-            "properties": {
-              "exam_type": {"type": "string"},
-              "userId": {"type": "number"}
-            }
-          },
-          "responseSchema": {
-            "properties": {
-              "examId": {"type": "number"},
-              "status": {"type": "string"}
-            }
-          }
+
+          "method": "POST"
+
         },
+
         {
-          "path": "/api/exams/baseline",
-          "method": "POST",
-          "description": "Start baseline exam"
-        },
-        {
-          "path": "/api/exams/postcourse",
-          "method": "POST",
-          "description": "Start post-course exam"
-        },
-        {
-          "path": "/api/exams/:attemptId/submit",
-          "method": "POST",
-          "description": "Submit exam answers"
-        },
-        {
+
           "path": "/api/fill-content-metrics",
-          "method": "POST",
-          "description": "Universal inbound endpoint for integrations"
+
+          "method": "POST"
+
         }
+
       ]
+
     },
-    "dependencies": [
-      "directory-service",
-      "skills-engine-service",
-      "coursebuilder-service",
-      "devlab-service",
-      "protocol-camera-service",
-      "learning-analytics-service"
-    ],
+
+    "dependencies": ["skills-engine-service", "directory-service"],
+
     "capabilities": [
-      "generate_exam_packages",
-      "score_attempts",
-      "ai_question_generation",
-      "ai_text_grading",
-      "coding_question_grading",
-      "identify_skill_gaps",
-      "proctoring_event_ingestion"
+
+      "assessment",
+
+      "exam creation",
+
+      "grading",
+
+      "attempt tracking"
+
     ],
+
     "events": {
-      "publishes": [
-        "exam.created",
-        "attempt.submitted",
-        "attempt.passed",
-        "attempt.failed"
-      ],
-      "subscribes": [
-        "policy.updated",
-        "course.completed"
-      ]
+
+      "publishes": ["assessment.completed"],
+
+      "subscribes": ["user.created"]
+
     }
+
   }
+
 }
+
