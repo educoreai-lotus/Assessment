@@ -4,7 +4,157 @@
 
     "version": "1.0.0",
 
-    "description": "Assessment service migration file",
+    "description": "Assessment Service: AI-powered baseline and post-course exams. Generates theoretical & coding questions, evaluates answers, calculates skill mastery, manages attempts, integrates with Directory, Skills Engine, DevLab, Learning Analytics, and Management Reporting.",
+
+
+
+    "dependencies": [
+
+      "directory-service",
+
+      "skills-engine-service",
+
+      "devlab-service",
+
+      "learning-analytics",
+
+      "managementreporting-service",
+
+      "course-builder-service"
+
+    ],
+
+
+
+    "api": {
+
+      "endpoints": [
+
+        {
+
+          "path": "/api/fill-content-metrics/",
+
+          "method": "POST",
+
+          "description": "Universal inbound endpoint. Coordinator sends all Assessment-bound requests here.",
+
+          "requestSchema": {
+
+            "type": "object",
+
+            "properties": {
+
+              "requester_service": { "type": "string" },
+
+              "payload": { "type": "object" },
+
+              "response": {
+
+                "type": "object",
+
+                "properties": {
+
+                  "answer": { "type": "string" }
+
+                }
+
+              }
+
+            },
+
+            "required": ["requester_service", "payload"]
+
+          },
+
+          "responseSchema": {
+
+            "type": "object",
+
+            "properties": {
+
+              "requester_service": { "type": "string" },
+
+              "payload": { "type": "object" },
+
+              "response": {
+
+                "type": "object",
+
+                "properties": {
+
+                  "answer": { "type": "string" }
+
+                }
+
+              }
+
+            }
+
+          }
+
+        },
+
+        {
+
+          "path": "/api/exams",
+
+          "method": "POST",
+
+          "description": "Create baseline or post-course exam, generate questions, create attempt."
+
+        },
+
+        {
+
+          "path": "/api/exams/submit",
+
+          "method": "POST",
+
+          "description": "Submit exam attempt, evaluate answers, compute skill mastery, store results."
+
+        }
+
+      ]
+
+    },
+
+
+
+    "capabilities": [
+
+      "generate baseline exam",
+
+      "generate post-course exam",
+
+      "theoretical question generation",
+
+      "coding question generation through DevLab",
+
+      "AI grading for open-ended theoretical answers",
+
+      "skill mastery scoring",
+
+      "exam attempt management",
+
+      "proctoring integration",
+
+      "question validation",
+
+      "analytics reporting",
+
+      "exam skill mapping",
+
+      "question difficulty adaptation",
+
+      "learning analytics integration",
+
+      "directory learner lookup",
+
+      "universal inbound router compatibility"
+
+    ],
+
+
 
     "database": {
 
@@ -14,9 +164,19 @@
 
           "name": "exams",
 
+          "description": "Stores exam metadata and question set for each learner",
+
           "schema": {
 
-            "id": "uuid"
+            "id": "uuid",
+
+            "user_id": "integer",
+
+            "exam_type": "enum",
+
+            "created_at": "timestamp",
+
+            "expires_at": "timestamp"
 
           }
 
@@ -26,9 +186,23 @@
 
           "name": "exam_attempts",
 
+          "description": "Tracks each learner attempt including score, grade, status",
+
           "schema": {
 
-            "id": "uuid"
+            "id": "uuid",
+
+            "exam_id": "uuid",
+
+            "user_id": "integer",
+
+            "attempt_no": "integer",
+
+            "grade": "integer",
+
+            "passed": "boolean",
+
+            "submitted_at": "timestamp"
 
           }
 
@@ -38,9 +212,21 @@
 
           "name": "attempt_skills",
 
+          "description": "Stores per-skill scoring and mastery evaluation for each attempt",
+
           "schema": {
 
-            "id": "uuid"
+            "id": "uuid",
+
+            "attempt_id": "uuid",
+
+            "skill_id": "string",
+
+            "skill_name": "string",
+
+            "score": "integer",
+
+            "status": "string"
 
           }
 
@@ -60,53 +246,52 @@
 
     },
 
-    "api": {
 
-      "endpoints": [
+
+    "events": {
+
+      "publishes": [
 
         {
 
-          "path": "/api/exams",
+          "name": "assessment.attempt.completed",
 
-          "method": "POST"
+          "description": "Published when a learner finishes an exam and mastery metrics are computed"
 
         },
 
         {
 
-          "path": "/api/fill-content-metrics",
+          "name": "assessment.exam.generated",
 
-          "method": "POST"
+          "description": "Published when new exam questions are produced"
+
+        }
+
+      ],
+
+      "subscribes": [
+
+        {
+
+          "name": "directory.user.updated",
+
+          "description": "Listens for learner updates to sync and enrich exam context"
+
+        },
+
+        {
+
+          "name": "skills.update",
+
+          "description": "Triggered when Skills Engine modifies skill definitions or mappings"
 
         }
 
       ]
-
-    },
-
-    "dependencies": ["skills-engine-service", "directory-service"],
-
-    "capabilities": [
-
-      "assessment",
-
-      "exam creation",
-
-      "grading",
-
-      "attempt tracking"
-
-    ],
-
-    "events": {
-
-      "publishes": ["assessment.completed"],
-
-      "subscribes": ["user.created"]
 
     }
 
   }
 
 }
-
