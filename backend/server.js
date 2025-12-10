@@ -31,6 +31,8 @@ app.use(helmet());
 
 const allowedOrigins = [
   'https://assessment-tests.vercel.app',
+  'https://assessment-seven-liard.vercel.app',
+  'https://assessment-6oojktvja-educoreai-lotus.vercel.app',
   'http://localhost:5173',
 ];
 
