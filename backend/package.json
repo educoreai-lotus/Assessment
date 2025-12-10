@@ -7,7 +7,8 @@
     "start": "node server.js",
     "test": "jest --runInBand --forceExit",
     "test:report": "jest --runInBand --json --outputFile=../artifacts/jest-results-phase08.json",
-    "upload:migration": "node backend/scripts/upload-migration.js"
+    "upload:migration": "node backend/scripts/upload-migration.js",
+    "mongo:migrate": "node backend/scripts/mongo-migrate-test-to-assessment.js"
   },
   "keywords": [],
   "author": "",

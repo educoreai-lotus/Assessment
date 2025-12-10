@@ -17,7 +17,9 @@ if (process.env.NODE_ENV === 'test') {
         console.warn('⚠️ No MongoDB URI found in MONGO_DB_URI or MONGO_URI');
         return;
       }
-      await mongoose.connect(mongoUri);
+      await mongoose.connect(mongoUri, { dbName: 'assessment' });
+      console.log('✅ Connected to MongoDB database: assessment');
+      // Preserve previous high-level message for consistency
       console.log('✅ Connected to MongoDB Atlas');
     } catch (error) {
       console.error('❌ MongoDB connection error:', error.message);
