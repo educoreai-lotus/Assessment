@@ -27,9 +27,12 @@ app.use(helmet());
 
 const allowedOrigins = [
   'https://assessment-tests.vercel.app',
-  'https://assessment-seven-liard.vercel.app',
-  'https://assessment-6oojktvja-educoreai-lotus.vercel.app',
   'http://localhost:5173',
+  'https://assessment-seven-liard.vercel.app',
+  // Accept Vercel preview deployments for this project namespace
+  /^https:\/\/assessment-[a-z0-9-]+-educoreai-lotus\.vercel\.app$/,
+  // Accept project-level Vercel aliases like assessment-*.vercel.app
+  /^https:\/\/assessment-[a-z0-9-]+\.vercel\.app$/,
 ];
 
 app.use(cors({
