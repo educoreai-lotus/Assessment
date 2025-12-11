@@ -51,6 +51,12 @@ async function executePostgres(operation, table, criteria = {}, values = {}) {
 		throw new Error("Postgres pool not available");
 	}
 
+	// Local helper: normalize SQL text before executing to guard status-like fields
+	function exec(sql, params) {
+		const normalized = normalizeAISQL(sql);
+		return pool.query(normalized, params);
+	}
+
 	const safeCriteria = sanitizeColumns(table, criteria || {});
 	const safeValues = sanitizeColumns(table, values || {});
 
@@ -64,7 +70,7 @@ async function executePostgres(operation, table, criteria = {}, values = {}) {
 		}
 		const where = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : "";
 		const sql = `SELECT * FROM "${table}" ${where}`;
-		const { rows } = await pool.query(sql, params);
+		const { rows } = await exec(sql, params);
 		return { rows };
 	}
 
@@ -74,7 +80,7 @@ async function executePostgres(operation, table, criteria = {}, values = {}) {
 		const placeholders = cols.map((_, i) => `$${i + 1}`);
 		const params = cols.map((c) => safeValues[c]);
 		const sql = `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
-		const { rows } = await pool.query(sql, params);
+		const { rows } = await exec(sql, params);
 		return { rows, rowCount: rows.length };
 	}
 
@@ -94,7 +100,7 @@ async function executePostgres(operation, table, criteria = {}, values = {}) {
 			return `"${c}" = $${setCols.length + i + 1}`;
 		});
 		const sql = `UPDATE "${table}" SET ${setClauses.join(", ")} WHERE ${whereClauses.join(" AND ")} RETURNING *`;
-		const { rows, rowCount } = await pool.query(sql, params);
+		const { rows, rowCount } = await exec(sql, params);
 		return { rows, rowCount };
 	}
 
@@ -107,7 +113,7 @@ async function executePostgres(operation, table, criteria = {}, values = {}) {
 			return `"${c}" = $${i + 1}`;
 		});
 		const sql = `DELETE FROM "${table}" WHERE ${whereClauses.join(" AND ")}`;
-		const { rowCount } = await pool.query(sql, params);
+		const { rowCount } = await exec(sql, params);
 		return { rowCount };
 	}
 
