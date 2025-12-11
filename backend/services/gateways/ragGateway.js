@@ -1,11 +1,6 @@
-const axios = require('axios');
 const { mockIncident, mockAcknowledgeDecision } = require('../mocks/ragMock');
-
-function getBaseUrl() {
-  const base = process.env.RAG_BASE_URL;
-  if (!base) throw new Error('RAG_BASE_URL not set');
-  return base.replace(/\/+$/, '');
-}
+const { postToCoordinator } = require('./coordinatorClient');
+const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
 async function safeReceiveIncident() {
   try {
@@ -17,15 +12,24 @@ async function safeReceiveIncident() {
 
 async function safePushIncidentDecision(payload) {
   try {
-    const base = getBaseUrl();
-    const url = `${base}/api/rag/incident-response`;
     const envelope = {
-      service_requester: 'Assessment',
-      payload: payload || {},
-      response: {},
+      requester_service: SERVICE_NAME,
+      target_service: 'rag-service',
+      payload: {
+        action: 'incident-decision',
+        ...(payload || {}),
+      },
+      response: { answer: '' },
     };
-    const { data } = await axios.post(url, envelope, { timeout: 15000 });
-    return data;
+    const ret = await postToCoordinator(envelope).catch(() => ({}));
+    let respString;
+    if (typeof ret === 'string') respString = ret;
+    else if (ret && typeof ret.data === 'string') respString = ret.data;
+    else respString = JSON.stringify((ret && ret.data) || {});
+    const resp = JSON.parse(respString || '{}');
+    const out = resp?.response?.answer;
+    if (!out) throw new Error('rag_push_decision_failed');
+    return out;
   } catch (err) {
     console.warn('RAG push incident decision failed, using mock. Reason:', err?.message || err);
     return mockAcknowledgeDecision(payload);

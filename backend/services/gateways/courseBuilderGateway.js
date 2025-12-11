@@ -10,30 +10,30 @@ function getCoordinatorUrl() {
 
 async function safeFetchCoverage(params) {
   try {
-    const body = {
+    const envelope = {
       requester_service: SERVICE_NAME,
+      target_service: 'course-builder',
       payload: {
-        action: 'fetch course coverage map from Course Builder',
+        action: 'fetch-coverage-map',
         ...(params || {}),
       },
-      response: {
-        learner_id: null,
-        course_id: null,
-        course_name: null,
-        coverage_map: [],
-      },
+      response: { answer: '' },
     };
-    const { data: json } = await postToCoordinator(body).catch(() => ({ data: {} }));
-    const data = json && json.success ? json.data : (json && json.response) || {};
-    const success = !!json && (json.success === true || typeof json.response === 'object');
-    const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
-    const isEmptyArray = Array.isArray(data) && data.length === 0;
-    const hasCoverage = !!(data && Array.isArray(data.coverage_map) && data.coverage_map.length > 0);
-    if (!json || !success || !data || isEmptyObject || isEmptyArray || !hasCoverage) {
+    const ret = await postToCoordinator(envelope).catch(() => ({}));
+    let respString;
+    if (typeof ret === 'string') respString = ret;
+    else if (ret && typeof ret.data === 'string') respString = ret.data;
+    else respString = JSON.stringify((ret && ret.data) || {});
+    const resp = JSON.parse(respString || '{}');
+    const answer = resp?.response?.answer;
+    const isEmptyObject = answer && typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0;
+    const isEmptyArray = Array.isArray(answer) && answer.length === 0;
+    const hasCoverage = !!(answer && Array.isArray(answer.coverage_map) && answer.coverage_map.length > 0);
+    if (!answer || isEmptyObject || isEmptyArray || !hasCoverage) {
       try { console.log('[MOCK-FALLBACK][CourseBuilder][coverage]', { hasParams: !!params }); } catch {}
       return mockFetchCoverage(params || {});
     }
-    return data;
+    return answer;
   } catch (err) {
     console.warn('CourseBuilder coverage fetch via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockFetchCoverage(params || {});
@@ -42,22 +42,25 @@ async function safeFetchCoverage(params) {
 
 // Outgoing results push through Coordinator
 async function sendCourseBuilderExamResults(payloadObj) {
-  const body = {
+  const envelope = {
     requester_service: SERVICE_NAME,
+    target_service: 'course-builder',
     payload: {
-      action: 'push post-course exam results to Course Builder',
+      action: 'postcourse-exam-result',
       ...(payloadObj || {}),
     },
-    response: {
-      ok: true,
-    },
+    response: { answer: '' },
   };
-  const { data: json } = await postToCoordinator(body).catch(() => ({ data: {} }));
-  const out = json && json.success ? json.data : (json && json.response) || {};
-  const success = !!json && (json.success === true || typeof json.response === 'object');
+  const ret = await postToCoordinator(envelope).catch(() => ({}));
+  let respString;
+  if (typeof ret === 'string') respString = ret;
+  else if (ret && typeof ret.data === 'string') respString = ret.data;
+  else respString = JSON.stringify((ret && ret.data) || {});
+  const resp = JSON.parse(respString || '{}');
+  const out = resp?.response?.answer;
   const isEmptyObject = out && typeof out === 'object' && !Array.isArray(out) && Object.keys(out).length === 0;
   const isEmptyArray = Array.isArray(out) && out.length === 0;
-  if (!json || !success || !out || isEmptyObject || isEmptyArray) {
+  if (!out || isEmptyObject || isEmptyArray) {
     try { console.log('[MOCK-FALLBACK][CourseBuilder][push-results]', { hasPayload: !!payloadObj }); } catch {}
     return mockPushExamResults(payloadObj);
   }

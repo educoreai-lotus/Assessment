@@ -10,28 +10,29 @@ function getCoordinatorUrl() {
 
 async function safeFetchBaselineSkills(params) {
   try {
-    const payload = {
-      action: 'fetch baseline readiness skills from Skills Engine',
-      ...(params || {}),
-    };
-    const body = {
+    const envelope = {
       requester_service: SERVICE_NAME,
-      payload,
-      response: {
-        skills: [],
-        passing_grade: 0,
+      target_service: 'skills-engine',
+      payload: {
+        action: 'fetch-baseline-skills',
+        ...(params || {}),
       },
+      response: { answer: '' },
     };
-    const { data: json } = await postToCoordinator(body).catch(() => ({ data: {} }));
-    const data = json && json.success ? json.data : (json && json.response) || {};
-    const success = !!json && (json.success === true || typeof json.response === 'object');
-    const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
-    const isEmptyArray = Array.isArray(data) && data.length === 0;
-    if (!json || !success || !data || isEmptyObject || isEmptyArray) {
+    const ret = await postToCoordinator(envelope).catch(() => ({}));
+    let respString;
+    if (typeof ret === 'string') respString = ret;
+    else if (ret && typeof ret.data === 'string') respString = ret.data;
+    else respString = JSON.stringify((ret && ret.data) || {});
+    const resp = JSON.parse(respString || '{}');
+    const answer = resp?.response?.answer;
+    const isEmptyObject = answer && typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0;
+    const isEmptyArray = Array.isArray(answer) && answer.length === 0;
+    if (!answer || isEmptyObject || isEmptyArray) {
       try { console.log('[MOCK-FALLBACK][SkillsEngine][baseline-skills]', { hasParams: !!params }); } catch {}
       return mockFetchBaselineSkills(params || {});
     }
-    return data;
+    return answer;
   } catch (err) {
     console.warn('SkillsEngine baseline fetch via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockFetchBaselineSkills(params || {});
@@ -40,26 +41,29 @@ async function safeFetchBaselineSkills(params) {
 
 async function safePushAssessmentResults(payload) {
   try {
-    const body = {
+    const envelope = {
       requester_service: SERVICE_NAME,
+      target_service: 'skills-engine',
       payload: {
-        action: 'push assessment results to Skills Engine',
+        action: 'baseline-exam-result',
         ...(payload || {}),
       },
-      response: {
-        ok: true,
-      },
+      response: { answer: '' },
     };
-    const { data: json } = await postToCoordinator(body).catch(() => ({ data: {} }));
-    const data = json && json.success ? json.data : (json && json.response) || {};
-    const success = !!json && (json.success === true || typeof json.response === 'object');
-    const isEmptyObject = data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0;
-    const isEmptyArray = Array.isArray(data) && data.length === 0;
-    if (!json || !success || !data || isEmptyObject || isEmptyArray) {
+    const ret = await postToCoordinator(envelope).catch(() => ({}));
+    let respString;
+    if (typeof ret === 'string') respString = ret;
+    else if (ret && typeof ret.data === 'string') respString = ret.data;
+    else respString = JSON.stringify((ret && ret.data) || {});
+    const resp = JSON.parse(respString || '{}');
+    const answer = resp?.response?.answer;
+    const isEmptyObject = answer && typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0;
+    const isEmptyArray = Array.isArray(answer) && answer.length === 0;
+    if (!answer || isEmptyObject || isEmptyArray) {
       try { console.log('[MOCK-FALLBACK][SkillsEngine][push-results]', { hasPayload: !!payload }); } catch {}
       return mockPushAssessmentResults(payload);
     }
-    return data;
+    return answer;
   } catch (err) {
     console.warn('SkillsEngine push results via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockPushAssessmentResults(payload);
