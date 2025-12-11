@@ -29,15 +29,52 @@ exports.handleInbound = async (payload) => {
   const user_id = payload?.user_id;
   const user_name = payload?.user_name || null;
   const company_id = payload?.company_id ?? null;
-  const created = await examsService.createExam({ user_id, user_name, company_id, exam_type: 'baseline' });
 
-  // Build response
+  // Start creation immediately
+  const creationPromise = examsService.createExam({ user_id, user_name, company_id, exam_type: 'baseline' });
+
+  // Race with a short timeout to avoid Coordinator timeouts; if it takes too long, acknowledge and continue in background
+  const timeoutMs = Number.isFinite(Number(process.env.INTEGRATION_INBOUND_TIMEOUT_MS))
+    ? Number(process.env.INTEGRATION_INBOUND_TIMEOUT_MS)
+    : 5000;
+
+  const result = await Promise.race([
+    creationPromise.then((created) => ({ done: true, created })).catch((e) => ({ done: true, error: e })),
+    new Promise((resolve) => setTimeout(() => resolve({ done: false }), timeoutMs)),
+  ]);
+
+  if (result.done) {
+    const created = result.created || {};
+    return {
+      status: 'baseline-created',
+      exam_type: 'baseline',
+      exam_id: created?.exam_id ?? null,
+      user_id: user_id ?? null,
+      redirect_to: '/app/profile',
+    };
+  }
+
+  // Continue in background; attach logging
+  creationPromise
+    .then((created) => {
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[TRACE][BASELINE][CREATE][ASYNC_DONE]', { exam_id: created?.exam_id, attempt_id: created?.attempt_id, user_id });
+      } catch {}
+    })
+    .catch((e) => {
+      try {
+        // eslint-disable-next-line no-console
+        console.error('[TRACE][BASELINE][CREATE][ASYNC_ERROR]', e?.message || e);
+      } catch {}
+    });
+
+  // Immediate acknowledgement to prevent upstream 30s timeouts
   return {
-    status: 'baseline-created',
+    status: 'accepted',
     exam_type: 'baseline',
-    exam_id: created?.exam_id ?? null,
     user_id: user_id ?? null,
-    redirect_to: '/app/profile', // placeholder
+    message: 'Exam creation in progress',
   };
 };
 
