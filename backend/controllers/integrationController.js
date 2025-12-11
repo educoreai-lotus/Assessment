@@ -17,12 +17,11 @@ const { sendSummaryToProtocolCamera } = require('../services/integrations/protoc
 const { normalizeToInt } = require("../services/core/idNormalizer");
 const { fetchManagementDailyAttempts } = require('../services/integrations/managementService');
 // Phase 08.6 – Universal dispatcher service imports
-const courseBuilderService = require('../services/integrations/courseBuilderService');
 const managementService = require('../services/integrations/managementService');
 const directoryService = require('../services/integrations/directoryService');
 const skillsEngineService = require('../services/integrations/skillsEngineService');
 const devlabService = require('../services/integrations/devlabService');
-const learningAnalyticsService = require('../services/integrations/learningAnalyticsService');
+const ragService = require('../services/integrations/ragService');
 
 // This controller centralizes inbound integration handling at /api/assessment/integration
 // It dispatches by api_caller and HTTP method to the correct workflow.
@@ -324,80 +323,54 @@ exports.universalIntegrationHandler = async (req, res) => {
       envelope = JSON.parse(String(req.body || ''));
     }
 
-    // Validate required fields
+    // Early validation (ignore target_service entirely)
     const requester = envelope?.requester_service;
-    const target = envelope?.target_service;
-    // Payload may itself be a stringified JSON; normalize to object if possible
     let payload = envelope?.payload;
     if (typeof payload === 'string') {
-      try {
-        payload = JSON.parse(payload);
-      } catch {
-        // keep as-is; validation below will catch non-object payloads
-      }
+      try { payload = JSON.parse(payload); } catch {}
     }
-    const action = payload?.action;
-
-    if (typeof requester !== 'string' || requester.trim() === '') {
-      return res.status(400).json(JSON.stringify({ error: 'requester_service_required' }));
-    }
-    if (target !== 'assessment-service') {
-      return res.status(400).json(JSON.stringify({ error: 'invalid_target_service' }));
-    }
-    if (!payload || typeof payload !== 'object') {
-      return res.status(400).json(JSON.stringify({ error: 'payload_object_required' }));
-    }
-    if (typeof action !== 'string' || action.trim() === '') {
-      return res.status(400).json(JSON.stringify({ error: 'payload.action_required' }));
+    if (!requester || !payload) {
+      return res.status(400).json({ error: 'invalid_envelope' });
     }
 
-    // Dispatch by requester_service; action handled within each service
+    // Dispatch by requester_service only
     const requesterLower = String(requester).toLowerCase();
     let answer;
     switch (requesterLower) {
+      case 'skills-engine-service':
       case 'skills-engine':
-      case 'skills_engine':
-      case 'skillsengine': {
+      case 'skillsengine':
         answer = await skillsEngineService.handleInbound(payload);
         break;
-      }
-      case 'course-builder':
-      case 'coursebuilder': {
-        answer = await courseBuilderService.handleInbound(payload);
+
+      case 'directory-service':
+      case 'directory':
+        answer = await directoryService.handleInbound(payload);
         break;
-      }
-      case 'content-studio':
-      case 'devlab-service':
-      case 'devlab': {
-        answer = await devlabService.handleInbound(payload);
-        break;
-      }
-      case 'learning-analytics':
-      case 'learning_analytics':
-      case 'learninganalytics':
-      case 'la': {
-        answer = await learningAnalyticsService.handleInbound(payload);
-        break;
-      }
+
       case 'management-service':
-      case 'management': {
+      case 'management':
         answer = await managementService.handleInbound(payload);
         break;
-      }
+
       case 'rag-service':
-      case 'rag': {
+      case 'rag':
         answer = await ragService.handleInbound(payload);
         break;
-      }
-      default: {
-        return res.status(400).json(JSON.stringify({ error: 'Unsupported requester_service' }));
-      }
+
+      case 'devlab-service':
+      case 'devlab':
+        answer = await devlabService.handleInbound(payload);
+        break;
+
+      default:
+        answer = { error: 'unknown_requester' };
+        break;
     }
 
-    const resp = JSON.stringify({ response: { answer } });
-    return res.status(200).json(resp);
+    return res.status(200).json({ response: { answer } });
   } catch (err) {
-    return res.status(400).json(JSON.stringify({ error: 'invalid_envelope', message: err?.message }));
+    return res.status(400).json({ error: 'invalid_envelope', message: err?.message });
   }
 };
 
