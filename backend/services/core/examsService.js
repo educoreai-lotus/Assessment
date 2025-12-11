@@ -270,7 +270,7 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
           JOIN exams e ON e.exam_id = ea.exam_id
           WHERE e.user_id = $1
             AND e.exam_type = 'baseline'
-            AND ea.status = 'submitted'
+            AND ea.submitted_at IS NOT NULL
           LIMIT 1
         `,
         [userInt],
