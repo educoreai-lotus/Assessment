@@ -1,6 +1,6 @@
 // Phase 08.5c – Delegates to gateway; no axios/env here
 const { sendCourseBuilderExamResults } = require('../gateways/courseBuilderGateway');
-const examsService = require('../../core/examsService');
+const examsService = require('../core/examsService');
 
 exports.sendExamResultsToCourseBuilder = async (payloadObj) => {
   return await sendCourseBuilderExamResults(payloadObj || {});
