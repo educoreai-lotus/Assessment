@@ -320,30 +320,9 @@ exports.handleInbound = async (payload, responseTemplate) => {
   try {
     const action = String(payload?.action || '').toLowerCase();
 
+    // Phase 1 placeholder for DevLab/content-studio generate-questions
     if (action === 'generate-questions') {
-      // New DevLab theoretical generation via AI
-      let params = payload || {};
-      // In case nested payload is present from coordinator
-      if (!params.topic_id && payload?.payload && typeof payload.payload === 'object') {
-        params = { ...payload.payload };
-      }
-      const topic_id = params?.topic_id != null ? String(params.topic_id) : '';
-      const topic_name = params?.topic_name != null ? String(params.topic_name) : '';
-      const skills = Array.isArray(params?.skills) ? params.skills : [];
-      const amount = Number(params?.amount || 1);
-      const question_type = params?.question_type != null ? String(params.question_type) : undefined;
-      const humanLanguage = params?.humanLanguage != null ? String(params.humanLanguage) : 'en';
-
-      const questions = await buildTheoreticalQuestionsForDevLab({
-        topic_id,
-        topic_name,
-        skills,
-        amount,
-        question_type,
-        humanLanguage,
-      });
-
-      return { success: true, data: { questions } };
+      return { status: 'devlab-temp', note: 'full AJAX/HTML logic implemented in Phase X' };
     }
 
     if (action === 'grade-theoretical') {

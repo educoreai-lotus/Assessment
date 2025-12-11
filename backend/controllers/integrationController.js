@@ -310,113 +310,78 @@ exports.handleCourseBuilderPreExam = async (req, res, next) => {
   }
 };
 
-// Phase 08.6 – Universal Integration Endpoint handler (single inbound route)
+// Phase 09 – Universal inbound Coordinator handler (single route)
 exports.universalIntegrationHandler = async (req, res) => {
   try {
-    // Accept both legacy and unified envelopes
-    const serviceRequester = req.body?.service_requester || req.body?.requester_service || '';
-    const payload = req.body?.payload || {};
-    const legacyStringified = req.body?.stringified_json;
+    // Coordinator sends RAW STRING. Always parse via JSON.parse.
+    const envelope = JSON.parse(req.body);
 
-    if (!serviceRequester) {
-      return res.status(400).json({ error: "Missing service_requester" });
+    // Validate required fields
+    const requester = envelope?.requester_service;
+    const target = envelope?.target_service;
+    const payload = envelope?.payload;
+    const action = payload?.action;
+
+    if (typeof requester !== 'string' || requester.trim() === '') {
+      return res.status(400).json(JSON.stringify({ error: 'requester_service_required' }));
+    }
+    if (target !== 'assessment-service') {
+      return res.status(400).json(JSON.stringify({ error: 'invalid_target_service' }));
+    }
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json(JSON.stringify({ error: 'payload_object_required' }));
+    }
+    if (typeof action !== 'string' || action.trim() === '') {
+      return res.status(400).json(JSON.stringify({ error: 'payload.action_required' }));
     }
 
-    let parsedPayload = {};
-    if (typeof payload?.stringified_json === 'string') {
-      try {
-        parsedPayload = JSON.parse(payload.stringified_json);
-      } catch {
-        return res.status(400).json({ error: "payload.stringified_json is not valid JSON" });
+    // Dispatch by requester_service; action handled within each service
+    const requesterLower = String(requester).toLowerCase();
+    let answer;
+    switch (requesterLower) {
+      case 'skills-engine':
+      case 'skills_engine':
+      case 'skillsengine': {
+        answer = await skillsEngineService.handleInbound(payload);
+        break;
       }
-    } else if (typeof legacyStringified === 'string') {
-      try {
-        parsedPayload = JSON.parse(legacyStringified);
-      } catch {
-        return res.status(400).json({ error: "stringified_json is not valid JSON" });
+      case 'course-builder':
+      case 'coursebuilder': {
+        answer = await courseBuilderService.handleInbound(payload);
+        break;
       }
-    } else if (payload && typeof payload === 'object') {
-      parsedPayload = payload;
-    } else {
-      parsedPayload = {};
-    }
-
-    // Early handling for DevLab/content-studio theoretical generation and grading
-    // Accept ANY requester_service and route generate-questions/grade-theoretical
-    const actionLower = String(parsedPayload?.action || '').toLowerCase();
-    if (actionLower === 'generate-questions') {
-      const pkg = await devlabService.buildTheoreticalQuestionsPackageForDevlab(parsedPayload);
-      return res.json({ success: true, data: pkg });
-    }
-    if (actionLower === 'grade-theoretical') {
-      const question_id = String(parsedPayload?.question_id || '');
-      const user_answer = parsedPayload?.user_answer != null ? String(parsedPayload.user_answer) : '';
-      const { gradeDevLabTheoreticalAnswer } = require('../services/integrations/devlabService');
-      const { correct } = gradeDevLabTheoreticalAnswer({ question_id, user_answer });
-      return res.json({ success: true, data: { correct } });
-    }
-
-    let result;
-
-    const withTimeout = (p, ms = 300) => Promise.race([p, new Promise((resolve) => setTimeout(() => resolve(Symbol('timeout')), ms))]);
-
-    const lower = String(serviceRequester).toLowerCase();
-    const pick = async () => {
-      switch (lower) {
-        case 'coursebuilder':
-          return courseBuilderService.handleInbound(parsedPayload, {});
-        case 'management':
-          return managementService.handleInbound(parsedPayload, {});
-        case 'directory':
-          return directoryService.handleInbound(parsedPayload, {});
-        case 'skillsengine':
-        case 'skills_engine':
-          return skillsEngineService.handleInbound(parsedPayload, {});
-        case 'devlab':
-          return devlabService.handleInbound(parsedPayload, {});
-        case 'learninganalytics':
-        case 'learning_analytics':
-        case 'la':
-          return learningAnalyticsService.handleInbound(parsedPayload, {});
-        case 'rag':
-        case 'protocol_camera':
-        case 'protocolcamera':
-          return {};
-        default:
-          return { error: `Unknown service_requester: ${serviceRequester}` };
+      case 'content-studio':
+      case 'devlab-service':
+      case 'devlab': {
+        answer = await devlabService.handleInbound(payload);
+        break;
       }
-    };
-
-    const raced = await withTimeout(pick(), 300);
-    if (raced && typeof raced === 'object' && !Object.is(raced, Symbol('timeout'))) {
-      result = raced;
-    } else {
-      const envelope = {
-        service_requester: 'Assessment',
-        payload: parsedPayload,
-        response: { answer: [] },
-      };
-      return res.json({
-        success: true,
-        data: envelope.response,
-        ...envelope,
-      });
+      case 'learning-analytics':
+      case 'learning_analytics':
+      case 'learninganalytics':
+      case 'la': {
+        answer = await learningAnalyticsService.handleInbound(payload);
+        break;
+      }
+      case 'management-service':
+      case 'management': {
+        answer = await managementService.handleInbound(payload);
+        break;
+      }
+      case 'rag-service':
+      case 'rag': {
+        answer = await ragService.handleInbound(payload);
+        break;
+      }
+      default: {
+        return res.status(400).json(JSON.stringify({ error: 'Unsupported requester_service' }));
+      }
     }
 
-    const envelope = {
-      service_requester: 'Assessment',
-      payload: parsedPayload,
-      response: result || {},
-    };
-    return res.json({
-      success: true,
-      data: envelope.response,
-      ...envelope,
-    });
-
+    const resp = JSON.stringify({ response: { answer } });
+    return res.status(200).json(resp);
   } catch (err) {
-    console.error('Error in universalIntegrationHandler:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(400).json(JSON.stringify({ error: 'invalid_envelope', message: err?.message }));
   }
 };
 
