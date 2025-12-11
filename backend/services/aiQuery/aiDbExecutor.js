@@ -6,6 +6,9 @@ const MONGO_COLLECTIONS = new Set(["proctoring_events"]);
 
 const ALLOWED_OPS = new Set(["insert", "update", "delete", "read"]);
 
+// Status-like aliases that AI might reference (do not exist in PG schema)
+const STATUS_ALIASES = new Set(["status", "exam_status", "attempt_status", "state"]);
+
 // Conservative allow-list for exam_attempts to keep SQL builders safe
 const EXAM_ATTEMPTS_COLUMNS = new Set([
 	"attempt_id",
@@ -166,6 +169,48 @@ async function applyDbOperation(operation, table, criteria = {}, values = {}) {
 	throw new Error(`Table/collection not allowed: ${table}`);
 }
 
-module.exports = { applyDbOperation };
+// --- AI SQL normalization (free-form SQL safety shim) ---
+// Rewrites references to non-existent status-like columns into a derived CASE
+// Applies to SELECT, WHERE, ORDER BY, GROUP BY.
+function normalizeAISQL(sql) {
+	if (typeof sql !== "string" || sql.trim() === "") return sql;
+	// Heuristic: prefer qualified ea.passed if alias present
+	const hasEa = /\bea\./i.test(sql);
+	const passedRef = hasEa ? "ea.passed" : "passed";
+	const caseExpr = `CASE WHEN ${passedRef} = true THEN 'passed' WHEN ${passedRef} = false THEN 'failed' ELSE 'in_progress' END`;
+
+	// Helper to build regex for any status alias with optional qualifier
+	const statusPattern = String.raw`\b(?:[a-zA-Z_][a-zA-Z0-9_]*\.)?(?:status|exam_status|attempt_status|state)\b`;
+
+	// 1) Normalize SELECT list: replace any status-like field with CASE ... AS status
+	const selectFromRegex = /select([\s\S]+?)from/i;
+	const m = selectFromRegex.exec(sql);
+	let out = sql;
+	if (m) {
+		const selectList = m[1];
+		const replacedSelect = selectList.replace(new RegExp(statusPattern, "gi"), `${caseExpr} AS status`);
+		out = out.replace(selectFromRegex, (full, grp) => full.replace(grp, replacedSelect));
+	}
+
+	// 2) Replace in WHERE/ORDER BY/GROUP BY with plain CASE (no alias)
+	const replaceContext = (keyword) => {
+		const re = new RegExp(`\\b${keyword}\\b([\\s\\S]*?)(?=\\bselect\\b|\\bwhere\\b|\\border\\s+by\\b|\\bgroup\\s+by\\b|\\blimit\\b|$)`, "i");
+		const m2 = re.exec(out);
+		if (!m2) return;
+		const seg = m2[1];
+		const replaced = seg.replace(new RegExp(statusPattern, "gi"), `${caseExpr}`);
+		out = out.replace(re, (full, grp) => full.replace(grp, replaced));
+	};
+	replaceContext("where");
+	replaceContext("order\\s+by");
+	replaceContext("group\\s+by");
+
+	// 3) Final safety: remove any residual qualified .status tokens
+	out = out.replace(/\b[a-zA-Z_][a-zA-Z0-9_]*\.status\b/gi, `${caseExpr}`);
+
+	return out;
+}
+
+module.exports = { applyDbOperation, normalizeAISQL };
 
 
