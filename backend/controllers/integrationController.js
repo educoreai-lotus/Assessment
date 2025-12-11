@@ -313,13 +313,29 @@ exports.handleCourseBuilderPreExam = async (req, res, next) => {
 // Phase 09 – Universal inbound Coordinator handler (single route)
 exports.universalIntegrationHandler = async (req, res) => {
   try {
-    // Coordinator sends RAW STRING. Always parse via JSON.parse.
-    const envelope = JSON.parse(req.body);
+    // Accept both RAW STRING and already-parsed JSON bodies
+    let envelope;
+    if (typeof req.body === 'string') {
+      envelope = JSON.parse(req.body);
+    } else if (req.body && typeof req.body === 'object') {
+      envelope = req.body;
+    } else {
+      // Last-ditch attempt to stringify and parse
+      envelope = JSON.parse(String(req.body || ''));
+    }
 
     // Validate required fields
     const requester = envelope?.requester_service;
     const target = envelope?.target_service;
-    const payload = envelope?.payload;
+    // Payload may itself be a stringified JSON; normalize to object if possible
+    let payload = envelope?.payload;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        // keep as-is; validation below will catch non-object payloads
+      }
+    }
     const action = payload?.action;
 
     if (typeof requester !== 'string' || requester.trim() === '') {
