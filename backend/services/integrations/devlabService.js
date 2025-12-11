@@ -256,38 +256,70 @@ async function buildTheoreticalQuestionsPackageForDevlab({
       document.getElementById("check_${id}").addEventListener("click", async () => {
         const ans = document.getElementById("answer_${id}").value.trim();
         const resBox = document.getElementById("result_${id}");
-        const result = await fetch("/api/fill-content-metrics", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requester_service: "devlab-service",
-            payload: {
-              action: "grade-theoretical",
-              question_id: "${id}",
-              user_answer: ans
-            },
-            response: {}
-          })
-        }).then(r => r.json());
-        resBox.textContent = result?.data?.correct ? "Correct!" : "Try again";
-      });
-    `,
-      ajax_request_example: `
-      fetch("/api/fill-content-metrics", {
-        method: "POST",
-        body: JSON.stringify({
+        const envelope = JSON.stringify({
           requester_service: "devlab-service",
+          target_service: "assessment-service",
           payload: {
             action: "grade-theoretical",
             question_id: "${id}",
-            user_answer: "ANSWER"
-          }
-        })
+            user_answer: ans
+          },
+          response: { answer: "" }
+        });
+        const result = await fetch("/api/fill-content-metrics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: envelope
+        }).then(r => r.json()).catch(()=>null);
+        try {
+          const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+          const correct = parsed?.data?.correct === true || parsed?.response?.answer?.correct === true || parsed?.correct === true;
+          resBox.textContent = correct ? "Correct!" : "Try again";
+        } catch {
+          resBox.textContent = "Try again";
+        }
+      });
+    `,
+      ajax_request_example: `
+      const envelope = JSON.stringify({
+        requester_service: "devlab-service",
+        target_service: "assessment-service",
+        payload: {
+          action: "grade-theoretical",
+          question_id: "${id}",
+          user_answer: "ANSWER"
+        },
+        response: { answer: "" }
+      });
+      fetch("/api/fill-content-metrics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: envelope
       });
     `,
     };
   });
-  return { questions };
+  // Aggregate HTML and JS for convenience (single block)
+  const html_snippet = questions.map((q) => String(q.html_snippet || '')).join('\n');
+  const javascript_snippet = [
+    '(function(){',
+    ...questions.map((q) => String(q.javascript_snippet || '')),
+    '})();',
+  ].join('\n');
+  const ajax_request_example = `
+  const envelope = JSON.stringify({
+    requester_service: "devlab-service",
+    target_service: "assessment-service",
+    payload: { action: "grade-theoretical", question_id: "${(questions[0] && questions[0].id) || 'QID'}", user_answer: "ANSWER" },
+    response: { answer: "" }
+  });
+  fetch("/api/fill-content-metrics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: envelope
+  });
+`.trim();
+  return { questions, html_snippet, javascript_snippet, ajax_request_example };
 }
 exports.buildTheoreticalQuestionsPackageForDevlab = buildTheoreticalQuestionsPackageForDevlab;
 
@@ -301,101 +333,74 @@ function gradeDevLabTheoreticalAnswer({ question_id, user_answer }) {
 exports.gradeDevLabTheoreticalAnswer = gradeDevLabTheoreticalAnswer;
 
 // Phase 08.6 – Universal inbound handler
-exports.handleInbound = async (payload, responseTemplate) => {
-	const resp =
-		typeof responseTemplate === 'object' && responseTemplate !== null
-			? responseTemplate
-			: {};
-
-  // Unified envelope expected upstream; here we receive parsed payload object.
-  // For theoretical:
-  // { action: 'theoretical', topic_id, topic_name, amount, difficulty: 'in ascending order of difficulty', humanLanguage, skills: [...] }
-  const withTimeout = (p, ms = 100) => {
-    return Promise.race([
-      p,
-      new Promise((resolve) => setTimeout(() => resolve(Symbol('timeout')), ms)),
-    ]);
-  };
-
+exports.handleInbound = async (payload) => {
   try {
     const action = String(payload?.action || '').toLowerCase();
 
-    // Phase 1 placeholder for DevLab/content-studio generate-questions
+    // 1) Generate theoretical questions with HTML/JS package
     if (action === 'generate-questions') {
-      return { status: 'devlab-temp', note: 'full AJAX/HTML logic implemented in Phase X' };
+      const topic_id = payload?.topic_id != null ? payload.topic_id : undefined;
+      const topic_name = typeof payload?.topic_name === 'string' ? payload.topic_name : undefined;
+      const skills = Array.isArray(payload?.skills) ? payload.skills.map(String) : [];
+      const amount = Number.isFinite(Number(payload?.amount)) ? Number(payload.amount) : 1;
+      const humanLanguage = typeof payload?.humanLanguage === 'string' ? payload.humanLanguage : 'en';
+      const theoretical_question_type = typeof payload?.theoretical_question_type === 'string'
+        ? payload.theoretical_question_type
+        : undefined;
+
+      const pkg = await exports.buildTheoreticalQuestionsPackageForDevlab({
+        topic_id,
+        topic_name,
+        skills,
+        amount,
+        humanLanguage,
+        theoretical_question_type,
+      });
+      // Return the package as the answer; controller wraps into { response: { answer } }
+      return pkg || { questions: [] };
     }
 
+    // 2) Grade theoretical answer using in-memory store
     if (action === 'grade-theoretical') {
       const question_id = String(payload?.question_id || '');
       const user_answer = payload?.user_answer != null ? String(payload.user_answer) : '';
       const { correct } = gradeDevLabTheoreticalAnswer({ question_id, user_answer });
-      return { success: true, data: { correct } };
+      return { correct };
     }
 
-    if (action !== 'theoretical') {
-      return {
-        service_requester: 'Assessment',
-        payload: payload || {},
-        response: { answer: [] },
-      };
+    // 3) Coding questions build
+    if (action === 'coding') {
+      const amount = Number.isFinite(Number(payload?.amount)) ? Number(payload.amount) : 1;
+      const skills = Array.isArray(payload?.skills) ? payload.skills.map(String) : [];
+      const humanLanguage = typeof payload?.humanLanguage === 'string' ? payload.humanLanguage : 'en';
+      const difficulty = typeof payload?.difficulty === 'string' ? payload.difficulty : 'medium';
+      const built = await exports.buildCodingQuestionsForExam({
+        amount,
+        skills,
+        humanLanguage,
+        difficulty,
+      });
+      return Array.isArray(built) ? built : [];
     }
 
-    const nRaw = Number(payload?.amount || 1);
-    const n = Number.isFinite(nRaw) && nRaw > 0 ? Math.min(nRaw, 20) : 1;
-
-    // Difficulty pattern (easy → medium → hard)
-    let difficulties = [];
-    if (n === 1) difficulties = ['easy'];
-    else if (n === 2) difficulties = ['easy', 'medium'];
-    else if (n === 3) difficulties = ['easy', 'medium', 'hard'];
-    else difficulties = ['easy', ...Array.from({ length: n - 2 }).map(() => 'medium'), 'hard'];
-
-    const skills = Array.isArray(payload?.skills) ? payload.skills.map(String) : [];
-    const items = difficulties.map((d, idx) => ({
-      skill_id: skills[idx % Math.max(skills.length, 1)] || 'general',
-      difficulty: d,
-      humanLanguage: 'en',
-      type: idx % 2 === 0 ? 'mcq' : 'open',
-    }));
-
-    // Pure mock generation only; no external/AI calls
-    const build = () => {
-      return items.map((it, i) => ({
-        qid: `devlab_theory_${i + 1}`,
-        type: it.type,
-        stem: it.type === 'mcq'
-          ? `Which is true about ${it.skill_id}?`
-          : `Explain the concept related to ${it.skill_id}.`,
-        skill_id: it.skill_id,
-        difficulty: it.difficulty,
-        options: it.type === 'mcq' ? ['A', 'B', 'C', 'D'] : undefined,
-        correct_answer: it.type === 'mcq' ? 'A' : '',
-        explanation: 'Auto-generated mock explanation.',
-        hint: 'Think about the core idea without revealing the answer.',
-      }));
-    };
-
-    const out = await withTimeout(Promise.resolve(build()), 100);
-    if (out === Symbol.for && out.description === 'timeout') {
-      // defensive, but Promise.resolve won't time out
-      return {
-        service_requester: 'Assessment',
-        payload: payload || {},
-        response: { answer: [] },
-      };
+    // 4) Coding grading
+    if (action === 'gradecoding' || action === 'grade-coding') {
+      const answers = Array.isArray(payload?.answers) ? payload.answers : [];
+      // Optional: include questions for richer grading context (test cases, expected output)
+      const codingQuestions = Array.isArray(payload?.questions)
+        ? payload.questions
+        : (Array.isArray(payload?.coding_questions) ? payload.coding_questions : []);
+      const { gradingResults, aggregated } = await exports.gradeCodingAnswersForExam({
+        codingQuestions,
+        codingAnswers: answers,
+      });
+      return { results: gradingResults, aggregated };
     }
 
-    return {
-      service_requester: 'Assessment',
-      payload: payload || {},
-      response: { answer: Array.isArray(out) ? out : [] },
-    };
+    // Unsupported action: return empty answer for compatibility
+    return [];
   } catch {
-    return {
-      service_requester: 'Assessment',
-      payload: payload || {},
-      response: { answer: [] },
-    };
+    return [];
   }
 };
 
