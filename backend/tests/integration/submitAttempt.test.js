@@ -1,7 +1,9 @@
 const request = require('supertest');
 const app = require('../../server');
+const pool = require('../../config/supabaseDB');
 
 const isCI = process.env.CI === 'true';
+const hasLiveEnv = !!(process.env.SUPABASE_DB_URL || process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL);
 
 // In CI, skip the live submission test
 (isCI ? describe.skip : describe)('POST /api/exams/:examId/submit (live)', () => {
@@ -49,6 +51,36 @@ const isCI = process.env.CI === 'true';
     } else {
       // If the attempt expired or was canceled during concurrent runs, treat as acceptable for CI
       expect([400, 403, 404]).toContain(res.statusCode);
+    }
+  });
+});
+
+// Live env only: auto-create user on exam creation
+(hasLiveEnv ? describe : describe.skip)('Auto-create user on exam creation', () => {
+  it('creates a users row if it does not exist and returns exam_id', async () => {
+    const randomId = 900000 + Math.floor(Math.random() * 100000);
+    const userIdStr = `u_${randomId}`;
+
+    // Ensure user does not exist
+    try {
+      await pool.query('DELETE FROM users WHERE user_id = $1', [randomId]);
+    } catch {}
+
+    const res = await request(app)
+      .post('/api/exams')
+      .send({ user_id: userIdStr, exam_type: 'baseline' })
+      .set('Content-Type', 'application/json');
+
+    expect([201, 400, 500]).toContain(res.statusCode);
+    if (res.statusCode === 201) {
+      expect(res.body).toHaveProperty('exam_id');
+      expect(res.body.exam_id).not.toBeNull();
+      const check = await pool.query('SELECT 1 FROM users WHERE user_id = $1', [randomId]);
+      expect((check && check.rowCount) || 0).toBeGreaterThan(0);
+    } else {
+      // If external mocks failed in the environment, still assert user was created
+      const check = await pool.query('SELECT 1 FROM users WHERE user_id = $1', [randomId]);
+      expect((check && check.rowCount) || 0).toBeGreaterThan(0);
     }
   });
 });

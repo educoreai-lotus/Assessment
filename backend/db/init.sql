@@ -54,3 +54,6 @@ CREATE TABLE IF NOT EXISTS outbox_integrations (
 ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS duration_minutes INT;
 ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
 ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS status VARCHAR(20);
+-- Users extended fields for inbound integrations
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id INT;

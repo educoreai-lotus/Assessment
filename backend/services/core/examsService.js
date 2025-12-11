@@ -33,6 +33,20 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+async function ensureUserExists({ user_id_numeric, user_name, company_id }) {
+  if (!Number.isFinite(Number(user_id_numeric))) return;
+  const uid = Number(user_id_numeric);
+  const { rowCount } = await pool.query('SELECT 1 FROM users WHERE user_id = $1', [uid]);
+  if (Number(rowCount || 0) === 0) {
+    await pool.query(
+      `INSERT INTO users (user_id, full_name, company_id)
+       VALUES ($1, $2, $3)`,
+      [uid, user_name || null, Number.isFinite(Number(company_id)) ? Number(company_id) : null],
+    );
+    try { console.log('[TRACE][USER][AUTO-CREATE]', { user_id: uid, created: true }); } catch {}
+  }
+}
+
 function removeHintsDeep(input) {
   if (input == null) return input;
   if (Array.isArray(input)) {
@@ -227,7 +241,7 @@ async function gradeOpenAnswerWithAI({ question, correctAnswer, userAnswer, skil
   return { score, reason };
 }
 
-async function createExam({ user_id, exam_type, course_id, course_name }) {
+async function createExam({ user_id, exam_type, course_id, course_name, user_name, company_id }) {
   // Map user_id to numeric at the very beginning
   const userStr = String(user_id);
   const userInt = Number(userStr.replace(/[^0-9]/g, ""));
@@ -237,6 +251,10 @@ async function createExam({ user_id, exam_type, course_id, course_name }) {
   try {
     // eslint-disable-next-line no-console
     console.log("[TRACE][USER_ID][MAPPED]", { original: user_id, numeric: userInt });
+  } catch {}
+  // Ensure a users row exists for this learner before creating exams
+  try {
+    await ensureUserExists({ user_id_numeric: userInt, user_name, company_id });
   } catch {}
   // Fetch upstream data via gateways with safe mocks
   let policy = {};

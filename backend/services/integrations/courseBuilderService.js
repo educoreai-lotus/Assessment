@@ -15,6 +15,7 @@ exports.handleInbound = async (payload) => {
 
   // Normalize learner_id → user_id
   const user_id = payload?.learner_id;
+  const user_name = payload?.learner_name || null;
   const course_id = payload?.course_id;
   const course_name = payload?.course_name;
 
@@ -26,6 +27,7 @@ exports.handleInbound = async (payload) => {
   // Create postcourse exam
   const created = await examsService.createExam({
     user_id,
+    user_name,
     exam_type: 'postcourse',
     course_id,
     course_name,

@@ -27,7 +27,9 @@ exports.handleInbound = async (payload) => {
 
   // Create baseline exam (internal service handles policy, persistence, Mongo package)
   const user_id = payload?.user_id;
-  const created = await examsService.createExam({ user_id, exam_type: 'baseline' });
+  const user_name = payload?.user_name || null;
+  const company_id = payload?.company_id ?? null;
+  const created = await examsService.createExam({ user_id, user_name, company_id, exam_type: 'baseline' });
 
   // Build response
   return {
