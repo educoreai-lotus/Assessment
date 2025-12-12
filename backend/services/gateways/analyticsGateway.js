@@ -21,7 +21,6 @@ async function safeGetPostcourseAnalytics() {
 async function sendAnalyticsData(dataPayload) {
   const envelope = {
     requester_service: SERVICE_NAME,
-    target_service: 'learning-analytics',
     payload: {
       action: 'provide-exam-analytics',
       ...(dataPayload || {}),

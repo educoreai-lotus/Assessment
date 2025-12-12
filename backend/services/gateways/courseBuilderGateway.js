@@ -12,7 +12,6 @@ async function safeFetchCoverage(params) {
   try {
     const envelope = {
       requester_service: SERVICE_NAME,
-      target_service: 'course-builder',
       payload: {
         action: 'fetch-coverage-map',
         ...(params || {}),
@@ -44,7 +43,6 @@ async function safeFetchCoverage(params) {
 async function sendCourseBuilderExamResults(payloadObj) {
   const envelope = {
     requester_service: SERVICE_NAME,
-    target_service: 'course-builder',
     payload: {
       action: 'postcourse-exam-result',
       ...(payloadObj || {}),

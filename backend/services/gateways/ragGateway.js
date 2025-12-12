@@ -14,7 +14,6 @@ async function safePushIncidentDecision(payload) {
   try {
     const envelope = {
       requester_service: SERVICE_NAME,
-      target_service: 'rag-service',
       payload: {
         action: 'incident-decision',
         ...(payload || {}),

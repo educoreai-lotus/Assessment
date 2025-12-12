@@ -5,7 +5,6 @@ const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 async function fetchPolicy(examType, userId, courseId) {
   const envelope = {
     requester_service: SERVICE_NAME,
-    target_service: 'directory-service',
     payload: {
       action: 'fetch-policy',
       exam_type: examType,
@@ -40,7 +39,6 @@ async function safePushExamResults(payload) {
   try {
     const envelope = {
       requester_service: SERVICE_NAME,
-      target_service: 'directory-service',
       payload: {
         action: 'push-exam-results',
         ...(payload || {}),

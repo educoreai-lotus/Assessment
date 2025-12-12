@@ -12,7 +12,6 @@ async function safeFetchBaselineSkills(params) {
   try {
     const envelope = {
       requester_service: SERVICE_NAME,
-      target_service: 'skills-engine',
       payload: {
         action: 'fetch-baseline-skills',
         ...(params || {}),
@@ -43,7 +42,6 @@ async function safePushAssessmentResults(payload) {
   try {
     const envelope = {
       requester_service: SERVICE_NAME,
-      target_service: 'skills-engine',
       payload: {
         action: 'baseline-exam-result',
         ...(payload || {}),

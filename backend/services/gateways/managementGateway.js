@@ -6,7 +6,6 @@ async function pushReportingRecord(recordPayload) {
   try {
     const envelope = {
       requester_service: SERVICE_NAME,
-      target_service: 'management-service',
       payload: {
         action: 'provide-reporting-record',
         ...(recordPayload || {}),

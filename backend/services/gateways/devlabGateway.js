@@ -11,7 +11,6 @@ function buildEnvelope(payloadObj) {
 	const payload = payloadObj && typeof payloadObj === 'object' ? payloadObj : {};
 	return {
 		requester_service: SERVICE_NAME,
-		target_service: 'devlab-service',
 		payload,
 		response: { answer: '' },
 	};

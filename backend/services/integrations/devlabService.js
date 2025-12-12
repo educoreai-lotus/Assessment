@@ -258,7 +258,6 @@ async function buildTheoreticalQuestionsPackageForDevlab({
         const resBox = document.getElementById("result_${id}");
         const envelope = JSON.stringify({
           requester_service: "devlab-service",
-          target_service: "assessment-service",
           payload: {
             action: "grade-theoretical",
             question_id: "${id}",
@@ -283,7 +282,6 @@ async function buildTheoreticalQuestionsPackageForDevlab({
       ajax_request_example: `
       const envelope = JSON.stringify({
         requester_service: "devlab-service",
-        target_service: "assessment-service",
         payload: {
           action: "grade-theoretical",
           question_id: "${id}",
@@ -309,7 +307,6 @@ async function buildTheoreticalQuestionsPackageForDevlab({
   const ajax_request_example = `
   const envelope = JSON.stringify({
     requester_service: "devlab-service",
-    target_service: "assessment-service",
     payload: { action: "grade-theoretical", question_id: "${(questions[0] && questions[0].id) || 'QID'}", user_answer: "ANSWER" },
     response: { answer: "" }
   });
