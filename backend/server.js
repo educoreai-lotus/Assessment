@@ -29,19 +29,12 @@ app.set('trust proxy', 1);
 
 app.use(helmet());
 
-const allowedOrigins = [
-  'https://assessment-tests.vercel.app',
-  'http://localhost:5173',
-  'https://assessment-seven-liard.vercel.app',
-  // Accept Vercel preview deployments for this project namespace
-  /^https:\/\/assessment-[a-z0-9-]+-educoreai-lotus\.vercel\.app$/,
-  // Accept project-level Vercel aliases like assessment-*.vercel.app
-  /^https:\/\/assessment-[a-z0-9-]+\.vercel\.app$/,
-];
-
+// Temporarily allow all origins to eliminate client timeouts due to CORS/preflight in multi-origin deployments
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => callback(null, true),
   credentials: true,
+  optionsSuccessStatus: 204,
+  maxAge: 86400,
 }));
 
 app.use(express.json({ limit: '50kb' }));
