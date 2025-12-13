@@ -1,28 +1,36 @@
-import { http } from './http';
+import { http, httpReady } from './http';
 
 export const examApi = {
-  create(payload) {
+  async create(payload) {
+    await httpReady;
     return http.post('/api/exams', payload).then(r => r.data);
   },
-  resolve(examId) {
+  async resolve(examId) {
+    await httpReady;
     return http.get(`/api/exams/${encodeURIComponent(examId)}`).then(r => r.data);
   },
-  start(examId, payload) {
+  async start(examId, payload) {
+    await httpReady;
     return http.post(`/api/exams/${encodeURIComponent(examId)}/start`, payload).then(r => r.data);
   },
-  submit(examId, payload) {
+  async submit(examId, payload) {
+    await httpReady;
     return http.post(`/api/exams/${encodeURIComponent(examId)}/submit`, payload).then(r => r.data);
   },
-  proctoringStart(attemptId) {
+  async proctoringStart(attemptId) {
+    await httpReady;
     return http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/start_camera`).then(r => r.data);
   },
-  proctoringStartForExam(examId, payload) {
+  async proctoringStartForExam(examId, payload) {
+    await httpReady;
     return http.post(`/api/exams/${encodeURIComponent(examId)}/proctoring/start`, payload).then(r => r.data);
   },
-  attempt(attemptId) {
+  async attempt(attemptId) {
+    await httpReady;
     return http.get(`/api/attempts/${encodeURIComponent(attemptId)}`).then(r => r.data);
   },
-  attemptsByUser(userId) {
+  async attemptsByUser(userId) {
+    await httpReady;
     return http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
   },
 };
