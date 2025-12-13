@@ -241,7 +241,6 @@ async function buildTheoreticalQuestionsPackageForDevlab({
       topic_name,
       stem,
       options,
-      correct_answer,
       explanation,
       hints,
       html_snippet: `

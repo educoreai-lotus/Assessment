@@ -1030,6 +1030,7 @@ async function getPackageByExamId(exam_id) {
         // Never expose correct_answer to client for theoretical questions
         if (String(q?.metadata?.type || '').toLowerCase() !== 'code') {
           delete clone.correct_answer;
+          delete clone.explanation;
         }
         return { ...q, prompt: clone };
       }
@@ -1052,6 +1053,7 @@ async function getPackageByAttemptId(attempt_id) {
         // Never expose correct_answer to client for theoretical questions
         if (String(q?.metadata?.type || '').toLowerCase() !== 'code') {
           delete clone.correct_answer;
+          delete clone.explanation;
         }
         return { ...q, prompt: clone };
       }
@@ -1468,6 +1470,31 @@ async function submitAttempt({ attempt_id, answers }) {
     }
   } catch {}
 
+  // 9.1) Optional: Generate AI feedback per skill
+  let feedbackPerSkill = [];
+  try {
+    const aiGateway = require("../gateways/aiGateway");
+    if (aiGateway && typeof aiGateway.generateSkillFeedback === "function") {
+      const requests = [];
+      for (const s of perSkill) {
+        requests.push(
+          aiGateway
+            .generateSkillFeedback({ skill_id: s.skill_id, score: s.score })
+            .then((resp) => {
+              let parsed = resp;
+              try {
+                if (typeof resp === "string") parsed = JSON.parse(resp);
+              } catch {}
+              const feedback = parsed && typeof parsed.feedback === "string" ? parsed.feedback : "";
+              return { skill_id: s.skill_id, feedback };
+            })
+            .catch(() => ({ skill_id: s.skill_id, feedback: "" })),
+        );
+      }
+      feedbackPerSkill = await Promise.all(requests);
+    }
+  } catch {}
+
   // 10) Update Postgres exam_attempts
   await pool.query(
     `
@@ -1507,6 +1534,7 @@ async function submitAttempt({ attempt_id, answers }) {
               final_grade: Number(finalGrade),
               passed: !!passed,
               per_skill: perSkill,
+              feedback_per_skill: Array.isArray(feedbackPerSkill) ? feedbackPerSkill : [],
               engine: "internal+devlab",
               completed_at: new Date(),
             },
