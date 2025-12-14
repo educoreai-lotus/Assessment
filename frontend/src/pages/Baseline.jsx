@@ -11,6 +11,22 @@ export default function Baseline() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
+  // Gate: redirect to Intro unless accepted for this attempt
+  useEffect(() => {
+    const acceptedParam = searchParams.get('introAccepted') === 'true';
+    const attemptParam = searchParams.get('attemptId');
+    const acceptedLocal = attemptParam ? localStorage.getItem(`introAccepted:${attemptParam}`) === 'true' : false;
+    if (!acceptedParam && !acceptedLocal) {
+      const qp = new URLSearchParams();
+      qp.set('examType', 'baseline');
+      const examIdQ = searchParams.get('examId');
+      const attemptIdQ = searchParams.get('attemptId');
+      if (examIdQ) qp.set('examId', examIdQ);
+      if (attemptIdQ) qp.set('attemptId', attemptIdQ);
+      navigate(`/exam-intro?${qp.toString()}`, { replace: true });
+    }
+  }, [navigate, searchParams]);
+
   const initialExamId = useMemo(() => {
     const qp = searchParams.get('examId');
     if (qp) return qp;
@@ -108,6 +124,14 @@ export default function Baseline() {
       mounted = false;
     };
   }, []); // initial mount
+
+  // Persist acceptance token tied to attempt once known
+  useEffect(() => {
+    const acceptedParam = searchParams.get('introAccepted') === 'true';
+    if (acceptedParam && attemptId) {
+      try { localStorage.setItem(`introAccepted:${attemptId}`, 'true'); } catch {}
+    }
+  }, [attemptId, searchParams]);
 
   // Start exam only after camera is ready and backend session is active
   useEffect(() => {

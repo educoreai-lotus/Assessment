@@ -32,6 +32,26 @@ export default function PostCourseExam() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
+  // Gate: redirect to Intro unless accepted for this attempt
+  useEffect(() => {
+    const acceptedParam = searchParams.get('introAccepted') === 'true';
+    const attemptParam = searchParams.get('attemptId');
+    const acceptedLocal = attemptParam ? localStorage.getItem(`introAccepted:${attemptParam}`) === 'true' : false;
+    if (!acceptedParam && !acceptedLocal) {
+      const qp = new URLSearchParams();
+      qp.set('examType', 'postcourse');
+      const examIdQ = searchParams.get('examId');
+      const attemptIdQ = searchParams.get('attemptId');
+      const courseIdQ = searchParams.get('courseId') || searchParams.get('course_id');
+      const courseNameQ = searchParams.get('courseName') || searchParams.get('course_name');
+      if (examIdQ) qp.set('examId', examIdQ);
+      if (attemptIdQ) qp.set('attemptId', attemptIdQ);
+      if (courseIdQ) qp.set('courseId', courseIdQ);
+      if (courseNameQ) qp.set('courseName', courseNameQ);
+      navigate(`/exam-intro?${qp.toString()}`, { replace: true });
+    }
+  }, [navigate, searchParams]);
+
   const creationStarted = useRef(false);
   const mountCountRef = useRef(0);
   const clearedOnceRef = useRef(false);
@@ -267,6 +287,14 @@ export default function PostCourseExam() {
       mounted = false;
     };
   }, [courseId]);
+
+  // Persist acceptance token tied to attempt once known
+  useEffect(() => {
+    const acceptedParam = searchParams.get('introAccepted') === 'true';
+    if (acceptedParam && attemptId) {
+      try { localStorage.setItem(`introAccepted:${attemptId}`, 'true'); } catch {}
+    }
+  }, [attemptId, searchParams]);
 
   useEffect(() => {
     let cancelled = false;

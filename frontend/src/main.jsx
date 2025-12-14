@@ -7,6 +7,8 @@ import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
 import Baseline from './pages/Baseline.jsx';
 import PostCourseExam from './pages/exam/PostCourseExam.jsx';
+import ExamIntro from './pages/ExamIntro.jsx';
+import CoordinatorEntry from './pages/CoordinatorEntry.jsx';
 import ResultsDashboard from './pages/results/ResultsDashboard.jsx';
 import BaselineResults from './pages/BaselineResults.jsx';
 import PostCourseResults from './pages/PostCourseResults.jsx';
@@ -21,6 +23,8 @@ const routes = [
       { index: true, element: withMotion(<HomePage />) },
       { path: 'exam/baseline', element: withMotion(<Baseline />) },
       { path: 'exam/postcourse', element: withMotion(<PostCourseExam />) },
+      { path: 'exam-intro', element: withMotion(<ExamIntro />) },
+      { path: 'coordinator-entry', element: withMotion(<CoordinatorEntry />) },
       { path: 'results', element: withMotion(<ResultsDashboard />) },
       { path: 'results/baseline', element: withMotion(<BaselineResults />) },
       { path: 'results/baseline/:attemptId', element: withMotion(<BaselineResults />) },

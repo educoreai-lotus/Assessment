@@ -16,6 +16,7 @@ const { sendIncidentDecisionToRag } = require('../services/integrations/ragServi
 const { sendSummaryToProtocolCamera } = require('../services/integrations/protocolCameraService');
 const { normalizeToInt } = require("../services/core/idNormalizer");
 const { fetchManagementDailyAttempts } = require('../services/integrations/managementService');
+const { parseEnvelope, normalizeEnvelope } = require('../utils/coordinatorEnvelope');
 // Phase 08.6 – Universal dispatcher service imports
 const managementService = require('../services/integrations/managementService');
 const directoryService = require('../services/integrations/directoryService');
@@ -310,12 +311,11 @@ exports.handleCourseBuilderPreExam = async (req, res, next) => {
   try {
     const { requester_service: requesterService, payload } = req.body || {};
 
-    // Parse stringified payload safely
+    // Parse payload safely (string or object)
     let parsed = {};
-    try {
-      parsed = typeof payload === 'string' ? JSON.parse(payload) : {};
-    } catch (e) {
-      parsed = {};
+    if (payload && typeof payload === 'object') parsed = payload;
+    else if (typeof payload === 'string') {
+      try { parsed = JSON.parse(payload); } catch { parsed = {}; }
     }
 
     // Extract fields (for future orchestration usage)
@@ -327,12 +327,14 @@ exports.handleCourseBuilderPreExam = async (req, res, next) => {
     void learner_id; void learner_name; void course_id; void course_name; void coverage_map;
 
     // Prepare protocol-compliant response envelope
-    const responseObject = { status: 'received' };
-    const envelope = {
-      requester_service: 'assessment',
-      payload: typeof payload === 'string' ? payload : JSON.stringify(parsed),
-      response: JSON.stringify(responseObject),
-    };
+    const envelope = normalizeEnvelope({
+      requester_service: 'assessment-service',
+      payload: {
+        action: 'start-postcourse-exam',
+        ...(parsed || {}),
+      },
+      response: { answer: 'received' },
+    });
 
     return res.json(envelope);
   } catch (err) {
@@ -352,22 +354,32 @@ exports.universalIntegrationHandler = async (req, res) => {
       });
     } catch {}
     // Accept both RAW STRING and already-parsed JSON bodies
-    let envelope;
-    if (typeof req.body === 'string') {
-      envelope = JSON.parse(req.body);
-    } else if (req.body && typeof req.body === 'object') {
-      envelope = req.body;
-    } else {
-      // Last-ditch attempt to stringify and parse
-      envelope = JSON.parse(String(req.body || ''));
+    let raw = parseEnvelope(req.body);
+
+    // Adapter: wrap raw Course Builder objects (or Skills Engine) into a standard envelope
+    if (!raw?.requester_service && raw && typeof raw === 'object') {
+      const looksLikeCourseBuilder = ('course_id' in raw) || ('learner_id' in raw) || ('coverage_map' in raw);
+      const looksLikeSkills = ('user_id' in raw) || ('user' in raw);
+      if (looksLikeCourseBuilder) {
+        raw = {
+          requester_service: 'course-builder',
+          payload: { action: 'start-postcourse-exam', ...raw },
+          response: { answer: '' },
+        };
+      } else if (looksLikeSkills) {
+        raw = {
+          requester_service: 'skills-engine',
+          payload: { action: 'start-baseline-exam', ...raw },
+          response: { answer: '' },
+        };
+      }
     }
+
+    const envelope = normalizeEnvelope(raw);
 
     // Early validation (ignore target_service entirely)
     const requester = envelope?.requester_service;
-    let payload = envelope?.payload;
-    if (typeof payload === 'string') {
-      try { payload = JSON.parse(payload); } catch {}
-    }
+    const payload = envelope?.payload;
     try {
       // eslint-disable-next-line no-console
       console.log('[INBOUND][UNIVERSAL][ENVELOPE]', {
@@ -430,7 +442,7 @@ exports.universalIntegrationHandler = async (req, res) => {
 
       case 'devlab-service':
       case 'devlab':
-        answer = await devlabService.handleInbound(payload);
+        answer = await devlabService.handleInbound(payload, { requester_service: requesterLower });
         break;
 
       // Learning Analytics via Coordinator (universal POST)

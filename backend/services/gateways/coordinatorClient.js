@@ -1,4 +1,5 @@
 const { generateSignature, verifySignature } = require('../../utils/signature');
+const { stringifyEnvelope } = require('../../utils/coordinatorEnvelope');
 
 const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 const COORDINATOR_URL = process.env.COORDINATOR_URL;
@@ -58,7 +59,7 @@ async function postToCoordinator(bodyOrEnvelope) {
   const resp = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(envelope),
+    body: stringifyEnvelope(envelope),
   });
 
   let data = {};

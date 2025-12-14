@@ -329,12 +329,15 @@ function gradeDevLabTheoreticalAnswer({ question_id, user_answer }) {
 exports.gradeDevLabTheoreticalAnswer = gradeDevLabTheoreticalAnswer;
 
 // Phase 08.6 – Universal inbound handler
-exports.handleInbound = async (payload) => {
+exports.handleInbound = async (payload, context = {}) => {
   try {
     const action = String(payload?.action || '').toLowerCase();
+    const requester = String(context?.requester_service || '').toLowerCase();
 
     // 1) Generate theoretical questions with HTML/JS package
     if (action === 'generate-questions') {
+      // DevLab INTERNAL MODE: allow difficulty distribution (no override here)
+      // This path intentionally uses generateDevLabTheoreticalQuestions which may vary difficulty.
       const topic_id = payload?.topic_id != null ? payload.topic_id : undefined;
       const topic_name = typeof payload?.topic_name === 'string' ? payload.topic_name : undefined;
       const skills = Array.isArray(payload?.skills) ? payload.skills.map(String) : [];
@@ -365,11 +368,12 @@ exports.handleInbound = async (payload) => {
     }
 
     // 3) Coding questions build
-    if (action === 'coding') {
+    if (action === 'coding' || action === 'exam' || action === 'assessment') {
       const amount = Number.isFinite(Number(payload?.amount)) ? Number(payload.amount) : 1;
       const skills = Array.isArray(payload?.skills) ? payload.skills.map(String) : [];
       const humanLanguage = typeof payload?.humanLanguage === 'string' ? payload.humanLanguage : 'en';
-      const difficulty = typeof payload?.difficulty === 'string' ? payload.difficulty : 'medium';
+      // EXAM MODE: force medium difficulty regardless of request
+      const difficulty = 'medium';
       const built = await exports.buildCodingQuestionsForExam({
         amount,
         skills,
