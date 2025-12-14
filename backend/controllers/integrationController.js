@@ -410,7 +410,9 @@ exports.universalIntegrationHandler = async (req, res) => {
         break;
 
       case 'management-service':
+      case 'managementreporting-service':
       case 'management':
+      case 'managementreporting':
         answer = await managementService.handleInbound(payload);
         break;
 
