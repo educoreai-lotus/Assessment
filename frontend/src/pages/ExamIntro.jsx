@@ -16,11 +16,15 @@ export default function ExamIntro() {
   const [ack, setAck] = useState(false);
 
   const title = useMemo(() => {
-    if (examType === 'postcourse') return 'Post-Course Exam Rules';
-    return 'Baseline Exam Rules';
+    if (examType === 'postcourse') return 'Post-Course Assessment';
+    return 'Baseline Assessment';
   }, [examType]);
 
   function handleStart() {
+    // Persist acceptance per attempt
+    if (attemptId) {
+      try { localStorage.setItem(`introAccepted:${attemptId}`, 'true'); } catch {}
+    }
     const params = new URLSearchParams();
     if (examId) params.set('examId', examId);
     if (attemptId) params.set('attemptId', attemptId);
@@ -55,26 +59,47 @@ export default function ExamIntro() {
           </div>
 
           <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
-            <h2 className="font-medium mb-2">Rules</h2>
+            <h2 className="font-medium mb-2">What you are about to enter</h2>
             <ul className="list-disc list-inside space-y-1 text-sm">
-              <li>Camera must stay on throughout the exam.</li>
-              <li>Three strikes policy for violations.</li>
-              <li>Tab switching violations will be recorded.</li>
-              <li>Submission is final. For post-course, attempts are limited per policy.</li>
+              <li>Purpose: measure your current proficiency for this assessment.</li>
+              <li>Questions are designed to be medium difficulty.</li>
+              <li>May include theoretical and coding tasks where applicable.</li>
             </ul>
           </div>
 
           <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
-            <h2 className="font-medium mb-2">Time</h2>
-            <p className="text-sm text-zinc-700 dark:text-zinc-300">
-              Time calculation placeholder. {/* TODO: integrate with server-provided timing if available */}
-            </p>
+            <h2 className="font-medium mb-2">Time & submission rules</h2>
+            <ul className="list-disc list-inside space-y-1 text-sm">
+              <li>Time is limited.</li>
+              <li>Submission is final.</li>
+              <li>Your exam will auto-submit if time expires.</li>
+            </ul>
           </div>
+
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
+            <h2 className="font-medium mb-2">Proctoring & integrity rules</h2>
+            <ul className="list-disc list-inside space-y-1 text-sm">
+              <li>Camera must remain active during the exam.</li>
+              <li>Tab switching is monitored and recorded.</li>
+              <li>Three strikes result in automatic termination.</li>
+            </ul>
+          </div>
+
+          {examType === 'postcourse' && (
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
+              <h2 className="font-medium mb-2">Attempts rules</h2>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Attempts are limited by policy.</li>
+                <li>Retakes only cover failed skills.</li>
+                <li>Once passed, the exam is locked.</li>
+              </ul>
+            </div>
+          )}
 
           <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
             <h2 className="font-medium mb-2">Identity verification (coming soon)</h2>
             <p className="text-sm text-zinc-700 dark:text-zinc-300">
-              Placeholder for ID photo + face match flow.
+              ID & face verification will be required before starting (coming soon).
             </p>
           </div>
 
