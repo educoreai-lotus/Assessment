@@ -426,6 +426,76 @@ exports.universalIntegrationHandler = async (req, res) => {
         answer = await devlabService.handleInbound(payload);
         break;
 
+      // Learning Analytics via Coordinator (universal POST)
+      case 'learning-analytics-service':
+      case 'learning-analytics':
+      case 'learninganalytics': {
+        // Mirror GET analytics path: return most recent submitted attempt with skills
+        const pool = require('../config/supabaseDB');
+        const { ExamPackage } = require('../models');
+        const { safeGetBaselineAnalytics, safeGetPostcourseAnalytics } = require('../services/gateways/analyticsGateway');
+        try {
+          const { rows } = await pool.query(
+            `SELECT ea.*, e.exam_type, e.course_id
+             FROM exam_attempts ea
+             JOIN exams e ON e.exam_id = ea.exam_id
+             WHERE ea.submitted_at IS NOT NULL
+             ORDER BY ea.submitted_at DESC
+             LIMIT 1`,
+          );
+          if (rows.length === 0) {
+            // Fallback mock if no submitted attempts yet
+            const type = (payload && payload.exam_type) || 'postcourse';
+            answer = type === 'baseline' ? await safeGetBaselineAnalytics() : await safeGetPostcourseAnalytics();
+            break;
+          }
+          const a = rows[0];
+          const pkg = await ExamPackage.findOne({ attempt_id: String(a.attempt_id) }).lean();
+          const skillsRows = await pool.query(
+            `SELECT skill_id, skill_name, score, status FROM attempt_skills WHERE attempt_id = $1 ORDER BY skill_id ASC`,
+            [a.attempt_id],
+          );
+          const skillList = skillsRows.rows.map((s) => ({
+            skill_id: s.skill_id,
+            skill_name: s.skill_name,
+            score: Number(s.score),
+            status: s.status,
+          }));
+          const policy = a.policy_snapshot || {};
+          const userIdNormalized = normalizeToInt(pkg?.user?.user_id);
+          if (a.exam_type === 'baseline') {
+            answer = {
+              user_id: userIdNormalized != null ? Number(userIdNormalized) : null,
+              exam_type: 'baseline',
+              passing_grade: Number(policy?.passing_grade ?? 0),
+              final_grade: a.final_grade != null ? Number(a.final_grade) : null,
+              passed: !!a.passed,
+              skills: skillList,
+              submitted_at: a.submitted_at ? new Date(a.submitted_at).toISOString() : null,
+            };
+          } else {
+            answer = {
+              user_id: userIdNormalized != null ? Number(userIdNormalized) : null,
+              exam_type: 'postcourse',
+              course_id: a.course_id != null ? Number(a.course_id) : null,
+              course_name: pkg?.metadata?.course_name || null,
+              attempt_no: a.attempt_no || 1,
+              passing_grade: Number(policy?.passing_grade ?? 0),
+              max_attempts: Number(policy?.max_attempts ?? 0) || undefined,
+              final_grade: a.final_grade != null ? Number(a.final_grade) : null,
+              passed: !!a.passed,
+              skills: skillList,
+              submitted_at: a.submitted_at ? new Date(a.submitted_at).toISOString() : null,
+            };
+          }
+        } catch (e) {
+          // Strict fallback to mock
+          const type = (payload && payload.exam_type) || 'postcourse';
+          answer = type === 'baseline' ? await safeGetBaselineAnalytics() : await safeGetPostcourseAnalytics();
+        }
+        break;
+      }
+
       default:
         answer = { error: 'unknown_requester' };
         break;
