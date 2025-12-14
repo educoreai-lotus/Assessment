@@ -53,7 +53,11 @@ async function executePostgres(operation, table, criteria = {}, values = {}) {
 
 	// Local helper: normalize SQL text before executing to guard status-like fields
 	function exec(sql, params) {
-		const normalized = normalizeAISQL(sql);
+		// Route through exported symbol so tests can spy on it
+		const normalizer = (module.exports && typeof module.exports.normalizeAISQL === "function")
+			? module.exports.normalizeAISQL
+			: normalizeAISQL;
+		const normalized = normalizer(sql);
 		return pool.query(normalized, params);
 	}
 
@@ -180,9 +184,23 @@ async function applyDbOperation(operation, table, criteria = {}, values = {}) {
 // Applies to SELECT, WHERE, ORDER BY, GROUP BY.
 function normalizeAISQL(sql) {
 	if (typeof sql !== "string" || sql.trim() === "") return sql;
-	// Heuristic: prefer qualified ea.passed if alias present
-	const hasEa = /\bea\./i.test(sql);
-	const passedRef = hasEa ? "ea.passed" : "passed";
+	// Detect table alias for exam_attempts (prefer qualified <alias>.passed when present)
+	let alias = null;
+	// Match: FROM exam_attempts ea   or   FROM "exam_attempts" ea   (case-insensitive)
+	const aliasMatch = /\bfrom\s+(?:"?exam_attempts"?)(?:\s+as)?\s+([a-zA-Z_][a-zA-Z0-9_]*)\b/i.exec(sql);
+	if (aliasMatch && aliasMatch[1]) {
+		const cand = aliasMatch[1];
+		const candLower = cand.toLowerCase();
+		const forbidden = new Set(["where","group","order","limit","join","left","right","inner","outer","on","union"]);
+		if (!forbidden.has(candLower)) {
+			alias = cand;
+		}
+	}
+	// Fallback heuristic: any explicit ea. reference implies alias ea
+	if (!alias && /\bea\./i.test(sql)) {
+		alias = "ea";
+	}
+	const passedRef = alias ? `${alias}.passed` : "passed";
 	const caseExpr = `CASE WHEN ${passedRef} = true THEN 'passed' WHEN ${passedRef} = false THEN 'failed' ELSE 'in_progress' END`;
 
 	// Helper to build regex for any status alias with optional qualifier
