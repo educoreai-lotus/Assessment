@@ -6,34 +6,42 @@ describe('Universal integration endpoint', () => {
     const res = await request(app)
       .post('/api/fill-content-metrics')
       .send({
-        service_requester: 'SkillsEngine',
-        payload: { stringified_json: JSON.stringify({ user_id: 'u_1' }) },
+        requester_service: 'skills-engine',
+        payload: {
+          action: 'fill-content-metrics',
+          user_id: 'u_1',
+        },
         response: {}
       });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('service_requester', 'Assessment');
-    expect(res.body).toHaveProperty('payload');
+    expect(res.body).toHaveProperty('response');
   });
 
   test('POST /api/fill-content-metrics with coursebuilder (unified envelope)', async () => {
     const res = await request(app)
       .post('/api/fill-content-metrics')
       .send({
-        service_requester: 'CourseBuilder',
-        payload: { stringified_json: JSON.stringify({}) },
+        requester_service: 'course-builder',
+        payload: {
+          action: 'start-postcourse-exam',
+          learner_id: 'u_123',
+          learner_name: 'Test User',
+          course_id: 'c_456',
+          course_name: 'Demo Course'
+        },
         response: {}
       });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('service_requester', 'Assessment');
+    expect(res.body).toHaveProperty('response');
   });
 
   test('POST /api/fill-content-metrics with devlab (unified envelope)', async () => {
     const res = await request(app)
       .post('/api/fill-content-metrics')
       .send({
-        service_requester: 'DevLab',
+        requester_service: 'devlab',
         payload: {
-          action: 'theoretical',
+          action: 'fill-content-metrics',
           topic_id: 1,
           topic_name: 'Arrays',
           amount: 3,
@@ -41,10 +49,9 @@ describe('Universal integration endpoint', () => {
           humanLanguage: 'en',
           skills: ['s_js_async', 's_js_promises']
         },
-        response: { answer: [] }
+        response: {}
       });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('service_requester', 'Assessment');
     expect(res.body).toHaveProperty('response');
   });
 

@@ -21,6 +21,7 @@ const { parseEnvelope, normalizeEnvelope } = require('../utils/coordinatorEnvelo
 const managementService = require('../services/integrations/managementService');
 const directoryService = require('../services/integrations/directoryService');
 const skillsEngineService = require('../services/integrations/skillsEngineService');
+const courseBuilderService = require('../services/integrations/courseBuilderService');
 const devlabService = require('../services/integrations/devlabService');
 const ragService = require('../services/integrations/ragService');
 
