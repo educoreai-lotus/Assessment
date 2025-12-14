@@ -18,6 +18,10 @@ WHERE ea.submitted_at >= NOW() - INTERVAL '24 hours'
 ORDER BY ea.submitted_at DESC;
 `;
 	const { rows } = await pool.query(sql);
+	try {
+		// eslint-disable-next-line no-console
+		console.log('[INBOUND][MANAGEMENT][DAILY_PULL]', { count: rows?.length || 0 });
+	} catch {}
 	return (rows || []).map((r) => ({
 		user_id: r.user_id != null ? Number(r.user_id) : null,
 		course_id: r.course_id != null ? Number(r.course_id) : null,
@@ -31,10 +35,22 @@ ORDER BY ea.submitted_at DESC;
 
 async function fetchReportingRecord({ user_id, exam_type, course_id }) {
   const examType = String(exam_type || '').toLowerCase();
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[INBOUND][MANAGEMENT][FETCH_REPORTING_RECORD][REQ]', {
+      user_id: user_id != null ? Number(String(user_id).replace(/[^0-9]/g, '')) : null,
+      exam_type: examType || null,
+      course_id: course_id != null ? Number(course_id) : null,
+    });
+  } catch {}
   const attempts = await getAttemptsForUser(user_id);
   const filtered = (attempts || []).filter((a) => a.exam_type === examType && (course_id == null || Number(a.course_id) === Number(course_id)));
   const pick = filtered.length > 0 ? filtered[0] : null;
   if (!pick) {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[INBOUND][MANAGEMENT][FETCH_REPORTING_RECORD][MISS]');
+    } catch {}
     return {
       user_id: user_id != null ? Number(String(user_id).replace(/[^0-9]/g, '')) : null,
       course_id: course_id != null ? Number(course_id) : null,
@@ -46,6 +62,15 @@ async function fetchReportingRecord({ user_id, exam_type, course_id }) {
     };
   }
   const detail = await getAttemptDetail(pick.attempt_id);
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[INBOUND][MANAGEMENT][FETCH_REPORTING_RECORD][HIT]', {
+      attempt_id: pick.attempt_id,
+      attempt_no: detail?.attempt_no ?? pick.attempt_no ?? 1,
+      final_grade: detail?.final_grade ?? null,
+      passed: !!detail?.passed,
+    });
+  } catch {}
   return {
     user_id: detail?.user_id ?? null,
     course_id: detail?.course_id ?? null,

@@ -3,6 +3,19 @@ const router = express.Router();
 
 const integrationController = require('../controllers/integrationController');
 
+// Lightweight inbound request logger for integration routes
+router.use((req, res, next) => {
+	try {
+		// eslint-disable-next-line no-console
+		console.log('[INBOUND][API]', {
+			method: req.method,
+			path: req.originalUrl || req.url,
+			ip: req.ip || null,
+		});
+	} catch {}
+	next();
+});
+
 /**
  * @openapi
  * /api/fill-content-metrics:

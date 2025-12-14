@@ -39,6 +39,16 @@ exports.handlePostIntegration = async (req, res, next) => {
     const { api_caller: apiCaller, stringified_json: stringifiedJson } = req.body || {};
     const payload = parseStringifiedJson(stringifiedJson);
 
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[INBOUND][INTEGRATION][POST]', {
+        path: req.originalUrl,
+        api_caller: apiCaller || null,
+        action: (payload && payload.action) || null,
+        ip: req.ip || null,
+      });
+    } catch {}
+
     if (!apiCaller) {
       return res.status(400).json({ error: 'api_caller_required' });
     }
@@ -127,6 +137,13 @@ exports.handlePostIntegration = async (req, res, next) => {
 
 exports.getManagementDailyReport = async (req, res, next) => {
   try {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[INBOUND][MANAGEMENT][GET_DAILY_REPORT]', {
+        path: req.originalUrl,
+        ip: req.ip || null,
+      });
+    } catch {}
     const results = await fetchManagementDailyAttempts();
     return res.json({
       requester_name: 'ManagementReporting',
@@ -145,6 +162,16 @@ exports.handleGetIntegration = async (req, res, next) => {
   try {
     const { api_caller: apiCaller, stringified_json: stringifiedJson } = req.query || {};
     const payload = parseStringifiedJson(stringifiedJson);
+
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[INBOUND][INTEGRATION][GET]', {
+        path: req.originalUrl,
+        api_caller: apiCaller || null,
+        action: (payload && payload.action) || null,
+        ip: req.ip || null,
+      });
+    } catch {}
     
     if (!apiCaller) {
       return res.status(400).json({ error: 'api_caller_required' });
@@ -219,6 +246,10 @@ exports.handleGetIntegration = async (req, res, next) => {
       }
       case 'management': {
         try {
+          try {
+            // eslint-disable-next-line no-console
+            console.log('[INBOUND][MANAGEMENT][GET]', { mode: 'latest_submitted' });
+          } catch {}
           const { rows } = await pool.query(
             `SELECT ea.attempt_no, ea.final_grade, ea.passed, ea.submitted_at,
                     e.exam_type, e.course_id
