@@ -409,6 +409,13 @@ exports.universalIntegrationHandler = async (req, res) => {
         answer = await directoryService.handleInbound(payload);
         break;
 
+      // Course Builder via Coordinator (universal POST)
+      case 'course-builder-service':
+      case 'course-builder':
+      case 'coursebuilder':
+        answer = await courseBuilderService.handleInbound(payload);
+        break;
+
       case 'management-service':
       case 'managementreporting-service':
       case 'management':
