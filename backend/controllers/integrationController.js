@@ -437,6 +437,12 @@ exports.universalIntegrationHandler = async (req, res) => {
         answer_type: answer && typeof answer,
         answer_keys: answer && typeof answer === 'object' ? Object.keys(answer) : null,
       });
+      // Log compact body snapshot (truncate to avoid excessive logs)
+      const bodyStr = (() => {
+        try { return JSON.stringify(answer); } catch { return String(answer); }
+      })();
+      const snapshot = bodyStr && bodyStr.length > 2000 ? (bodyStr.slice(0, 2000) + '…[truncated]') : bodyStr;
+      console.log('[OUTBOUND][INTEGRATION][RESPONSE_BODY]', snapshot);
     } catch {}
 
     return res.status(200).json({ response: { answer } });

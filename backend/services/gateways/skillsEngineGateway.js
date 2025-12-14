@@ -18,6 +18,12 @@ async function safeFetchBaselineSkills(params) {
       },
       response: { answer: '' },
     };
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][REQUEST_PAYLOAD]', {
+        payload_keys: Object.keys(envelope.payload || {}),
+      });
+    } catch {}
     const ret = await postToCoordinator(envelope).catch(() => ({}));
     let respString;
     if (typeof ret === 'string') respString = ret;
@@ -37,6 +43,9 @@ async function safeFetchBaselineSkills(params) {
         received_type: Array.isArray(answer) ? 'array' : (answer && typeof answer),
         count: Array.isArray(answer) ? answer.length : undefined,
       });
+      const bodyStr = (() => { try { return JSON.stringify(answer); } catch { return String(answer); } })();
+      const snapshot = bodyStr && bodyStr.length > 1500 ? (bodyStr.slice(0, 1500) + '…[truncated]') : bodyStr;
+      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][RESPONSE_BODY]', snapshot);
     } catch {}
     return answer;
   } catch (err) {
@@ -55,6 +64,12 @@ async function safePushAssessmentResults(payload) {
       },
       response: { answer: '' },
     };
+    try {
+      const reqStr = (() => { try { return JSON.stringify(envelope.payload); } catch { return String(envelope.payload); } })();
+      const reqSnap = reqStr && reqStr.length > 1500 ? (reqStr.slice(0, 1500) + '…[truncated]') : reqStr;
+      // eslint-disable-next-line no-console
+      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][REQUEST_PAYLOAD]', reqSnap);
+    } catch {}
     const ret = await postToCoordinator(envelope).catch(() => ({}));
     let respString;
     if (typeof ret === 'string') respString = ret;
@@ -78,6 +93,9 @@ async function safePushAssessmentResults(payload) {
         },
         answer_type: answer && typeof answer,
       });
+      const bodyStr = (() => { try { return JSON.stringify(answer); } catch { return String(answer); } })();
+      const snapshot = bodyStr && bodyStr.length > 1500 ? (bodyStr.slice(0, 1500) + '…[truncated]') : bodyStr;
+      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][RESPONSE_BODY]', snapshot);
     } catch {}
     return answer;
   } catch (err) {
