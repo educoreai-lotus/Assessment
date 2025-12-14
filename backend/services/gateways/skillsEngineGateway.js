@@ -1,5 +1,6 @@
 const { mockFetchBaselineSkills, mockPushAssessmentResults } = require('../mocks/skillsEngineMock');
-const { postToCoordinator } = require('./coordinatorClient');
+const { sendToCoordinator } = require('../integrations/envelopeSender');
+const { buildSkillsEngineFetchBaselinePayload, buildSkillsEngineResultPayload } = require('../integrations/payloadBuilders/skillsEngine.payload');
 const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
 function getCoordinatorUrl() {
@@ -10,21 +11,14 @@ function getCoordinatorUrl() {
 
 async function safeFetchBaselineSkills(params) {
   try {
-    const envelope = {
-      requester_service: SERVICE_NAME,
-      payload: {
-        action: 'fetch-baseline-skills',
-        ...(params || {}),
-      },
-      response: { answer: '' },
-    };
+    const payload = buildSkillsEngineFetchBaselinePayload(params || {});
     try {
       // eslint-disable-next-line no-console
       console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][REQUEST_PAYLOAD]', {
         payload_keys: Object.keys(envelope.payload || {}),
       });
     } catch {}
-    const ret = await postToCoordinator(envelope).catch(() => ({}));
+    const ret = await sendToCoordinator({ targetService: 'skills-engine', payload }).catch(() => ({}));
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;
@@ -56,21 +50,14 @@ async function safeFetchBaselineSkills(params) {
 
 async function safePushAssessmentResults(payload) {
   try {
-    const envelope = {
-      requester_service: SERVICE_NAME,
-      payload: {
-        action: 'baseline-exam-result',
-        ...(payload || {}),
-      },
-      response: { answer: '' },
-    };
+    const shaped = buildSkillsEngineResultPayload(payload || {});
     try {
       const reqStr = (() => { try { return JSON.stringify(envelope.payload); } catch { return String(envelope.payload); } })();
       const reqSnap = reqStr && reqStr.length > 1500 ? (reqStr.slice(0, 1500) + '…[truncated]') : reqStr;
       // eslint-disable-next-line no-console
       console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][REQUEST_PAYLOAD]', reqSnap);
     } catch {}
-    const ret = await postToCoordinator(envelope).catch(() => ({}));
+    const ret = await sendToCoordinator({ targetService: 'skills-engine', payload: shaped }).catch(() => ({}));
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;

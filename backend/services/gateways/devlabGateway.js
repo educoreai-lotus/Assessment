@@ -4,7 +4,8 @@ function getCoordinatorUrl() {
 	return String(base).replace(/\/+$/, '');
 }
 
-const { postToCoordinator } = require('./coordinatorClient');
+const { sendToCoordinator } = require('../integrations/envelopeSender');
+const { buildDevLabCodingRequestPayload, buildDevLabGradePayload } = require('../integrations/payloadBuilders/devlab.payload');
 const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
 function buildEnvelope(payloadObj) {
@@ -18,7 +19,7 @@ function buildEnvelope(payloadObj) {
 
 async function sendToDevlabEnvelope(payloadObj) {
 	const envelope = buildEnvelope(payloadObj);
-	const { data: json } = await postToCoordinator(envelope).catch(() => ({ data: {} }));
+	const { data: json } = await sendToCoordinator({ targetService: 'devlab', payload: envelope.payload }).catch(() => ({ data: {} }));
 	// Prefer new format: { success: true, data: { questions: [...] } }
 	if (json && json.success && json.data && Array.isArray(json.data.questions)) {
 		return json.data.questions;
@@ -32,14 +33,8 @@ async function sendToDevlabEnvelope(payloadObj) {
 
 async function requestCodingQuestions({ amount, skills, humanLanguage = 'en', difficulty = 'medium' }) {
 	try {
-		const resp = await sendToDevlabEnvelope({
-			action: 'coding',
-			amount,
-			difficulty,
-			humanLanguage,
-			programming_language: 'javascript',
-			skills,
-		});
+		const shaped = buildDevLabCodingRequestPayload({ amount, skills, humanLanguage, difficulty });
+		const resp = await sendToDevlabEnvelope(shaped);
 		// resp may already be an array (new behavior) or an envelope with answer arrays (legacy)
 		const answer = Array.isArray(resp) ? resp : (Array.isArray(resp?.answer) ? resp.answer : (Array.isArray(resp?.response?.answer) ? resp.response.answer : []));
 		const isEmpty = !Array.isArray(answer) || answer.length === 0;
@@ -60,7 +55,8 @@ async function requestCodingQuestions({ amount, skills, humanLanguage = 'en', di
 
 async function sendCodingGradeEnvelope(payloadObj) {
 	try {
-		const resp = await sendToDevlabEnvelope(payloadObj);
+		const shaped = buildDevLabGradePayload(payloadObj || {});
+		const resp = await sendToDevlabEnvelope(shaped);
 		const answer = Array.isArray(resp?.answer) ? resp.answer : (Array.isArray(resp?.response?.answer) ? resp.response.answer : []);
 		const isEmpty = !Array.isArray(answer) || answer.length === 0;
 		if (isEmpty) {

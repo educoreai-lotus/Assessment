@@ -1,19 +1,11 @@
 const { mockFetchPolicy, mockPushExamResults } = require('../mocks/directoryMock');
-const { postToCoordinator } = require('./coordinatorClient');
+const { sendToCoordinator } = require('../integrations/envelopeSender');
+const { buildDirectoryPolicyPayload, buildDirectoryResultPayload } = require('../integrations/payloadBuilders/directory.payload');
 const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
 async function fetchPolicy(examType, userId, courseId) {
-  const envelope = {
-    requester_service: SERVICE_NAME,
-    payload: {
-      action: 'fetch-policy',
-      exam_type: examType,
-      user_id: userId,
-      course_id: courseId,
-    },
-    response: { answer: '' },
-  };
-  const ret = await postToCoordinator(envelope);
+  const payload = buildDirectoryPolicyPayload({ exam_type: examType, user_id: userId, course_id: courseId });
+  const ret = await sendToCoordinator({ targetService: 'directory', payload });
   let respString;
   if (typeof ret === 'string') respString = ret;
   else if (ret && typeof ret.data === 'string') respString = ret.data;
@@ -37,15 +29,8 @@ async function safeFetchPolicy(examType) {
 // Optional push to Directory (kept for compatibility); now via Coordinator envelope
 async function safePushExamResults(payload) {
   try {
-    const envelope = {
-      requester_service: SERVICE_NAME,
-      payload: {
-        action: 'push-exam-results',
-        ...(payload || {}),
-      },
-      response: { answer: '' },
-    };
-    const ret = await postToCoordinator(envelope);
+    const shaped = buildDirectoryResultPayload(payload || {});
+    const ret = await sendToCoordinator({ targetService: 'directory', payload: shaped });
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;

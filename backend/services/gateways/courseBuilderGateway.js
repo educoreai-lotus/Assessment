@@ -1,5 +1,6 @@
 const { mockFetchCoverage, mockPushExamResults } = require('../mocks/courseBuilderMock');
-const { postToCoordinator } = require('./coordinatorClient');
+const { sendToCoordinator } = require('../integrations/envelopeSender');
+const { buildCourseBuilderCoveragePayload, buildCourseBuilderResultPayload } = require('../integrations/payloadBuilders/courseBuilder.payload');
 const SERVICE_NAME = process.env.SERVICE_NAME || 'assessment-service';
 
 function getCoordinatorUrl() {
@@ -10,15 +11,8 @@ function getCoordinatorUrl() {
 
 async function safeFetchCoverage(params) {
   try {
-    const envelope = {
-      requester_service: SERVICE_NAME,
-      payload: {
-        action: 'fetch-coverage-map',
-        ...(params || {}),
-      },
-      response: { answer: '' },
-    };
-    const ret = await postToCoordinator(envelope).catch(() => ({}));
+    const payload = buildCourseBuilderCoveragePayload(params || {});
+    const ret = await sendToCoordinator({ targetService: 'course-builder', payload }).catch(() => ({}));
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;
@@ -41,15 +35,8 @@ async function safeFetchCoverage(params) {
 
 // Outgoing results push through Coordinator
 async function sendCourseBuilderExamResults(payloadObj) {
-  const envelope = {
-    requester_service: SERVICE_NAME,
-    payload: {
-      action: 'postcourse-exam-result',
-      ...(payloadObj || {}),
-    },
-    response: { answer: '' },
-  };
-  const ret = await postToCoordinator(envelope).catch(() => ({}));
+  const shaped = buildCourseBuilderResultPayload(payloadObj || {});
+  const ret = await sendToCoordinator({ targetService: 'course-builder', payload: shaped }).catch(() => ({}));
   let respString;
   if (typeof ret === 'string') respString = ret;
   else if (ret && typeof ret.data === 'string') respString = ret.data;
