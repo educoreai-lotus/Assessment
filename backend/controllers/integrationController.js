@@ -343,6 +343,14 @@ exports.handleCourseBuilderPreExam = async (req, res, next) => {
 // Phase 09 – Universal inbound Coordinator handler (single route)
 exports.universalIntegrationHandler = async (req, res) => {
   try {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[INBOUND][UNIVERSAL][POST]', {
+        path: req.originalUrl,
+        body_type: typeof req.body,
+        ip: req.ip || null,
+      });
+    } catch {}
     // Accept both RAW STRING and already-parsed JSON bodies
     let envelope;
     if (typeof req.body === 'string') {
@@ -360,12 +368,34 @@ exports.universalIntegrationHandler = async (req, res) => {
     if (typeof payload === 'string') {
       try { payload = JSON.parse(payload); } catch {}
     }
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[INBOUND][UNIVERSAL][ENVELOPE]', {
+        requester_service: requester || null,
+        action: (payload && payload.action) || null,
+        payload_keys: payload && typeof payload === 'object' ? Object.keys(payload) : null,
+      });
+    } catch {}
     if (!requester || !payload) {
+      try {
+        // eslint-disable-next-line no-console
+        console.warn('[INBOUND][UNIVERSAL][INVALID_ENVELOPE]', {
+          requester_present: !!requester,
+          payload_present: !!payload,
+        });
+      } catch {}
       return res.status(400).json({ error: 'invalid_envelope' });
     }
 
     // Dispatch by requester_service only
     const requesterLower = String(requester).toLowerCase();
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[INBOUND][UNIVERSAL][DISPATCH]', {
+        requester: requesterLower,
+        action: (payload && payload.action) || null,
+      });
+    } catch {}
     let answer;
     switch (requesterLower) {
       case 'skills-engine-service':
