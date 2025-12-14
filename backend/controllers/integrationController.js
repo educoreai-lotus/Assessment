@@ -429,6 +429,16 @@ exports.universalIntegrationHandler = async (req, res) => {
         break;
     }
 
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[OUTBOUND][INTEGRATION][RESPONSE]', {
+        requester: requesterLower,
+        action: (payload && payload.action) || null,
+        answer_type: answer && typeof answer,
+        answer_keys: answer && typeof answer === 'object' ? Object.keys(answer) : null,
+      });
+    } catch {}
+
     return res.status(200).json({ response: { answer } });
   } catch (err) {
     return res.status(400).json({ error: 'invalid_envelope', message: err?.message });

@@ -31,6 +31,13 @@ async function safeFetchBaselineSkills(params) {
       try { console.log('[MOCK-FALLBACK][SkillsEngine][baseline-skills]', { hasParams: !!params }); } catch {}
       return mockFetchBaselineSkills(params || {});
     }
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][SUCCESS]', {
+        received_type: Array.isArray(answer) ? 'array' : (answer && typeof answer),
+        count: Array.isArray(answer) ? answer.length : undefined,
+      });
+    } catch {}
     return answer;
   } catch (err) {
     console.warn('SkillsEngine baseline fetch via Coordinator failed, using mock. Reason:', err?.message || err);
@@ -61,6 +68,17 @@ async function safePushAssessmentResults(payload) {
       try { console.log('[MOCK-FALLBACK][SkillsEngine][push-results]', { hasPayload: !!payload }); } catch {}
       return mockPushAssessmentResults(payload);
     }
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][SUCCESS]', {
+        request_summary: {
+          user_id: payload?.user_id ?? null,
+          exam_type: payload?.exam_type ?? null,
+          skills: Array.isArray(payload?.skills) ? payload.skills.length : 0,
+        },
+        answer_type: answer && typeof answer,
+      });
+    } catch {}
     return answer;
   } catch (err) {
     console.warn('SkillsEngine push results via Coordinator failed, using mock. Reason:', err?.message || err);
