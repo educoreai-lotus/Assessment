@@ -125,7 +125,10 @@ exports.createExam = async (req, res, next) => {
         },
       });
     } catch {}
+    const __t0 = Date.now();
+    try { console.log('[TRACE][EXAM][CREATE][STEP] controller_call start'); } catch {}
     const resp = await createExam({ user_id: userStr, exam_type, course_id, course_name });
+    try { console.log('[TRACE][EXAM][CREATE][STEP] controller_call end elapsed_ms=%d', Date.now() - __t0); } catch {}
     if (resp && resp.error) {
       const errorCode = String(resp.error);
       if (errorCode === 'baseline_already_completed' || errorCode === 'max_attempts_reached' || errorCode === 'retake_not_allowed') {

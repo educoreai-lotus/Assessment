@@ -248,13 +248,19 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   if (!Number.isFinite(userInt)) {
     return { error: "invalid_user_id" };
   }
+  const __t0 = Date.now();
+  const __lap = (label) => {
+    try { console.log('[TRACE][%s][CREATE][STEP] %s elapsed_ms=%d', String(exam_type || '').toUpperCase(), label, Date.now() - __t0); } catch {}
+  };
   try {
     // eslint-disable-next-line no-console
     console.log("[TRACE][USER_ID][MAPPED]", { original: user_id, numeric: userInt });
   } catch {}
   // Ensure a users row exists for this learner before creating exams
   try {
+    __lap('ensureUserExists start');
     await ensureUserExists({ user_id_numeric: userInt, user_name, company_id });
+    __lap('ensureUserExists end');
   } catch {}
   // Fetch upstream data via gateways with safe mocks
   let policy = {};
@@ -881,6 +887,7 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   questions = validateTheoreticalQuestions(questions);
   if (process.env.NODE_ENV !== "test") {
     try {
+      __lap('buildExamPackageDoc start');
       const pkg = await buildExamPackageDoc({
         exam_id: examId,
         attempt_id: attemptId,
@@ -896,11 +903,14 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
         time_allocated_minutes: durationMinutes || undefined,
         expires_at_iso: expiresAtIso || undefined,
       });
+      __lap('buildExamPackageDoc end');
       // Backfill package_ref in PG
+      __lap('pg_update_package_ref start');
       await pool.query(
         `UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`,
         [pkg._id, attemptId],
       );
+      __lap('pg_update_package_ref end');
       try {
         // eslint-disable-next-line no-console
         if (exam_type === 'postcourse') {
@@ -925,11 +935,13 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
     } catch {}
     // End-to-end validation: Confirm package exists
     try {
+      __lap('verify_package start');
       const verify = await ExamPackage.findOne({ attempt_id: String(attemptId) }).lean();
       if (!verify) {
         try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_incomplete', message: 'ExamPackage missing after creation' }); } catch {}
         return { error: 'exam_incomplete' };
       }
+      __lap('verify_package end');
     } catch (e) {
       try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'exam_incomplete', message: e?.message }); } catch {}
       return { error: 'exam_incomplete' };

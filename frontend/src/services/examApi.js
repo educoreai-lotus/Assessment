@@ -3,6 +3,15 @@ import { http, httpReady } from './http';
 export const examApi = {
   async create(payload) {
     await httpReady;
+    try {
+      // TEMP DIAGNOSTIC: log resolved base URL + endpoint
+      // eslint-disable-next-line no-console
+      console.log('[HTTP][EXAMS][CREATE][REQUEST]', {
+        baseURL: http?.defaults?.baseURL || null,
+        url: '/api/exams',
+        timeout_ms: http?.defaults?.timeout,
+      });
+    } catch {}
     return http.post('/api/exams', payload).then(r => r.data);
   },
   async resolve(examId) {
