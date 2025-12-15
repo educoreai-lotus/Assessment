@@ -10,7 +10,7 @@
 // - zero prefix collisions
 // - correct grading and attempt lookup
 
-const { createExam, markAttemptStarted, getPackageByExamId, getPackageByAttemptId, submitAttempt } = require('../services/core/examsService');
+const { createExamRecord, prepareExamAsync, markAttemptStarted, getPackageByExamId, getPackageByAttemptId, submitAttempt } = require('../services/core/examsService');
 const pool = require('../config/supabaseDB');
 const { ProctoringSession, ExamPackage } = require('../models');
 const { normalizeToInt } = require("../services/core/idNormalizer");
@@ -126,9 +126,9 @@ exports.createExam = async (req, res, next) => {
       });
     } catch {}
     const __t0 = Date.now();
-    try { console.log('[TRACE][EXAM][CREATE][STEP] controller_call start'); } catch {}
-    const resp = await createExam({ user_id: userStr, exam_type, course_id, course_name });
-    try { console.log('[TRACE][EXAM][CREATE][STEP] controller_call end elapsed_ms=%d', Date.now() - __t0); } catch {}
+    try { console.log('[TRACE][EXAM][CREATE][STEP] fast_create start'); } catch {}
+    const resp = await createExamRecord({ user_id: userStr, exam_type, course_id, course_name });
+    try { console.log('[TRACE][EXAM][CREATE][STEP] fast_create end elapsed_ms=%d', Date.now() - __t0); } catch {}
     if (resp && resp.error) {
       const errorCode = String(resp.error);
       if (errorCode === 'baseline_already_completed' || errorCode === 'max_attempts_reached' || errorCode === 'retake_not_allowed') {
@@ -140,11 +140,17 @@ exports.createExam = async (req, res, next) => {
       }
       return res.status(400).json({ error: errorCode, message: resp.message || errorCode });
     }
+
+    // Immediately kick off async preparation (do NOT await)
     try {
-      console.log('[TRACE][EXAM][CREATE][RETURN]', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id });
-      // Explicit assertion: createExam does NOT start proctoring or the exam
-      console.log('[TRACE][CREATE] no startExam', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id });
+      setImmediate(() => {
+        try { console.log('[TRACE] prepareExamAsync started', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id }); } catch {}
+        prepareExamAsync(resp.exam_id, resp.attempt_id, { user_id: userStr, exam_type, course_id, course_name })
+          .catch((e) => { try { console.log('[TRACE][prepareExamAsync ERROR]', { message: e?.message }); } catch {} });
+      });
     } catch {}
+
+    try { console.log('[TRACE] POST /api/exams -> 201 in %dms', Date.now() - __t0); } catch {}
     return res.status(201).json(resp);
   } catch (err) {
     return next(err);
@@ -540,6 +546,28 @@ exports.resolveExam = async (req, res, next) => {
       duration_seconds: durationSeconds,
       status: isExpired ? 'expired' : (a.status || 'active'),
     });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// GET /api/exams/:examId/status - preparation status for async flow
+exports.getExamStatus = async (req, res, next) => {
+  try {
+    const { examId } = req.params;
+    const examIdNum = normalizeToInt(examId);
+    if (examIdNum == null) return res.status(400).json({ error: 'invalid_exam_id' });
+    const { rows } = await pool.query(
+      `SELECT COALESCE(status, 'READY') AS status, COALESCE(progress, 0) AS progress, error_message, failed_step
+       FROM exams WHERE exam_id = $1`,
+      [examIdNum],
+    ).catch(()=>({ rows: [] }));
+    if (!rows || rows.length === 0) return res.status(404).json({ error: 'exam_not_found' });
+    const row = rows[0];
+    const out = { status: row.status, progress: Number(row.progress || 0) };
+    if (row.error_message) out.error = row.error_message;
+    if (row.failed_step) out.failed_step = row.failed_step;
+    return res.json(out);
   } catch (err) {
     return next(err);
   }

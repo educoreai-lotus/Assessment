@@ -28,6 +28,7 @@ const devlabIntegration = require("../integrations/devlabService");
 const { safeSendSummary } = require("../gateways/protocolCameraGateway");
 const { normalizeToInt } = require("./idNormalizer");
 const axios = require("axios");
+const { ensureExamStatusColumns } = require("../../db/migrations");
 
 function nowIso() {
   return new Date().toISOString();
@@ -1673,8 +1674,273 @@ async function submitAttempt({ attempt_id, answers }) {
   };
 }
 
+// ----------------------
+// Async-first creation
+// ----------------------
+async function setExamStatus(examId, { status, progress, error_message = null, failed_step = null }) {
+  try {
+    await pool.query(
+      `UPDATE exams
+       SET status = COALESCE($2, status),
+           progress = COALESCE($3, progress),
+           error_message = $4,
+           failed_step = $5,
+           updated_at = NOW()
+       WHERE exam_id = $1`,
+      [examId, status || null, Number.isFinite(Number(progress)) ? Number(progress) : null, error_message, failed_step],
+    );
+  } catch {}
+}
+
+async function createExamRecord({ user_id, exam_type, course_id, course_name, user_name, company_id }) {
+  const userStr = String(user_id);
+  const userInt = Number(userStr.replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(userInt)) {
+    return { error: "invalid_user_id" };
+  }
+  const __t0 = Date.now();
+  const lap = (label) => { try { console.log('[TRACE][CREATE][FAST]%s %s ms', '', `${label}: ${Date.now() - __t0}`); } catch {} };
+
+  await ensureExamStatusColumns(pool);
+  await ensureUserExists({ user_id_numeric: userInt, user_name, company_id }).catch(()=>{});
+
+  // Idempotency: existing PREPARING/READY exam
+  try {
+    const sql = `
+      SELECT e.exam_id, COALESCE(e.status, 'READY') AS status,
+             (SELECT ea.attempt_id FROM exam_attempts ea WHERE ea.exam_id = e.exam_id ORDER BY ea.attempt_no DESC, ea.attempt_id DESC LIMIT 1) AS attempt_id
+      FROM exams e
+      WHERE e.user_id = $1 AND e.exam_type = $2
+        ${String(exam_type) === 'postcourse' ? 'AND e.course_id = $3' : ''}
+      ORDER BY e.exam_id DESC
+      LIMIT 1`;
+    const params = String(exam_type) === 'postcourse'
+      ? [userInt, exam_type, (Number.isFinite(Number(course_id)) ? Number(course_id) : null)]
+      : [userInt, exam_type];
+    const row = await pool.query(sql, params).then(r => r.rows?.[0] || null).catch(()=>null);
+    if (row && (row.status === 'PREPARING' || row.status === 'READY')) {
+      try { console.log('[TRACE][IDEMPOTENCY] returning existing exam', { exam_id: row.exam_id, attempt_id: row.attempt_id, status: row.status }); } catch {}
+      return {
+        exam_id: Number(row.exam_id),
+        attempt_id: Number(row.attempt_id || 0),
+        exam_type,
+        user_id: userInt,
+        course_id: Number.isFinite(Number(course_id)) ? Number(course_id) : null,
+        duration_seconds: null,
+        started_at: null,
+        expires_at: null,
+      };
+    }
+  } catch {}
+
+  // Baseline: block if already submitted
+  if (String(exam_type) === 'baseline') {
+    const { rows: completedBaseline } = await pool.query(
+      `SELECT ea.attempt_id
+       FROM exam_attempts ea
+       JOIN exams e ON e.exam_id = ea.exam_id
+       WHERE e.user_id = $1 AND e.exam_type = 'baseline' AND ea.submitted_at IS NOT NULL
+       LIMIT 1`,
+      [userInt],
+    );
+    if (completedBaseline && completedBaseline.length > 0) {
+      return { error: 'baseline_already_completed' };
+    }
+  }
+
+  const courseInt = normalizeToInt(course_id);
+  let examId;
+  try {
+    const ins = await pool.query(
+      `INSERT INTO exams (exam_type, user_id, course_id, status, progress, updated_at)
+       VALUES ($1, $2, $3, 'PREPARING', 0, NOW())
+       RETURNING exam_id`,
+      [exam_type, userInt, courseInt],
+    );
+    examId = ins.rows[0].exam_id;
+  } catch (e) {
+    return { error: 'invalid_user_id' };
+  }
+
+  let attemptId;
+  try {
+    const insAtt = await pool.query(
+      `INSERT INTO exam_attempts (exam_id, attempt_no, policy_snapshot, package_ref)
+       VALUES ($1, $2, $3::jsonb, $4)
+       RETURNING attempt_id`,
+      [examId, 1, JSON.stringify({}), null],
+    );
+    attemptId = insAtt.rows[0].attempt_id;
+  } catch (e) {
+    return { error: 'exam_creation_failed' };
+  }
+
+  lap('created');
+  return {
+    exam_id: Number(examId),
+    attempt_id: Number(attemptId),
+    exam_type,
+    user_id: Number(userInt),
+    course_id: courseInt != null ? Number(courseInt) : null,
+    passing_grade: null,
+    max_attempts: null,
+    policy_snapshot: {},
+    started_at: null,
+    expires_at: null,
+    duration_seconds: null,
+  };
+}
+
+async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_id, course_name }) {
+  const userStr = String(user_id);
+  const userInt = Number(userStr.replace(/[^0-9]/g, ""));
+  const courseInt = normalizeToInt(course_id);
+  try { console.log('[TRACE][prepareExamAsync started]', { exam_id: examId, attempt_id: attemptId, exam_type }); } catch {}
+  await setExamStatus(examId, { status: 'PREPARING', progress: 5 });
+
+  // Fetch upstream policy/skills/coverage
+  let policy = {};
+  let skillsPayload = null;
+  let coveragePayload = null;
+  const isTest = String(process.env.NODE_ENV || '').toLowerCase() === 'test';
+  try {
+    if (exam_type === 'baseline') {
+      const { safeFetchBaselineSkills } = require("../gateways/skillsEngineGateway");
+      const { safeFetchPolicy } = require("../gateways/directoryGateway");
+      skillsPayload = await safeFetchBaselineSkills({ user_id });
+      policy = isTest
+        ? ({ passing_grade: 70, max_attempts: 1 })
+        : await safeFetchPolicy('baseline');
+    } else if (exam_type === 'postcourse') {
+      const { safeFetchPolicy } = require("../gateways/directoryGateway");
+      const { safeFetchCoverage } = require("../gateways/courseBuilderGateway");
+      policy = isTest
+        ? ({ passing_grade: 70, max_attempts: 3 })
+        : await safeFetchPolicy('postcourse');
+      coveragePayload = await safeFetchCoverage({
+        learner_id: user_id,
+        learner_name: undefined,
+        course_id,
+      });
+    } else {
+      await setExamStatus(examId, { status: 'FAILED', error_message: 'invalid_exam_type', failed_step: 'input_validation', progress: 100 });
+      return;
+    }
+  } catch (e) {
+    await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'fetch_failed', failed_step: 'fetch_upstream', progress: 100 });
+    return;
+  }
+
+  // Normalize and compute duration
+  const { normalizeSkills } = require("./skillsUtils");
+  const normalizedBaselineSkills = normalizeSkills(skillsPayload?.skills || []);
+  const rawCoverage = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
+  const normalizedCoverageMap = rawCoverage.map((item) => ({ ...item, skills: normalizeSkills(item?.skills || []) })).filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
+  const skillsArray = exam_type === 'postcourse'
+    ? Array.from(new Map(normalizedCoverageMap.flatMap((it)=>it.skills).map((s)=>[String(s.skill_id), s])).values())
+    : normalizedBaselineSkills;
+  const coverageMap = normalizedCoverageMap;
+  const resolvedCourseName = exam_type === 'postcourse' ? (coveragePayload?.course_name || course_name || null) : null;
+  let questionCount = 0;
+  if (exam_type === 'baseline') {
+    questionCount = Array.isArray(skillsArray) ? skillsArray.length : 0;
+  } else {
+    const uniqueSkillIds = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
+    questionCount = uniqueSkillIds.length * 2;
+  }
+  if (isTest && (!Number.isFinite(questionCount) || questionCount < 2)) questionCount = 2;
+  const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
+  try { await pool.query(`UPDATE exam_attempts SET policy_snapshot = $1::jsonb, duration_minutes = $2 WHERE attempt_id = $3`, [JSON.stringify(policy || {}), durationMinutes || null, attemptId]); } catch {}
+  await setExamStatus(examId, { progress: 40 });
+
+  // Generate questions and coding
+  const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
+  const { validateTheoreticalQuestions, normalizeAiQuestion } = require("./theoryService");
+  const devlabIntegration = require("../integrations/devlabService");
+
+  let codingQuestionsDecorated = [];
+  try {
+    const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
+    codingQuestionsDecorated = await devlabIntegration.buildCodingQuestionsForExam({ amount: 2, skills: ids, humanLanguage: 'en', difficulty: 'medium' });
+  } catch { codingQuestionsDecorated = []; }
+  await setExamStatus(examId, { progress: 55 });
+
+  let questions = [];
+  try {
+    const uniqueSkills = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
+    const items = [];
+    if (exam_type === 'postcourse') {
+      for (const sid of uniqueSkills) { items.push({ skill_id: sid, type: 'mcq', difficulty: 'medium', humanLanguage: 'en' }); items.push({ skill_id: sid, type: 'open', difficulty: 'medium', humanLanguage: 'en' }); }
+    } else {
+      for (let i = 0; i < questionCount; i += 1) {
+        const sid = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
+        if (!sid) continue;
+        const type = i % 2 === 0 ? 'mcq' : 'open';
+        items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type });
+      }
+    }
+    let generated = [];
+    if (isTest) {
+      const sid = (Array.isArray(items) && items[0]?.skill_id) || 's_general';
+      generated = [{ qid: 'test_mcq', type: 'mcq', skill_id: sid, difficulty: 'medium', question: `MCQ for ${sid}`, options: ['A','B','C'], correct_answer: 'A' },
+                   { qid: 'test_open', type: 'open', skill_id: sid, difficulty: 'medium', question: `Explain ${sid}` }];
+    } else {
+      const seed = `${Date.now()}-${Math.random()}`;
+      generated = await generateTheoreticalQuestions({ items, seed });
+    }
+    const validated = [];
+    for (const q of generated) {
+      let validation = { valid: true, reasons: [] };
+      if (!isTest) { try { validation = await validateQuestion({ question: q }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; } }
+      const hints = q?.hint ? [String(q.hint)] : undefined;
+      validated.push(normalizeAiQuestion({ ...q, hint: hints }));
+    }
+    questions = validateTheoreticalQuestions(validated);
+  } catch (e) {
+    try {
+      const { buildMockQuestions } = require("../mocks/theoryMock");
+      const skillsForMocks = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
+      const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
+      const normalizedMcqs = mocks.map((m) => ({ qid: m.qid, type: 'mcq', skill_id: m.skill_id, difficulty: 'medium', question: m.prompt?.question || '', stem: m.prompt?.question || '', options: Array.isArray(m.prompt?.options) ? m.prompt.options : [], correct_answer: m.prompt?.correct_answer || '' }));
+      const duplicatedForOpen = exam_type === 'postcourse' ? normalizedMcqs : [];
+      questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+    } catch (e2) {
+      await setExamStatus(examId, { status: 'FAILED', error_message: e2?.message || 'generation_failed', failed_step: 'generate_questions', progress: 100 });
+      return;
+    }
+  }
+  await setExamStatus(examId, { progress: 80 });
+
+  try {
+    const pkg = await buildExamPackageDoc({
+      exam_id: examId,
+      attempt_id: attemptId,
+      user_id: userStr,
+      exam_type,
+      policy,
+      skills: Array.isArray(skillsArray) ? skillsArray : [],
+      coverage_map: Array.isArray(coverageMap) ? coverageMap : [],
+      course_id: course_id != null ? course_id : null,
+      course_name: resolvedCourseName || undefined,
+      questions,
+      coding_questions: codingQuestionsDecorated,
+      time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
+      expires_at_iso: null,
+    });
+    await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
+  } catch (e) {
+    await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'persist_package_failed', failed_step: 'persist_package', progress: 100 });
+    return;
+  }
+
+  await setExamStatus(examId, { status: 'READY', progress: 100 });
+  try { console.log('[TRACE][prepareExamAsync READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+}
+
 module.exports = {
   createExam,
+  createExamRecord,
+  prepareExamAsync,
   markAttemptStarted,
   getPackageByExamId,
   getPackageByAttemptId,

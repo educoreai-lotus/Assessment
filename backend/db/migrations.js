@@ -45,6 +45,66 @@ async function runBootstrapMigrations(pool) {
   await ensureExamTypeEnum(pool);
 }
 
-module.exports = { runBootstrapMigrations, ensureExamTypeEnum };
+async function ensureExamStatusColumns(pool) {
+  const sql = `
+  DO $$
+  BEGIN
+    -- status column
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'exams' AND column_name = 'status'
+    ) THEN
+      ALTER TABLE exams ADD COLUMN status VARCHAR(20);
+    END IF;
+
+    -- progress column
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'exams' AND column_name = 'progress'
+    ) THEN
+      ALTER TABLE exams ADD COLUMN progress INT;
+    END IF;
+
+    -- error_message column
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'exams' AND column_name = 'error_message'
+    ) THEN
+      ALTER TABLE exams ADD COLUMN error_message TEXT;
+    END IF;
+
+    -- failed_step column
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'exams' AND column_name = 'failed_step'
+    ) THEN
+      ALTER TABLE exams ADD COLUMN failed_step TEXT;
+    END IF;
+
+    -- updated_at column
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'exams' AND column_name = 'updated_at'
+    ) THEN
+      ALTER TABLE exams ADD COLUMN updated_at TIMESTAMP;
+    END IF;
+  END
+  $$;`;
+  try {
+    await pool.query(sql);
+    // eslint-disable-next-line no-console
+    console.log('✅ exams status columns verified (status/progress/error_message/failed_step/updated_at)');
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('❌ Failed to ensure exams status columns:', err?.message || err);
+  }
+}
+
+module.exports = { runBootstrapMigrations, ensureExamTypeEnum, ensureExamStatusColumns };
 
 

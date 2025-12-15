@@ -92,6 +92,9 @@ router.post('/:examId/cancel', examsController.cancelExam);
 // Package readiness / exam info
 router.get('/:examId', examsController.getExam);
 
+// Async preparation status
+router.get('/:examId/status', examsController.getExamStatus);
+
 /**
  * @openapi
  * /api/exams/{examId}/proctoring:
