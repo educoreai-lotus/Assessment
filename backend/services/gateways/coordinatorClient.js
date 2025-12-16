@@ -39,6 +39,7 @@ async function postToCoordinator(bodyOrEnvelope, targetService) {
   const envelope = buildCompliantEnvelope(bodyOrEnvelope);
   if (targetService && typeof envelope === 'object') {
     envelope.target_service = targetService;
+    envelope.targetService = targetService; // add camelCase too
   }
 
   const headers = {

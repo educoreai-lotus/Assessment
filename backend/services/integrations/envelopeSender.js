@@ -5,11 +5,14 @@ async function sendToCoordinator({ targetService, payload, requester = (process.
     requester_service: requester,
     payload: payload || {},
     response: { answer: '' },
+    // include both snake_case and camelCase to satisfy different coordinator parsers
     target_service: targetService || undefined,
+    targetService: targetService || undefined,
   };
   try {
     console.log('[OUTBOUND][ENVELOPE][SEND]', {
       target: targetService || 'unknown',
+      targetService: targetService || 'unknown',
       requester,
       action: String(envelope.payload?.action || ''),
       keys: Object.keys(envelope.payload || {}),
