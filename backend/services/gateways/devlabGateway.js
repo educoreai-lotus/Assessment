@@ -19,13 +19,32 @@ function buildEnvelope(payloadObj) {
 
 async function sendToDevlabEnvelope(payloadObj) {
 	const envelope = buildEnvelope(payloadObj);
-	const { data: json } = await sendToCoordinator({ targetService: 'devlab', payload: envelope.payload }).catch(() => ({ data: {} }));
+	const { data: json } = await sendToCoordinator({ targetService: 'devlab-service', payload: envelope.payload }).catch(() => ({ data: {} }));
 	// Prefer new format: { success: true, data: { questions: [...] } }
 	if (json && json.success && json.data && Array.isArray(json.data.questions)) {
 		return json.data.questions;
 	}
-	// Backward compatibility with { response: { answer: [...] } } or { answer: [...] }
+	// Backward compatibility:
+	// - response.answer may be a JSON string or an array/object
+	// - response.answers may be HTML string (widget) -> not used here
+	// - top-level answer may exist too
+	try {
+		if (typeof json?.response?.answer === 'string') {
+			const parsed = JSON.parse(json.response.answer);
+			if (Array.isArray(parsed?.questions)) return parsed.questions;
+			if (Array.isArray(parsed?.results)) return parsed.results;
+			if (Array.isArray(parsed)) return parsed;
+		}
+	} catch {}
 	if (Array.isArray(json?.response?.answer)) return json.response.answer;
+	try {
+		if (typeof json?.answer === 'string') {
+			const parsed = JSON.parse(json.answer);
+			if (Array.isArray(parsed?.questions)) return parsed.questions;
+			if (Array.isArray(parsed?.results)) return parsed.results;
+			if (Array.isArray(parsed)) return parsed;
+		}
+	} catch {}
 	if (Array.isArray(json?.answer)) return json.answer;
 	// Fallback
 	return [];
@@ -57,7 +76,26 @@ async function sendCodingGradeEnvelope(payloadObj) {
 	try {
 		const shaped = buildDevLabGradePayload(payloadObj || {});
 		const resp = await sendToDevlabEnvelope(shaped);
-		const answer = Array.isArray(resp?.answer) ? resp.answer : (Array.isArray(resp?.response?.answer) ? resp.response.answer : []);
+		let answer = [];
+		if (Array.isArray(resp)) {
+			answer = resp;
+		} else if (Array.isArray(resp?.answer)) {
+			answer = resp.answer;
+		} else if (Array.isArray(resp?.response?.answer)) {
+			answer = resp.response.answer;
+		} else if (typeof resp?.response?.answer === 'string') {
+			try {
+				const parsed = JSON.parse(resp.response.answer);
+				if (Array.isArray(parsed?.results)) answer = parsed.results;
+				else if (Array.isArray(parsed)) answer = parsed;
+			} catch {}
+		} else if (typeof resp === 'string') {
+			try {
+				const parsed = JSON.parse(resp);
+				if (Array.isArray(parsed?.results)) answer = parsed.results;
+				else if (Array.isArray(parsed)) answer = parsed;
+			} catch {}
+		}
 		const isEmpty = !Array.isArray(answer) || answer.length === 0;
 		if (isEmpty) {
 			try { console.log('[MOCK-FALLBACK][DevLab][coding-grade]'); } catch {}

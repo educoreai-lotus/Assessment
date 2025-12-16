@@ -13,7 +13,7 @@ import { http } from '../../services/http';
 // and helps detect unexpected remounts
 
 
-async function waitForPackage(examId, maxWaitMs = 30000) {
+async function waitForPackage(examId, maxWaitMs = 60000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     try {
