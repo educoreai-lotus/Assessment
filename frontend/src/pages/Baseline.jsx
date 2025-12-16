@@ -5,6 +5,7 @@ import QuestionCard from '../components/QuestionCard';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 import CameraPreview from '../components/CameraPreview';
 import DevLabWidget from '../components/DevLabWidget';
+import CodingPanel from '../components/CodingPanel';
 import { examApi } from '../services/examApi';
 import { http } from '../services/http';
 
@@ -53,6 +54,7 @@ export default function Baseline() {
   const [answers, setAnswers] = useState({});
   const [strikes, setStrikes] = useState(0);
   const [devlabWidget, setDevlabWidget] = useState(null);
+  const [codingQuestions, setCodingQuestions] = useState([]);
 
   async function waitForPackage(examId, maxWaitMs = 60000) {
     const start = Date.now();
@@ -166,6 +168,7 @@ export default function Baseline() {
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         try { setDevlabWidget(data?.devlab_widget || null); } catch {}
+        try { setCodingQuestions(Array.isArray(data?.coding_questions) ? data.coding_questions : []); } catch {}
         const normalized = Array.isArray(data?.questions)
           ? data.questions.map((p, idx) => {
               const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
@@ -437,8 +440,24 @@ export default function Baseline() {
         <LoadingSpinner label="Preparing questions..." />
       ))}
 
-      {devlabWidget && (
+      {devlabWidget ? (
         <DevLabWidget widget={devlabWidget} iframeRef={devlabIframeRef} />
+      ) : null}
+
+      {!devlabWidget && Array.isArray(codingQuestions) && codingQuestions.length > 0 && (
+        <div className="space-y-5 mt-6">
+          <h3 className="text-xl font-semibold text-emerald-300">Coding Challenges</h3>
+          {codingQuestions.map((cq, idx) => (
+            <CodingPanel
+              key={cq.id || cq.question_id || `code-${idx}`}
+              challenge={{
+                title: cq.title || cq.question || `Challenge ${idx + 1}`,
+                description: cq.description || (cq.prompt?.question) || '',
+              }}
+              onRun={() => {}}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
