@@ -37,7 +37,7 @@ app.use(cors({
   maxAge: 86400,
 }));
 
-app.use(express.json({ limit: '50kb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // Swagger docs
 mountSwagger(app);
