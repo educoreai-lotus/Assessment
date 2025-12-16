@@ -37,7 +37,7 @@ async function postToCoordinator(bodyOrEnvelope, targetService) {
   const url = `${base}/api/fill-content-metrics`;
   const timeoutMs = Number.isFinite(Number(process.env.COORDINATOR_TIMEOUT_MS))
     ? Number(process.env.COORDINATOR_TIMEOUT_MS)
-    : 45000;
+    : 60000;
 
   const envelope = buildCompliantEnvelope(bodyOrEnvelope);
   if (targetService && typeof envelope === 'object') {

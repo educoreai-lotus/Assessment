@@ -1602,8 +1602,13 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
   }
 
   // 3.2) Skills Engine
+  // Use original user_id from ExamPackage (string/UUID) if available; fallback to numeric
+  const originalUserId =
+    (examPackage && examPackage.user && typeof examPackage.user.user_id === 'string')
+      ? examPackage.user.user_id
+      : null;
   const payloadSkills = {
-    user_id: attempt.user_id != null ? Number(attempt.user_id) : null,
+    user_id: originalUserId != null ? originalUserId : (attempt.user_id != null ? Number(attempt.user_id) : null),
     exam_type: examType,
     passing_grade: Number(passing),
     final_grade: Number(finalGrade),
