@@ -7,7 +7,6 @@ import CameraPreview from '../../components/CameraPreview';
 import DevLabWidget from '../../components/DevLabWidget';
 import { examApi } from '../../services/examApi';
 import { http } from '../../services/http';
-import CodingPanel from '../../components/CodingPanel';
 
 // Mount guard + instrumentation
 // Ensures createExam is called only once per mount
@@ -113,7 +112,6 @@ export default function PostCourseExam() {
   const recreateOnceRef = useRef(false);
   const devlabIframeRef = useRef(null);
   const [devlabWidget, setDevlabWidget] = useState(null);
-  const [codingQuestions, setCodingQuestions] = useState([]);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
   [answers]);
@@ -311,7 +309,6 @@ export default function PostCourseExam() {
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         try { setDevlabWidget(data?.devlab_widget || null); } catch {}
-        try { setCodingQuestions(Array.isArray(data?.coding_questions) ? data.coding_questions : []); } catch {}
         const normalized = Array.isArray(data?.questions)
           ? data.questions.map((p, idx) => {
               const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
@@ -333,6 +330,18 @@ export default function PostCourseExam() {
               };
             })
           : [];
+        // Inject DevLab widget as a dedicated page at the end, if present
+        if (data?.devlab_widget && (data.devlab_widget.url || data.devlab_widget.srcdoc)) {
+          normalized.push({
+            id: 'devlab_widget',
+            originalId: 'devlab_widget',
+            type: 'devlab',
+            prompt: '',
+            options: [],
+            skill: 'Coding',
+            skill_id: null,
+          });
+        }
         setQuestions(normalized);
         setCurrentIdx(0);
         setAnswers({});
@@ -657,24 +666,8 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {devlabWidget ? (
+      {questions.length > 0 && questions[currentIdx]?.type === 'devlab' && devlabWidget && (
         <DevLabWidget widget={devlabWidget} iframeRef={devlabIframeRef} />
-      ) : null}
-
-      {!devlabWidget && Array.isArray(codingQuestions) && codingQuestions.length > 0 && (
-        <div className="space-y-5 mt-6">
-          <h3 className="text-xl font-semibold text-emerald-300">Coding Challenges</h3>
-          {codingQuestions.map((cq, idx) => (
-            <CodingPanel
-              key={cq.id || cq.question_id || `code-${idx}`}
-              challenge={{
-                title: cq.title || cq.question || `Challenge ${idx + 1}`,
-                description: cq.description || (cq.prompt?.question) || '',
-              }}
-              onRun={() => {}}
-            />
-          ))}
-        </div>
       )}
     </div>
   );
