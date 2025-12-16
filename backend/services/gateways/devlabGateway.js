@@ -85,6 +85,9 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
 			amount,
 			humanLanguage,
 			programming_language: 'javascript',
+      // explicit routing + classification for Coordinator
+      route: { destination: 'devlab', strict: true },
+      content: { type: 'coding' },
 		};
 		const { data: json } = await sendToCoordinator({ targetService: 'devlab-service', payload }).catch(() => ({ data: {} }));
 		// Expected modern format: include widget + questions

@@ -6,6 +6,9 @@ function buildDevLabCodingRequestPayload({ amount, skills, humanLanguage = 'en',
     humanLanguage,
     programming_language: 'javascript',
     skills: Array.isArray(skills) ? skills : [],
+    // explicit routing and classification for Coordinator
+    route: { destination: 'devlab', strict: true },
+    content: { type: 'coding' },
   };
 }
 
@@ -16,6 +19,9 @@ function buildDevLabGradePayload({ attempt, answers, questions, session_token } 
     answers: Array.isArray(answers) ? answers : [],
     questions: Array.isArray(questions) ? questions : undefined,
     session_token: session_token || undefined,
+    // explicit routing and classification for Coordinator
+    route: { destination: 'devlab', strict: true },
+    content: { type: 'coding' },
   };
 }
 
