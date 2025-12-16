@@ -316,13 +316,14 @@ exports.startExam = async (req, res, next) => {
     };
     const userIntFromPkg = normalizeToInt(pkg?.user?.user_id);
     const courseIntFromPkg = normalizeToInt(pkg?.metadata?.course_id);
-    // Map theoretical questions
-    const theoreticalForResponse = safeMapQuestions(pkg?.questions).map((q) => ({
+    // Map theoretical questions with explicit sequence numbers
+    const theoreticalForResponse = safeMapQuestions(pkg?.questions).map((q, idx) => ({
       question_id: q.question_id,
       skill_id: q.skill_id,
       prompt: removeHintsDeep(q.prompt),
       options: Array.isArray(q.options) ? q.options : [],
       metadata: q.metadata || {},
+      sequence: idx + 1,
     }));
     // Also surface coding questions in the generic questions array for legacy UIs
     const codingForResponse = (Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : []).map((cq, idx) => {
@@ -340,6 +341,7 @@ exports.startExam = async (req, res, next) => {
         },
         options: [],
         metadata: { type: 'code', difficulty: typeof cq?.difficulty === 'string' ? cq.difficulty : 'medium' },
+        sequence: theoreticalForResponse.length + idx + 1,
       };
     });
     const questionsForResponse = [...theoreticalForResponse, ...codingForResponse];
@@ -353,6 +355,11 @@ exports.startExam = async (req, res, next) => {
       skills: pkg?.metadata?.skills || [],
       coverage_map: pkg?.coverage_map || [],
       questions: questionsForResponse,
+      total_questions: questionsForResponse.length,
+      ui_hints: {
+        allow_unanswered_navigation: true,
+        allow_empty_submit: true,
+      },
       coding_questions: Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : [],
       devlab_widget: pkg?.metadata?.devlab_widget || null,
       time_allocated_minutes: pkg?.metadata?.time_allocated_minutes ?? null,
