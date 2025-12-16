@@ -136,12 +136,27 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
 			const questions = Array.isArray(json.data.questions) ? json.data.questions : [];
 			return { html, url, session_token, questions };
 		}
-		// Legacy: { response: { answers: "<html>", url?, session_token?, questions? } }
-		const html = typeof json?.response?.answers === 'string' ? json.response.answers : null;
-		const url = typeof json?.response?.url === 'string' ? json.response.url : null;
-		const session_token = typeof json?.response?.session_token === 'string' ? json.response.session_token : null;
-		const questions = Array.isArray(json?.response?.questions) ? json.response.questions : [];
-		if (html || url || questions.length > 0) return { html, url, session_token, questions };
+		// Legacy: try response.answers (HTML) and response.answer (JSON string or object)
+		let html = typeof json?.response?.answers === 'string' ? json.response.answers : null;
+		let url = typeof json?.response?.url === 'string' ? json.response.url : null;
+		let session_token = typeof json?.response?.session_token === 'string' ? json.response.session_token : null;
+		let questions = Array.isArray(json?.response?.questions) ? json.response.questions : [];
+		// Parse response.answer if it is a JSON string or object
+		if (json?.response?.answer) {
+			try {
+				const parsed = typeof json.response.answer === 'string' ? JSON.parse(json.response.answer) : json.response.answer;
+				if (parsed && typeof parsed === 'object') {
+					if (!html && typeof parsed.html === 'string') html = parsed.html;
+					if (!url && typeof parsed.url === 'string') url = parsed.url;
+					if (!session_token && typeof parsed.session_token === 'string') session_token = parsed.session_token;
+					if (Array.isArray(parsed.questions)) questions = parsed.questions;
+					else if (!questions.length && Array.isArray(parsed.results)) questions = parsed.results;
+				} else if (Array.isArray(parsed)) {
+					questions = parsed;
+				}
+			} catch { /* ignore parse errors */ }
+		}
+		if (html || url || (questions && questions.length > 0) || session_token) return { html, url, session_token, questions };
 	} catch (err) {
 		try { console.log('[MOCK-FALLBACK][DevLab][coding-widget][error]', { message: err?.message }); } catch {}
 	}
