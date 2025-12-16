@@ -15,7 +15,7 @@ async function safeFetchBaselineSkills(params) {
     try {
       // eslint-disable-next-line no-console
       console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][REQUEST_PAYLOAD]', {
-        payload_keys: Object.keys(envelope.payload || {}),
+        payload_keys: Object.keys(payload || {}),
       });
     } catch {}
     const ret = await sendToCoordinator({ targetService: 'skills-engine', payload }).catch(() => ({}));
@@ -24,24 +24,63 @@ async function safeFetchBaselineSkills(params) {
     else if (ret && typeof ret.data === 'string') respString = ret.data;
     else respString = JSON.stringify((ret && ret.data) || {});
     const resp = JSON.parse(respString || '{}');
+
+    // New response format: response contains user_id and a grouped skills object
+    // {
+    //   response: {
+    //     user_id: "user-123",
+    //     skills: {
+    //       "Category A": [{ skill_id, skill_name }, ...],
+    //       "Category B": [...]
+    //     }
+    //   }
+    // }
+    const responseBlock = resp?.response || {};
+    const grouped = responseBlock?.skills && typeof responseBlock.skills === 'object' ? responseBlock.skills : null;
+    let flattenedSkills = [];
+    if (grouped && !Array.isArray(grouped)) {
+      for (const [_, arr] of Object.entries(grouped)) {
+        if (Array.isArray(arr)) {
+          for (const s of arr) {
+            const sid = typeof s?.skill_id === 'string' ? s.skill_id : String(s?.skill_id || '');
+            const sname = typeof s?.skill_name === 'string' ? s.skill_name : String(s?.skill_name || sid);
+            if (sid) flattenedSkills.push({ skill_id: sid, skill_name: sname || sid });
+          }
+        }
+      }
+    }
+    const hasNew = Array.isArray(flattenedSkills) && flattenedSkills.length > 0;
+
+    // Legacy support: response.answer as array/object
     const answer = resp?.response?.answer;
     const isEmptyObject = answer && typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0;
     const isEmptyArray = Array.isArray(answer) && answer.length === 0;
-    if (!answer || isEmptyObject || isEmptyArray) {
+
+    if (!hasNew && (!answer || isEmptyObject || isEmptyArray)) {
       try { console.log('[MOCK-FALLBACK][SkillsEngine][baseline-skills]', { hasParams: !!params }); } catch {}
       return mockFetchBaselineSkills(params || {});
     }
+
+    // Normalize output to { user_id, skills: [{ skill_id, skill_name }] }
+    if (hasNew) {
+      const user_id = responseBlock?.user_id ?? params?.user_id ?? null;
+      try {
+        console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][SUCCESS][GROUPED]', {
+          categories: Object.keys(grouped || {}).length,
+          total_skills: flattenedSkills.length,
+        });
+      } catch {}
+      return { user_id, skills: flattenedSkills };
+    }
+
+    // Legacy normalization: if answer is array of skills already
     try {
-      // eslint-disable-next-line no-console
-      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][SUCCESS]', {
+      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][SUCCESS][LEGACY]', {
         received_type: Array.isArray(answer) ? 'array' : (answer && typeof answer),
         count: Array.isArray(answer) ? answer.length : undefined,
       });
-      const bodyStr = (() => { try { return JSON.stringify(answer); } catch { return String(answer); } })();
-      const snapshot = bodyStr && bodyStr.length > 1500 ? (bodyStr.slice(0, 1500) + '…[truncated]') : bodyStr;
-      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][RESPONSE_BODY]', snapshot);
     } catch {}
-    return answer;
+    return { user_id: params?.user_id ?? null, skills: Array.isArray(answer) ? answer : [] };
   } catch (err) {
     console.warn('SkillsEngine baseline fetch via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockFetchBaselineSkills(params || {});
