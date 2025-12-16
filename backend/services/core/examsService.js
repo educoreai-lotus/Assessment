@@ -93,6 +93,7 @@ async function buildExamPackageDoc({
   time_allocated_minutes,
   expires_at_iso,
   devlab_widget,
+  devlab_raw,
 }) {
   const doc = new ExamPackage({
     // assessment_type explicitly persisted alongside IDs for reporting/filtering
@@ -167,6 +168,7 @@ async function buildExamPackageDoc({
       time_allocated_minutes: time_allocated_minutes ?? undefined,
       expires_at: expires_at_iso ?? undefined,
       devlab_widget: devlab_widget || undefined,
+      devlab_raw: devlab_raw || undefined,
     },
   });
   // Emit full package payload before persisting, for postcourse only
@@ -1962,6 +1964,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
       expires_at_iso: null,
       devlab_widget: devlabWidgetBlock,
+      devlab_raw: (widget && typeof widget.raw === 'string') ? widget.raw : undefined,
     });
     await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
   } catch (e) {

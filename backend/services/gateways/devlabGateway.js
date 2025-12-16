@@ -130,25 +130,36 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
 		const { data: json } = await sendToCoordinator({ targetService: 'devlab-service', payload }).catch(() => ({ data: {} }));
 		// Expected modern format: include widget + questions
 		if (json && json.success && json.data) {
-			const html = typeof json.data.html === 'string' ? json.data.html : null;
+			const html = typeof json.data.componentHtml === 'string'
+        ? json.data.componentHtml
+        : (typeof json.data.html === 'string' ? json.data.html : null);
 			const url = typeof json.data.url === 'string' ? json.data.url : null;
-			const session_token = typeof json.data.session_token === 'string' ? json.data.session_token : null;
+			const session_token = (typeof json.data.sessionToken === 'string' ? json.data.sessionToken : null)
+        || (typeof json.data.session_token === 'string' ? json.data.session_token : null);
 			const questions = Array.isArray(json.data.questions) ? json.data.questions : [];
-			return { html, url, session_token, questions };
+			return { html, url, session_token, questions, raw: null };
 		}
-		// Legacy: try response.answers (HTML) and response.answer (JSON string or object)
+		// Legacy: try response.answers (HTML) and response.answer (double-encoded JSON string)
 		let html = typeof json?.response?.answers === 'string' ? json.response.answers : null;
 		let url = typeof json?.response?.url === 'string' ? json.response.url : null;
-		let session_token = typeof json?.response?.session_token === 'string' ? json.response.session_token : null;
+		let session_token = (typeof json?.response?.sessionToken === 'string' ? json.response.sessionToken : null)
+      || (typeof json?.response?.session_token === 'string' ? json.response.session_token : null);
 		let questions = Array.isArray(json?.response?.questions) ? json.response.questions : [];
+    let raw = null;
 		// Parse response.answer if it is a JSON string or object
 		if (json?.response?.answer) {
 			try {
-				const parsed = typeof json.response.answer === 'string' ? JSON.parse(json.response.answer) : json.response.answer;
+        raw = typeof json.response.answer === 'string' ? json.response.answer : JSON.stringify(json.response.answer);
+				let parsed = typeof json.response.answer === 'string' ? JSON.parse(json.response.answer) : json.response.answer;
+        if (typeof parsed === 'string') {
+          try { parsed = JSON.parse(parsed); } catch {}
+        }
 				if (parsed && typeof parsed === 'object') {
-					if (!html && typeof parsed.html === 'string') html = parsed.html;
+					if (!html && typeof parsed.componentHtml === 'string') html = parsed.componentHtml;
+          if (!html && typeof parsed.html === 'string') html = parsed.html;
 					if (!url && typeof parsed.url === 'string') url = parsed.url;
-					if (!session_token && typeof parsed.session_token === 'string') session_token = parsed.session_token;
+					if (!session_token && typeof parsed.sessionToken === 'string') session_token = parsed.sessionToken;
+          if (!session_token && typeof parsed.session_token === 'string') session_token = parsed.session_token;
 					if (Array.isArray(parsed.questions)) questions = parsed.questions;
 					else if (!questions.length && Array.isArray(parsed.results)) questions = parsed.results;
 				} else if (Array.isArray(parsed)) {
@@ -156,12 +167,12 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
 				}
 			} catch { /* ignore parse errors */ }
 		}
-		if (html || url || (questions && questions.length > 0) || session_token) return { html, url, session_token, questions };
+		if (html || url || (questions && questions.length > 0) || session_token) return { html, url, session_token, questions, raw };
 	} catch (err) {
 		try { console.log('[MOCK-FALLBACK][DevLab][coding-widget][error]', { message: err?.message }); } catch {}
 	}
 	// Fallback: return nothing; UI will render only theoretical part
-	return { html: null, url: null, session_token: null, questions: [] };
+	return { html: null, url: null, session_token: null, questions: [], raw: null };
 }
 
 module.exports = { sendToDevlabEnvelope, requestCodingQuestions, sendCodingGradeEnvelope, requestCodingWidgetHtml };
