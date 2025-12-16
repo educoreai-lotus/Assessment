@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import QuestionCard from '../components/QuestionCard';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 import CameraPreview from '../components/CameraPreview';
+import DevLabWidget from '../components/DevLabWidget';
 import { examApi } from '../services/examApi';
 import { http } from '../services/http';
 
 export default function Baseline() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const devlabIframeRef = useRef(null);
 
   // Gate: redirect to Intro unless accepted for this attempt
   useEffect(() => {
@@ -50,6 +52,7 @@ export default function Baseline() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [strikes, setStrikes] = useState(0);
+  const [devlabWidget, setDevlabWidget] = useState(null);
 
   // Bootstrap: resolve user_id -> exam_id -> attempt_id
   useEffect(() => {
@@ -143,6 +146,7 @@ export default function Baseline() {
         setQuestionsLoading(true);
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
+        try { setDevlabWidget(data?.devlab_widget || null); } catch {}
         const normalized = Array.isArray(data?.questions)
           ? data.questions.map((p, idx) => {
               const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
@@ -178,6 +182,36 @@ export default function Baseline() {
       cancelled = false;
     };
   }, [examId, attemptId, cameraReady, cameraOk]);
+
+  async function requestDevLabAnswers(timeoutMs = 5000) {
+    const iframe = devlabIframeRef.current;
+    if (!iframe || !iframe.contentWindow) return [];
+    return new Promise((resolve) => {
+      let done = false;
+      const to = setTimeout(() => {
+        if (!done) {
+          done = true;
+          window.removeEventListener('message', onMessage);
+          resolve([]);
+        }
+      }, timeoutMs);
+      function onMessage(ev) {
+        const data = ev?.data || {};
+        if (data && data.type === 'devlab:answers') {
+          done = true;
+          clearTimeout(to);
+          window.removeEventListener('message', onMessage);
+          resolve(Array.isArray(data.answers) ? data.answers : []);
+        }
+      }
+      window.addEventListener('message', onMessage);
+      try {
+        iframe.contentWindow.postMessage({ type: 'devlab:getAnswers' }, '*');
+      } catch {
+        resolve([]);
+      }
+    });
+  }
 
   // Anti-cheating: three-strike system
   useEffect(() => {
@@ -264,6 +298,7 @@ export default function Baseline() {
   async function handleSubmit() {
     try {
       setLoading(true);
+      const devlabAnswers = await requestDevLabAnswers().catch(() => []);
       const payloadAnswers = questions.map((q) => ({
         question_id: q.originalId,
         type: q.type === 'text' ? 'open' : q.type,
@@ -273,6 +308,12 @@ export default function Baseline() {
       const result = await examApi.submit(examId, {
         attempt_id: attemptId,
         answers: payloadAnswers,
+        devlab: devlabWidget
+          ? {
+              session_token: devlabWidget?.session_token || undefined,
+              answers: Array.isArray(devlabAnswers) ? devlabAnswers : [],
+            }
+          : undefined,
       });
       navigate(`/results/baseline?attemptId=${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
@@ -376,6 +417,10 @@ export default function Baseline() {
       ) : (
         <LoadingSpinner label="Preparing questions..." />
       ))}
+
+      {devlabWidget && (
+        <DevLabWidget widget={devlabWidget} iframeRef={devlabIframeRef} />
+      )}
     </div>
   );
 }

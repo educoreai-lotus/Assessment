@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import CameraPreview from '../../components/CameraPreview';
+import DevLabWidget from '../../components/DevLabWidget';
 import { examApi } from '../../services/examApi';
 import { http } from '../../services/http';
 
@@ -109,6 +110,8 @@ export default function PostCourseExam() {
   const [expiresAtIso, setExpiresAtIso] = useState(null);
   const [remainingSec, setRemainingSec] = useState(null);
   const recreateOnceRef = useRef(false);
+  const devlabIframeRef = useRef(null);
+  const [devlabWidget, setDevlabWidget] = useState(null);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
   [answers]);
@@ -305,6 +308,7 @@ export default function PostCourseExam() {
         setQuestionsLoading(true);
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
+        try { setDevlabWidget(data?.devlab_widget || null); } catch {}
         const normalized = Array.isArray(data?.questions)
           ? data.questions.map((p, idx) => {
               const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
@@ -364,6 +368,36 @@ export default function PostCourseExam() {
     startIfReady();
     return () => { cancelled = false; };
   }, [examId, attemptId, cameraReady, cameraOk, navigate]);
+
+  async function requestDevLabAnswers(timeoutMs = 5000) {
+    const iframe = devlabIframeRef.current;
+    if (!iframe || !iframe.contentWindow) return [];
+    return new Promise((resolve) => {
+      let done = false;
+      const to = setTimeout(() => {
+        if (!done) {
+          done = true;
+          window.removeEventListener('message', onMessage);
+          resolve([]);
+        }
+      }, timeoutMs);
+      function onMessage(ev) {
+        const data = ev?.data || {};
+        if (data && data.type === 'devlab:answers') {
+          done = true;
+          clearTimeout(to);
+          window.removeEventListener('message', onMessage);
+          resolve(Array.isArray(data.answers) ? data.answers : []);
+        }
+      }
+      window.addEventListener('message', onMessage);
+      try {
+        iframe.contentWindow.postMessage({ type: 'devlab:getAnswers' }, '*');
+      } catch {
+        resolve([]);
+      }
+    });
+  }
 
   // Countdown timer
   useEffect(() => {
@@ -461,13 +495,24 @@ export default function PostCourseExam() {
     try {
       console.trace('[UI][SUBMIT][START]');
       setIsSubmitting(true);
-      // Only send answers for questions in current attempt's package
+      const devlabAnswers = await requestDevLabAnswers().catch(() => []);
+      // Only send answers for questions in current attempt's package with metadata
       const filteredAnswers = Object.entries(answers)
         .filter(([questionId]) => questions.find((q) => String(q.originalId || q.id) === String(questionId)))
-        .map(([question_id, answer]) => ({ question_id, answer }));
+        .map(([question_id, answer]) => {
+          const qMeta = questions.find((q) => String(q.originalId || q.id) === String(question_id));
+          const type = qMeta ? (qMeta.type === 'text' ? 'open' : qMeta.type) : undefined;
+          return { question_id, type, skill_id: qMeta?.skill_id || '', answer };
+        });
       const result = await examApi.submit(examId, {
         attempt_id: attemptId,
         answers: filteredAnswers,
+        devlab: devlabWidget
+          ? {
+              session_token: devlabWidget?.session_token || undefined,
+              answers: Array.isArray(devlabAnswers) ? devlabAnswers : [],
+            }
+          : undefined,
       });
       console.trace('[UI][SUBMIT][DONE]');
       navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });
@@ -607,6 +652,10 @@ export default function PostCourseExam() {
             <LoadingSpinner label="Submitting exam..." />
           </div>
         </div>
+      )}
+
+      {devlabWidget && (
+        <DevLabWidget widget={devlabWidget} iframeRef={devlabIframeRef} />
       )}
     </div>
   );
