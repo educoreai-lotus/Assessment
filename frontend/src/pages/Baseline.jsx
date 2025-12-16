@@ -54,6 +54,20 @@ export default function Baseline() {
   const [strikes, setStrikes] = useState(0);
   const [devlabWidget, setDevlabWidget] = useState(null);
 
+  async function waitForPackage(examId, maxWaitMs = 30000) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      try {
+        const res = await http.get(`/api/exams/${encodeURIComponent(examId)}`);
+        if (res?.data?.package_ready) {
+          return res.data;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    throw new Error('package_not_ready_timeout');
+  }
+
   // Bootstrap: resolve user_id -> exam_id -> attempt_id
   useEffect(() => {
     let mounted = true;
@@ -144,6 +158,11 @@ export default function Baseline() {
       if (!cameraReady || !cameraOk) return;
       try {
         setQuestionsLoading(true);
+        try {
+          await waitForPackage(examId);
+        } catch {
+          throw new Error('Exam package not ready yet. Please retry in a moment.');
+        }
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         try { setDevlabWidget(data?.devlab_widget || null); } catch {}
