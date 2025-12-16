@@ -1932,6 +1932,20 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   await setExamStatus(examId, { progress: 80 });
 
   try {
+    // Prepare optional DevLab widget block for UI rendering (if available)
+    let devlabWidgetBlock = undefined;
+    if (devlabWidgetResult && (devlabWidgetResult.html || devlabWidgetResult.url)) {
+      devlabWidgetBlock = {
+        provider: 'devlab',
+        mode: devlabWidgetResult.html ? 'srcdoc' : 'iframe',
+        url: devlabWidgetResult.url || null,
+        srcdoc: devlabWidgetResult.html || null,
+        session_token: devlabWidgetResult.session_token || null,
+        skills: skillsForCoding,
+        difficulty: 'medium',
+      };
+    }
+
     const pkg = await buildExamPackageDoc({
       exam_id: examId,
       attempt_id: attemptId,
@@ -1946,6 +1960,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       coding_questions: codingQuestionsDecorated,
       time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
       expires_at_iso: null,
+      devlab_widget: devlabWidgetBlock,
+      devlab_raw: (typeof devlabWidgetResult?.raw === 'string') ? devlabWidgetResult.raw : undefined,
     });
     await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
     try {
@@ -1955,7 +1971,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         package_id: String(pkg?._id || ''),
         questions: Array.isArray(questions) ? questions.length : 0,
         coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.length : 0,
-        devlab: 'none',
+        devlab: !!devlabWidgetBlock && (devlabWidgetBlock.srcdoc || devlabWidgetBlock.url) ? 'widget_present' : 'none',
       });
     } catch {}
   } catch (e) {
