@@ -1,6 +1,6 @@
 const { postToCoordinator } = require('../gateways/coordinatorClient');
 
-async function sendToCoordinator({ targetService, payload, requester = 'assessment-service' }) {
+async function sendToCoordinator({ targetService, payload, requester = (process.env.SERVICE_NAME || 'assessment-service') }) {
   const envelope = {
     requester_service: requester,
     payload: payload || {},
