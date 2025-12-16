@@ -5,6 +5,7 @@ async function sendToCoordinator({ targetService, payload, requester = (process.
     requester_service: requester,
     payload: payload || {},
     response: { answer: '' },
+    target_service: targetService || undefined,
   };
   try {
     console.log('[OUTBOUND][ENVELOPE][SEND]', {
@@ -14,7 +15,7 @@ async function sendToCoordinator({ targetService, payload, requester = (process.
       keys: Object.keys(envelope.payload || {}),
     });
   } catch {}
-  const ret = await postToCoordinator(envelope).catch(() => ({}));
+  const ret = await postToCoordinator(envelope, targetService).catch(() => ({}));
   let respString;
   if (typeof ret === 'string') respString = ret;
   else if (ret && typeof ret.data === 'string') respString = ret.data;

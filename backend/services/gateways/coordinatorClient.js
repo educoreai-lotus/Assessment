@@ -29,7 +29,7 @@ function buildCompliantEnvelope(input) {
   };
 }
 
-async function postToCoordinator(bodyOrEnvelope) {
+async function postToCoordinator(bodyOrEnvelope, targetService) {
   if (!COORDINATOR_URL) {
     throw new Error('COORDINATOR_URL not set');
   }
@@ -37,6 +37,9 @@ async function postToCoordinator(bodyOrEnvelope) {
   const url = `${base}/api/fill-content-metrics`;
 
   const envelope = buildCompliantEnvelope(bodyOrEnvelope);
+  if (targetService && typeof envelope === 'object') {
+    envelope.target_service = targetService;
+  }
 
   const headers = {
     'Content-Type': 'application/json',
@@ -54,6 +57,9 @@ async function postToCoordinator(bodyOrEnvelope) {
   } else {
     // eslint-disable-next-line no-console
     console.warn('[CoordinatorClient] PRIVATE_KEY is not set. Requests will not be signed and Coordinator will likely reject them.');
+  }
+  if (targetService) {
+    headers['X-Target-Service'] = targetService;
   }
 
   const resp = await fetch(url, {
