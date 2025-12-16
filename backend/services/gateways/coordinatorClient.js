@@ -37,7 +37,7 @@ async function postToCoordinator(bodyOrEnvelope, targetService) {
   const url = `${base}/api/fill-content-metrics`;
   const timeoutMs = Number.isFinite(Number(process.env.COORDINATOR_TIMEOUT_MS))
     ? Number(process.env.COORDINATOR_TIMEOUT_MS)
-    : 6000;
+    : 45000;
 
   const envelope = buildCompliantEnvelope(bodyOrEnvelope);
   if (targetService && typeof envelope === 'object') {
@@ -66,26 +66,40 @@ async function postToCoordinator(bodyOrEnvelope, targetService) {
     headers['X-Target-Service'] = targetService;
   }
 
-  // Add an AbortController-based timeout to avoid hanging background flows
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  async function postOnce(withMs) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), withMs);
+    try {
+      return await fetch(url, {
+        method: 'POST',
+        headers,
+        body: stringifyEnvelope(envelope),
+        signal: controller.signal,
+      });
+    } finally {
+      try { clearTimeout(timer); } catch {}
+    }
+  }
 
   let resp;
   try {
-    resp = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: stringifyEnvelope(envelope),
-      signal: controller.signal,
-    });
+    resp = await postOnce(timeoutMs);
   } catch (err) {
-    // Normalize aborted/failed requests into an empty response
-    try { clearTimeout(timer); } catch {}
-    // eslint-disable-next-line no-console
-    console.warn('[CoordinatorClient] request failed/aborted', { message: err?.message });
-    return { resp: { ok: false, aborted: true, error: err?.message }, data: {} };
-  } finally {
-    try { clearTimeout(timer); } catch {}
+    // retry once on abort/timeout
+    const msg = String(err?.message || '');
+    const retryable = msg.includes('aborted') || msg.includes('network') || msg.includes('timeout');
+    if (retryable) {
+      try {
+        console.warn('[CoordinatorClient] retrying after failure', { message: err?.message, timeout_ms: timeoutMs });
+        resp = await postOnce(timeoutMs);
+      } catch (err2) {
+        console.warn('[CoordinatorClient] request failed/aborted (final)', { message: err2?.message });
+        return { resp: { ok: false, aborted: true, error: err2?.message }, data: {} };
+      }
+    } else {
+      console.warn('[CoordinatorClient] request failed (non-retryable)', { message: err?.message });
+      return { resp: { ok: false, error: err?.message }, data: {} };
+    }
   }
 
   let data = {};
