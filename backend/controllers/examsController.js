@@ -334,6 +334,7 @@ exports.startExam = async (req, res, next) => {
       coverage_map: pkg?.coverage_map || [],
       questions: questionsForResponse,
       coding_questions: Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : [],
+      devlab_widget: pkg?.metadata?.devlab_widget || null,
       time_allocated_minutes: pkg?.metadata?.time_allocated_minutes ?? null,
       expires_at: pkg?.metadata?.expires_at ?? null,
       started_at: startedAtVal,
@@ -351,6 +352,7 @@ exports.submitExam = async (req, res, next) => {
   try {
     const { examId } = req.params;
     const { attempt_id, answers } = req.body || {};
+    const devlabBlock = (req.body && req.body.devlab) || null;
     // [TRACE] submit entry
     try {
       // eslint-disable-next-line no-console
@@ -425,7 +427,14 @@ exports.submitExam = async (req, res, next) => {
       return res.status(403).json({ error: 'proctoring_not_started', message: 'Proctoring session not started' });
     }
 
-    const response = await submitAttempt({ attempt_id: attemptIdNum, answers });
+    const response = await submitAttempt({
+      attempt_id: attemptIdNum,
+      answers,
+      devlab: {
+        session_token: devlabBlock && devlabBlock.session_token ? String(devlabBlock.session_token) : undefined,
+        answers: Array.isArray(devlabBlock?.answers) ? devlabBlock.answers : undefined,
+      },
+    });
 
     if (response && response.error) {
       // Map known service errors to 4xx

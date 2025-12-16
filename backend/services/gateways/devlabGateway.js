@@ -74,4 +74,25 @@ async function sendCodingGradeEnvelope(payloadObj) {
 	}
 }
 
-module.exports = { sendToDevlabEnvelope, requestCodingQuestions, sendCodingGradeEnvelope };
+// Request DevLab widget HTML (or URL) for coding questions session
+async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'medium' }) {
+	try {
+		const payload = { action: 'coding-widget', attempt_id, skills: Array.isArray(skills) ? skills : [], difficulty };
+		const { data: json } = await sendToCoordinator({ targetService: 'devlab', payload }).catch(() => ({ data: {} }));
+		// Expected modern format
+		if (json && json.success && json.data && (typeof json.data.html === 'string' || typeof json.data.url === 'string')) {
+			return { html: json.data.html || null, url: json.data.url || null, session_token: json.data.session_token || null };
+		}
+		// Legacy: { response: { answers: "<html>" } }
+		const html = typeof json?.response?.answers === 'string' ? json.response.answers : null;
+		const url = typeof json?.response?.url === 'string' ? json.response.url : null;
+		const session_token = typeof json?.response?.session_token === 'string' ? json.response.session_token : null;
+		if (html || url) return { html, url, session_token };
+	} catch (err) {
+		try { console.log('[MOCK-FALLBACK][DevLab][coding-widget][error]', { message: err?.message }); } catch {}
+	}
+	// Fallback: return nothing; UI will render only theoretical part
+	return { html: null, url: null, session_token: null };
+}
+
+module.exports = { sendToDevlabEnvelope, requestCodingQuestions, sendCodingGradeEnvelope, requestCodingWidgetHtml };

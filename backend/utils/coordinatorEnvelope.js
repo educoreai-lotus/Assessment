@@ -32,6 +32,17 @@ function stringifyEnvelope(envelope) {
 function normalizeEnvelope(envelope) {
   const out = envelope && typeof envelope === 'object' ? { ...envelope } : {};
   const requester = (out.requester_service || out.requester || '').toString();
+  // Accept optional request id and service origin with flexible naming
+  const requestId =
+    out.request_id ||
+    out.requestId ||
+    (out.headers && (out.headers['x-request-id'] || out.headers['X-Request-Id'])) ||
+    '';
+  const serviceOrigin =
+    out['service-origin'] ||
+    out.service_origin ||
+    out.serviceOrigin ||
+    '';
   const payloadIn = out.payload;
   const payload =
     payloadIn && typeof payloadIn === 'object'
@@ -65,6 +76,8 @@ function normalizeEnvelope(envelope) {
 
   return {
     requester_service: requester,
+    request_id: requestId ? String(requestId) : undefined,
+    service_origin: serviceOrigin ? String(serviceOrigin) : undefined,
     payload,
     response,
   };

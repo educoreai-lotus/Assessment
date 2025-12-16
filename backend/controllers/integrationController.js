@@ -409,6 +409,7 @@ exports.universalIntegrationHandler = async (req, res) => {
         action: (payload && payload.action) || null,
       });
     } catch {}
+    const startedAt = Date.now();
     let answer;
     switch (requesterLower) {
       case 'skills-engine-service':
@@ -521,23 +522,36 @@ exports.universalIntegrationHandler = async (req, res) => {
         break;
     }
 
+    const elapsed = Date.now() - startedAt;
+
+    // Build echo envelope with original payload + computed answer
+    const responseEnvelope = {
+      requester_service: envelope.requester_service,
+      request_id: envelope.request_id || undefined,
+      service_origin: envelope.service_origin || undefined,
+      received_at: new Date(startedAt).toISOString(),
+      responded_at: new Date().toISOString(),
+      payload, // echo exactly what we received post-normalization
+      response: answer,
+      status: (answer && answer.error) ? 'error' : 'success',
+      error: (answer && answer.error) ? answer.error : null,
+      metrics: { elapsed_ms: elapsed },
+    };
+
     try {
       // eslint-disable-next-line no-console
       console.log('[OUTBOUND][INTEGRATION][RESPONSE]', {
         requester: requesterLower,
         action: (payload && payload.action) || null,
-        answer_type: answer && typeof answer,
-        answer_keys: answer && typeof answer === 'object' ? Object.keys(answer) : null,
+        status: responseEnvelope.status,
+        elapsed_ms: elapsed,
       });
-      // Log compact body snapshot (truncate to avoid excessive logs)
-      const bodyStr = (() => {
-        try { return JSON.stringify(answer); } catch { return String(answer); }
-      })();
+      const bodyStr = (() => { try { return JSON.stringify(responseEnvelope); } catch { return String(responseEnvelope); } })();
       const snapshot = bodyStr && bodyStr.length > 2000 ? (bodyStr.slice(0, 2000) + '…[truncated]') : bodyStr;
       console.log('[OUTBOUND][INTEGRATION][RESPONSE_BODY]', snapshot);
     } catch {}
 
-    return res.status(200).json({ response: { answer } });
+    return res.status(200).json(responseEnvelope);
   } catch (err) {
     return res.status(400).json({ error: 'invalid_envelope', message: err?.message });
   }

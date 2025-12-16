@@ -92,6 +92,7 @@ async function buildExamPackageDoc({
   coding_questions,
   time_allocated_minutes,
   expires_at_iso,
+  devlab_widget,
 }) {
   const doc = new ExamPackage({
     // assessment_type explicitly persisted alongside IDs for reporting/filtering
@@ -165,6 +166,7 @@ async function buildExamPackageDoc({
       course_name,
       time_allocated_minutes: time_allocated_minutes ?? undefined,
       expires_at: expires_at_iso ?? undefined,
+      devlab_widget: devlab_widget || undefined,
     },
   });
   // Emit full package payload before persisting, for postcourse only
@@ -1076,7 +1078,7 @@ async function getPackageByAttemptId(attempt_id) {
   return doc;
 }
 
-async function submitAttempt({ attempt_id, answers }) {
+async function submitAttempt({ attempt_id, answers, devlab }) {
   // 1) Load attempt + exam
   const attemptIdNum = normalizeToInt(attempt_id);
   if (attemptIdNum == null) {
@@ -1175,7 +1177,15 @@ async function submitAttempt({ attempt_id, answers }) {
 
   // 4) Split answers
   const allAnswers = Array.isArray(answers) ? answers : [];
-  const codingAnswers = allAnswers.filter((a) => String(a?.type || "").toLowerCase() === "code");
+  const codingAnswersFromPayload = allAnswers.filter((a) => String(a?.type || "").toLowerCase() === "code");
+  const devlabAnswersArray = Array.isArray(devlab?.answers) ? devlab.answers : [];
+  const devlabAnswersNormalized = devlabAnswersArray.map((a) => ({
+    question_id: String(a?.question_id || ""),
+    type: "code",
+    skill_id: String(a?.skill_id || ""),
+    answer: a?.answer != null ? String(a.answer) : "",
+  }));
+  const codingAnswers = [...codingAnswersFromPayload, ...devlabAnswersNormalized];
   const theoreticalAnswers = allAnswers.filter((a) => String(a?.type || "").toLowerCase() !== "code");
   try {
     const mcqCount = theoreticalAnswers.filter(a => String(a?.type||'').toLowerCase()==='mcq').length;
@@ -1345,6 +1355,8 @@ async function submitAttempt({ attempt_id, answers }) {
         ? examPackage.coding_questions
         : [],
       codingAnswers,
+      sessionToken: devlab?.session_token,
+      attempt: { attempt_id: attemptIdNum },
     });
   const codingGraded = (Array.isArray(gradingResults) ? gradingResults : []).map((r) => {
     const s = typeof r.score === "number" ? r.score : 0;
@@ -1912,6 +1924,25 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   await setExamStatus(examId, { progress: 80 });
 
   try {
+    // Prepare optional DevLab widget (coding-only, exam flow)
+    let devlabWidgetBlock = undefined;
+    try {
+      const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
+      const skillsForCoding = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
+      const widget = await requestCodingWidgetHtml({ attempt_id: attemptId, skills: skillsForCoding, difficulty: 'medium' });
+      if (widget && (widget.html || widget.url)) {
+        devlabWidgetBlock = {
+          provider: 'devlab',
+          mode: widget.html ? 'srcdoc' : 'iframe',
+          url: widget.url || null,
+          srcdoc: widget.html || null,
+          session_token: widget.session_token || null,
+          skills: skillsForCoding,
+          difficulty: 'medium',
+        };
+      }
+    } catch {}
+
     const pkg = await buildExamPackageDoc({
       exam_id: examId,
       attempt_id: attemptId,
@@ -1926,6 +1957,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       coding_questions: codingQuestionsDecorated,
       time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
       expires_at_iso: null,
+      devlab_widget: devlabWidgetBlock,
     });
     await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
   } catch (e) {

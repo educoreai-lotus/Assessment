@@ -84,6 +84,8 @@ exports.decorateDevLabResponse = function decorateDevLabResponse(resp) {
 exports.gradeCodingAnswersForExam = async function gradeCodingAnswersForExam({
 	codingQuestions,
 	codingAnswers,
+  sessionToken,
+  attempt,
 }) {
 	const questions = Array.isArray(codingQuestions) ? codingQuestions : [];
 	const answers = Array.isArray(codingAnswers) ? codingAnswers : [];
@@ -134,7 +136,12 @@ exports.gradeCodingAnswersForExam = async function gradeCodingAnswersForExam({
   let gradingResults = [];
   try {
     gradingResults =
-      (await devlabGateway.sendCodingGradeEnvelope(gradingPayload)) || [];
+      (await devlabGateway.sendCodingGradeEnvelope({
+        answers: answersPayload,
+        questions,
+        attempt,
+        session_token: sessionToken,
+      })) || [];
   } catch (err) {
     try {
       const { mockGradeCodingAnswers } = require('../mocks/devlabMock');
