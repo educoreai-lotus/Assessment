@@ -78,7 +78,7 @@ async function sendCodingGradeEnvelope(payloadObj) {
 async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'medium', amount = 2, humanLanguage = 'en' }) {
 	try {
 		const payload = {
-			action: 'coding-widget',
+			action: 'coding',
 			attempt_id,
 			skills: Array.isArray(skills) ? skills : [],
 			difficulty,
@@ -86,7 +86,7 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
 			humanLanguage,
 			programming_language: 'javascript',
 		};
-		const { data: json } = await sendToCoordinator({ targetService: 'devlab', payload }).catch(() => ({ data: {} }));
+		const { data: json } = await sendToCoordinator({ targetService: 'devlab-service', payload }).catch(() => ({ data: {} }));
 		// Expected modern format: include widget + questions
 		if (json && json.success && json.data) {
 			const html = typeof json.data.html === 'string' ? json.data.html : null;
