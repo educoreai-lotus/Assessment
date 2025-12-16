@@ -31,10 +31,7 @@ function validateTheoreticalQuestions(input) {
     let fixedCA = ca;
     if (Array.isArray(options) && options.length > 0 && !options.includes(ca)) {
       fixedCA = options[0];
-      try {
-        // eslint-disable-next-line no-console
-        console.log('[THEORY][MOCK][FIX]', { reason: 'invalid_correct_answer', set_to: fixedCA });
-      } catch {}
+      // quiet fix: do not log noisy mock fix lines in production
     }
     out.push({ ...q, correct_answer: fixedCA });
   }

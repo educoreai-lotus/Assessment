@@ -1967,6 +1967,16 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       devlab_raw: (widget && typeof widget.raw === 'string') ? widget.raw : undefined,
     });
     await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
+    try {
+      console.log('[TRACE][PACKAGE][SAVE_OK]', {
+        exam_id: examId,
+        attempt_id: attemptId,
+        package_id: String(pkg?._id || ''),
+        questions: Array.isArray(questions) ? questions.length : 0,
+        coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.length : 0,
+        devlab: !!devlabWidgetBlock && (devlabWidgetBlock.srcdoc || devlabWidgetBlock.url) ? 'widget_present' : 'none',
+      });
+    } catch {}
   } catch (e) {
     await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'persist_package_failed', failed_step: 'persist_package', progress: 100 });
     return;

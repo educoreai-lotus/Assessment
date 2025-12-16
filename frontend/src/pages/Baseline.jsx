@@ -54,7 +54,7 @@ export default function Baseline() {
   const [strikes, setStrikes] = useState(0);
   const [devlabWidget, setDevlabWidget] = useState(null);
 
-  async function waitForPackage(examId, maxWaitMs = 60000) {
+  async function waitForPackage(examId, maxWaitMs = 90000) {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {
       try {
