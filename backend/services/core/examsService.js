@@ -653,29 +653,35 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   // eslint-disable-next-line no-console
   console.debug("Coding generation skills:", skillsForCoding);
   let codingQuestionsDecorated = [];
+  let devlabWidgetResult = null;
   try {
-    codingQuestionsDecorated =
-      await devlabIntegration.buildCodingQuestionsForExam({
-        amount: 2,
-        skills: skillsForCoding,
-        humanLanguage: "en",
-        difficulty: "medium",
-      });
-  } catch (e) {
+    const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
+    devlabWidgetResult = await requestCodingWidgetHtml({
+      attempt_id: attemptId,
+      skills: skillsForCoding,
+      difficulty: 'medium',
+      amount: 2,
+      humanLanguage: 'en',
+    });
+    if (Array.isArray(devlabWidgetResult?.questions) && devlabWidgetResult.questions.length > 0) {
+      codingQuestionsDecorated = devlabWidgetResult.questions;
+    }
+  } catch {}
+  if (!Array.isArray(codingQuestionsDecorated) || codingQuestionsDecorated.length === 0) {
     try {
-      // eslint-disable-next-line no-console
-      console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'devlab_build_failed', message: e?.message });
-    } catch {}
-    try {
-      if (String(exam_type).toLowerCase() === 'postcourse') {
-        // eslint-disable-next-line no-console
-        console.log('[TRACE][POSTCOURSE][DEVLAB][ERROR]', { stage: 'build_coding_questions', message: e?.message, stack: e?.stack });
-      }
-    } catch {}
-    codingQuestionsDecorated = [];
+      codingQuestionsDecorated =
+        await devlabIntegration.buildCodingQuestionsForExam({
+          amount: 2,
+          skills: skillsForCoding,
+          humanLanguage: "en",
+          difficulty: "medium",
+        });
+    } catch (e) {
+      try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'devlab_build_failed', message: e?.message }); } catch {}
+      codingQuestionsDecorated = [];
+    }
   }
   try {
-    // eslint-disable-next-line no-console
     console.log(`[TRACE][${String(exam_type).toUpperCase()}][DEVLAB]`, {
       skills_for_coding: skillsForCoding.length,
       questions_built: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.length : 0,
@@ -1927,9 +1933,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     // Prepare optional DevLab widget (coding-only, exam flow)
     let devlabWidgetBlock = undefined;
     try {
-      const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
-      const skillsForCoding = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
-      const widget = await requestCodingWidgetHtml({ attempt_id: attemptId, skills: skillsForCoding, difficulty: 'medium' });
+      const widget = devlabWidgetResult;
       if (widget && (widget.html || widget.url)) {
         devlabWidgetBlock = {
           provider: 'devlab',

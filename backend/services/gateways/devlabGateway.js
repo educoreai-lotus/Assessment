@@ -75,24 +75,37 @@ async function sendCodingGradeEnvelope(payloadObj) {
 }
 
 // Request DevLab widget HTML (or URL) for coding questions session
-async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'medium' }) {
+async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'medium', amount = 2, humanLanguage = 'en' }) {
 	try {
-		const payload = { action: 'coding-widget', attempt_id, skills: Array.isArray(skills) ? skills : [], difficulty };
+		const payload = {
+			action: 'coding-widget',
+			attempt_id,
+			skills: Array.isArray(skills) ? skills : [],
+			difficulty,
+			amount,
+			humanLanguage,
+			programming_language: 'javascript',
+		};
 		const { data: json } = await sendToCoordinator({ targetService: 'devlab', payload }).catch(() => ({ data: {} }));
-		// Expected modern format
-		if (json && json.success && json.data && (typeof json.data.html === 'string' || typeof json.data.url === 'string')) {
-			return { html: json.data.html || null, url: json.data.url || null, session_token: json.data.session_token || null };
+		// Expected modern format: include widget + questions
+		if (json && json.success && json.data) {
+			const html = typeof json.data.html === 'string' ? json.data.html : null;
+			const url = typeof json.data.url === 'string' ? json.data.url : null;
+			const session_token = typeof json.data.session_token === 'string' ? json.data.session_token : null;
+			const questions = Array.isArray(json.data.questions) ? json.data.questions : [];
+			return { html, url, session_token, questions };
 		}
-		// Legacy: { response: { answers: "<html>" } }
+		// Legacy: { response: { answers: "<html>", url?, session_token?, questions? } }
 		const html = typeof json?.response?.answers === 'string' ? json.response.answers : null;
 		const url = typeof json?.response?.url === 'string' ? json.response.url : null;
 		const session_token = typeof json?.response?.session_token === 'string' ? json.response.session_token : null;
-		if (html || url) return { html, url, session_token };
+		const questions = Array.isArray(json?.response?.questions) ? json.response.questions : [];
+		if (html || url || questions.length > 0) return { html, url, session_token, questions };
 	} catch (err) {
 		try { console.log('[MOCK-FALLBACK][DevLab][coding-widget][error]', { message: err?.message }); } catch {}
 	}
 	// Fallback: return nothing; UI will render only theoretical part
-	return { html: null, url: null, session_token: null };
+	return { html: null, url: null, session_token: null, questions: [] };
 }
 
 module.exports = { sendToDevlabEnvelope, requestCodingQuestions, sendCodingGradeEnvelope, requestCodingWidgetHtml };
