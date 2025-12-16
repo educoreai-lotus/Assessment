@@ -316,13 +316,33 @@ exports.startExam = async (req, res, next) => {
     };
     const userIntFromPkg = normalizeToInt(pkg?.user?.user_id);
     const courseIntFromPkg = normalizeToInt(pkg?.metadata?.course_id);
-    const questionsForResponse = safeMapQuestions(pkg?.questions).map((q) => ({
+    // Map theoretical questions
+    const theoreticalForResponse = safeMapQuestions(pkg?.questions).map((q) => ({
       question_id: q.question_id,
       skill_id: q.skill_id,
       prompt: removeHintsDeep(q.prompt),
       options: Array.isArray(q.options) ? q.options : [],
       metadata: q.metadata || {},
     }));
+    // Also surface coding questions in the generic questions array for legacy UIs
+    const codingForResponse = (Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : []).map((cq, idx) => {
+      const qid = String(cq?.qid || cq?.question_id || cq?.id || `code_${idx + 1}`);
+      const skillsArr = Array.isArray(cq?.skills) ? cq.skills.map(String) : [];
+      const skillId = skillsArr.length > 0 ? skillsArr[0] : (typeof cq?.skill_id === 'string' ? cq.skill_id : null);
+      return {
+        question_id: qid,
+        skill_id: skillId,
+        prompt: {
+          question: typeof cq?.question === 'string' ? cq.question : (typeof cq?.stem === 'string' ? cq.stem : ''),
+          programming_language: typeof cq?.programming_language === 'string' ? cq.programming_language : 'javascript',
+          expected_output: cq?.expected_output ?? '',
+          test_cases: Array.isArray(cq?.test_cases) ? cq.test_cases : [],
+        },
+        options: [],
+        metadata: { type: 'code', difficulty: typeof cq?.difficulty === 'string' ? cq.difficulty : 'medium' },
+      };
+    });
+    const questionsForResponse = [...theoreticalForResponse, ...codingForResponse];
     return res.json({
       exam_id: Number(pkg.exam_id),
       attempt_id: Number(pkg.attempt_id),
@@ -351,7 +371,8 @@ exports.startExam = async (req, res, next) => {
 exports.submitExam = async (req, res, next) => {
   try {
     const { examId } = req.params;
-    const { attempt_id, answers } = req.body || {};
+    const { attempt_id } = req.body || {};
+    const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
     const devlabBlock = (req.body && req.body.devlab) || null;
     // [TRACE] submit entry
     try {
@@ -359,12 +380,12 @@ exports.submitExam = async (req, res, next) => {
       console.log('[TRACE][EXAM][SUBMIT]', {
         examId: Number(examId),
         attempt_id,
-        answers_count: Array.isArray(answers) ? answers.length : 0,
+        answers_count: answers.length,
       });
     } catch {}
 
-    if (!attempt_id || !Array.isArray(answers)) {
-      return res.status(400).json({ error: 'attempt_id_and_answers_required', message: 'attempt_id and answers[] are required' });
+    if (!attempt_id) {
+      return res.status(400).json({ error: 'attempt_id_required', message: 'attempt_id is required' });
     }
 
     // Validate attempt exists and matches examId; check status and expiration
