@@ -132,7 +132,11 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
 		if (json && json.success && json.data) {
 			const html = typeof json.data.componentHtml === 'string'
         ? json.data.componentHtml
-        : (typeof json.data.html === 'string' ? json.data.html : null);
+        : (typeof json.data.componentHTML === 'string'
+          ? json.data.componentHTML
+          : (typeof json.data.component_html === 'string'
+            ? json.data.component_html
+            : (typeof json.data.html === 'string' ? json.data.html : null)));
 			const url = typeof json.data.url === 'string' ? json.data.url : null;
 			const session_token = (typeof json.data.sessionToken === 'string' ? json.data.sessionToken : null)
         || (typeof json.data.session_token === 'string' ? json.data.session_token : null);
@@ -156,6 +160,8 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
         }
 				if (parsed && typeof parsed === 'object') {
 					if (!html && typeof parsed.componentHtml === 'string') html = parsed.componentHtml;
+          if (!html && typeof parsed.componentHTML === 'string') html = parsed.componentHTML;
+          if (!html && typeof parsed.component_html === 'string') html = parsed.component_html;
           if (!html && typeof parsed.html === 'string') html = parsed.html;
 					if (!url && typeof parsed.url === 'string') url = parsed.url;
 					if (!session_token && typeof parsed.sessionToken === 'string') session_token = parsed.sessionToken;
