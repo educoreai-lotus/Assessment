@@ -181,6 +181,7 @@ async function buildExamPackageDoc({
           if (Array.isArray(q.skills)) out.skills = q.skills.map(String);
           if (typeof q.difficulty === 'string') out.difficulty = q.difficulty;
           if (q.renderedComponent != null) out.renderedComponent = q.renderedComponent;
+          if (q.devlab != null) out.devlab = q.devlab;
           return out;
         }
         return { question: String(q ?? '') };
@@ -2033,7 +2034,25 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       })();
       try { console.log(`[DEVLAB][UI][${devlabUi ? 'PRESENT' : 'ABSENT'}]`, { componentHtml: !!devlabUi }); } catch {}
 
-      try { console.log('[PACKAGE][WRITE][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    try { console.log('[PACKAGE][WRITE][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    const mappedCodingQuestions = Array.isArray(codingQuestionsDecorated)
+      ? codingQuestionsDecorated.map((q) => ({
+        question: [
+          q?.title ? `Title: ${q.title}` : null,
+          q?.description ? `Description: ${q.description}` : null,
+          q?.difficulty ? `Difficulty: ${q.difficulty}` : null,
+          q?.programming_language ? `Language: ${q.programming_language}` : null,
+        ].filter(Boolean).join("\n"),
+        devlab: q,
+      }))
+      : [];
+    try {
+      console.log('[PACKAGE][CODING_SHAPE]', {
+        firstType: typeof (codingQuestionsDecorated?.[0]),
+        savedQuestionType: typeof (codingQuestionsDecorated?.[0]?.title),
+        mappedQuestionType: typeof (mappedCodingQuestions?.[0]?.question),
+      });
+    } catch {}
       const pkg = await buildExamPackageDoc({
         exam_id: examId,
         attempt_id: attemptId,
@@ -2045,7 +2064,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         course_id: course_id != null ? course_id : null,
         course_name: resolvedCourseName || undefined,
         questions,
-        coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.map((q) => ({ question: q })) : [],
+      coding_questions: mappedCodingQuestions,
         time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
         expires_at_iso: null,
         devlab_ui: devlabUi,

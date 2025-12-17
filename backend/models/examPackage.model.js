@@ -37,6 +37,8 @@ const ExamPackageCodingQuestionSchema = new Schema(
     difficulty: { type: String, default: 'medium' },
     // Optional UI payload from DevLab, passed through transparently when present
     renderedComponent: Schema.Types.Mixed,
+    // Full DevLab object for grading/judge engines (non-required)
+    devlab: { type: Schema.Types.Mixed, required: false },
     requested_at: { type: Date, default: Date.now },
   },
   { _id: false }
