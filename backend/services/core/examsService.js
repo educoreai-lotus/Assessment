@@ -1730,18 +1730,29 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
 // Async-first creation
 // ----------------------
 async function setExamStatus(examId, { status, progress, error_message = null, failed_step = null }) {
-  try {
-    await pool.query(
-      `UPDATE exams
-       SET status = COALESCE($2, status),
-           progress = COALESCE($3, progress),
-           error_message = $4,
-           failed_step = $5,
-           updated_at = NOW()
-       WHERE exam_id = $1`,
-      [examId, status || null, Number.isFinite(Number(progress)) ? Number(progress) : null, error_message, failed_step],
-    );
-  } catch {}
+  const patch = {
+    status: status ?? undefined,
+    progress: Number.isFinite(Number(progress)) ? Number(progress) : undefined,
+    error_message: error_message ?? undefined,
+    failed_step: failed_step ?? undefined,
+  };
+  console.log('[EXAM][STATUS][WRITE][BEFORE]', { exam_id: examId, patch });
+  const result = await pool.query(
+    `UPDATE exams
+     SET status = COALESCE($2, status),
+         progress = COALESCE($3, progress),
+         error_message = $4,
+         failed_step = $5,
+         updated_at = NOW()
+     WHERE exam_id = $1`,
+    [examId, status || null, Number.isFinite(Number(progress)) ? Number(progress) : null, error_message, failed_step],
+  );
+  const rowCount = Number(result?.rowCount || 0);
+  console.log('[EXAM][STATUS][WRITE][AFTER]', { exam_id: examId, rowCount });
+  if (rowCount === 0) {
+    console.error('[EXAM][STATUS][WRITE][ZERO_ROWS]', { exam_id: examId, patch });
+    throw new Error('exam_status_update_zero_rows');
+  }
 }
 
 async function createExamRecord({ user_id, exam_type, course_id, course_name, user_name, company_id }) {
@@ -1851,6 +1862,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     return;
   }
   __activePrepAttempts.add(Number(attemptId));
+  const watchdogMs = Number.isFinite(Number(process.env.PREP_TIMEOUT_MS)) ? Number(process.env.PREP_TIMEOUT_MS) : 120000;
+  const startedAt = Date.now();
   try {
   const userStr = String(user_id);
   const userInt = Number(userStr.replace(/[^0-9]/g, ""));
@@ -1890,6 +1903,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'fetch_failed', failed_step: 'fetch_upstream', progress: 100 });
     return;
   }
+  try { console.log('[PREP][CHECKPOINT][AFTER_DIRECTORY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
 
   // Normalize and compute duration
   const { normalizeSkills } = require("./skillsUtils");
@@ -2042,6 +2056,15 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
 
   await setExamStatus(examId, { status: 'READY', progress: 100 });
   try { console.log('[EXAM][STATUS][READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+  } catch (e) {
+    // Prep watchdog: last-resort timeout handler
+    if (String(e?.message || '').toLowerCase().includes('prep_timeout')) {
+      try {
+        await setExamStatus(examId, { status: 'FAILED', error_message: 'prepareExamAsync timed out', failed_step: 'prep_timeout', progress: 100 });
+      } catch {}
+    } else {
+      // unexpected crash bubble-up path has already set FAILED earlier; do nothing
+    }
   } finally {
   try { __activePrepAttempts.delete(Number(attemptId)); } catch {}
 }

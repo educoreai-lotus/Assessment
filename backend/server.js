@@ -196,6 +196,21 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'server_error' });
 });
 
+// Process-level crash guards (log globally)
+if (!global.__PROCESS_ERROR_HANDLERS_INSTALLED__) {
+  global.__PROCESS_ERROR_HANDLERS_INSTALLED__ = true;
+  process.on('unhandledRejection', (reason, p) => {
+    try {
+      console.error('[PROCESS][UNHANDLED_REJECTION]', { reason: String(reason && reason.message || reason), stack: reason && reason.stack });
+    } catch {}
+  });
+  process.on('uncaughtException', (err) => {
+    try {
+      console.error('[PROCESS][UNCAUGHT_EXCEPTION]', { message: err && err.message, stack: err && err.stack });
+    } catch {}
+  });
+}
+
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
