@@ -598,17 +598,27 @@ exports.getExamStatus = async (req, res, next) => {
     const { examId } = req.params;
     const examIdNum = normalizeToInt(examId);
     if (examIdNum == null) return res.status(400).json({ error: 'invalid_exam_id' });
-    const { rows } = await pool.query(
-      `SELECT COALESCE(status, 'READY') AS status, COALESCE(progress, 0) AS progress, error_message, failed_step
-       FROM exams WHERE exam_id = $1`,
-      [examIdNum],
-    ).catch(()=>({ rows: [] }));
+    const { rows } = await pool
+      .query(
+        `SELECT COALESCE(status, 'READY') AS status,
+                COALESCE(progress, 0) AS progress,
+                error_message,
+                failed_step,
+                updated_at
+         FROM exams
+         WHERE exam_id = $1`,
+        [examIdNum],
+      )
+      .catch(()=>({ rows: [] }));
     if (!rows || rows.length === 0) return res.status(404).json({ error: 'exam_not_found' });
     const row = rows[0];
-    const out = { status: row.status, progress: Number(row.progress || 0) };
-    if (row.error_message) out.error = row.error_message;
-    if (row.failed_step) out.failed_step = row.failed_step;
-    return res.json(out);
+    return res.json({
+      status: row.status,
+      progress: Number(row.progress || 0),
+      failed_step: row.failed_step || null,
+      error_message: row.error_message || null,
+      updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    });
   } catch (err) {
     return next(err);
   }

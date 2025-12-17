@@ -2018,6 +2018,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     })();
     try { console.log(`[DEVLAB][UI][${devlabUi ? 'PRESENT' : 'ABSENT'}]`, { componentHtml: !!devlabUi }); } catch {}
 
+    try { console.log('[PACKAGE][WRITE][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
     const pkg = await buildExamPackageDoc({
       exam_id: examId,
       attempt_id: attemptId,
@@ -2034,6 +2035,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       expires_at_iso: null,
       devlab_ui: devlabUi,
     });
+    try { console.log('[PACKAGE][WRITE][AFTER]', { exam_id: examId, attempt_id: attemptId, package_id: String(pkg?._id || '') }); } catch {}
     await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
     try {
       console.log('[PERSIST][PACKAGE][SUCCESS]', {
@@ -2050,19 +2052,29 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     return;
   }
 
+  try { console.log('[EXAM][STATUS][READY][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
   await setExamStatus(examId, { status: 'READY', progress: 100 });
   try { console.log('[EXAM][STATUS][READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
   } catch (e) {
-    // Prep watchdog: last-resort timeout handler
-    if (String(e?.message || '').toLowerCase().includes('prep_timeout')) {
-      try {
-        await setExamStatus(examId, { status: 'FAILED', error_message: 'prepareExamAsync timed out', failed_step: 'prep_timeout', progress: 100 });
-      } catch {}
-    } else {
-      // unexpected crash bubble-up path has already set FAILED earlier; do nothing
-    }
+    // Any uncaught error: mark FAILED to avoid PREPARING hang
+    try {
+      await setExamStatus(examId, {
+        status: 'FAILED',
+        error_message: e?.message || 'prepare_failed',
+        failed_step: String(e?.message || '').toLowerCase().includes('prep_timeout') ? 'prep_timeout' : 'prep_unhandled',
+        progress: 100,
+      });
+      try { console.error('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, message: e?.message || 'prepare_failed' }); } catch {}
+    } catch {}
   } finally {
-  try { __activePrepAttempts.delete(Number(attemptId)); } catch {}
+    // Emit final lifecycle log
+    try {
+      const { rows } = await pool.query(`SELECT status FROM exams WHERE exam_id = $1`, [examId]).catch(() => ({ rows: [] }));
+      const finalStatus = rows && rows[0] ? rows[0].status : null;
+      try { console.log('[PREP][DONE]', { exam_id: examId, attempt_id: attemptId, status: finalStatus }); } catch {}
+    } catch {}
+    try { __activePrepAttempts.delete(Number(attemptId)); } catch {}
+  }
 }
 
 }
