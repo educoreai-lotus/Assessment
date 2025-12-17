@@ -1922,6 +1922,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   let codingQuestionsDecorated = [];
   let devlabPayload = null;
   try {
+    try { console.log('[DEVLAB][GEN][ENTERED]'); } catch {}
     const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
     const __tDev = Date.now();
     try { console.log('[DEVLAB][GEN][START]', { exam_id: examId, attempt_id: attemptId }); } catch {}
