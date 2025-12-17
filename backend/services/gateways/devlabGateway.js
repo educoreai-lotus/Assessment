@@ -129,25 +129,60 @@ async function requestCodingWidgetHtml(input) {
 
 		console.log('[DEVLAB][GW][RAW_KEYS]', Object.keys(json || {}));
 
-		// ALWAYS unwrap response.answer JSON string; ignore top-level json.questions/data.questions
-		const answerStr = json?.response?.answer;
-		const answerObj = typeof answerStr === 'string' ? JSON.parse(answerStr) : answerStr;
-		if (!answerObj || typeof answerObj !== 'object') {
-			throw new Error('devlab_unrecognized_response_shape');
+		// Resilient extraction
+		let answerObj = null;
+		const ans = json?.response?.answer;
+		if (typeof ans === 'string') {
+			try {
+				answerObj = JSON.parse(ans);
+			} catch {
+				answerObj = { success: false, error: 'invalid_json_in_answer' };
+			}
+		} else if (ans && typeof ans === 'object') {
+			answerObj = ans;
 		}
 
-		console.log('[DEVLAB][PARSE][RAW_ANSWER_KEYS]', Object.keys(answerObj || {}));
+		// Questions fallback chain
+		let questions = [];
+		let sourceQuestions = 'none';
+		if (Array.isArray(answerObj?.questions)) {
+			questions = answerObj.questions;
+			sourceQuestions = 'answerObj.questions';
+		} else if (Array.isArray(json?.questions)) {
+			questions = json.questions;
+			sourceQuestions = 'json.questions';
+		} else if (Array.isArray(json?.data?.questions)) {
+			questions = json.data.questions;
+			sourceQuestions = 'json.data.questions';
+		} else if (Array.isArray(answerObj?.data?.questions)) {
+			questions = answerObj.data.questions;
+			sourceQuestions = 'answerObj.data.questions';
+		} else if (Array.isArray(json?.payload?.questions)) {
+			questions = json.payload.questions;
+			sourceQuestions = 'json.payload.questions';
+		}
 
-		const questions = Array.isArray(answerObj.questions) ? answerObj.questions : [];
-		const html = typeof answerObj.componentHtml === 'string' ? answerObj.componentHtml : null;
+		// HTML fallback chain
+		let html = null;
+		let sourceHtml = 'none';
+		if (typeof answerObj?.componentHtml === 'string') {
+			html = answerObj.componentHtml;
+			sourceHtml = 'answerObj.componentHtml';
+		} else if (typeof json?.componentHtml === 'string') {
+			html = json.componentHtml;
+			sourceHtml = 'json.componentHtml';
+		} else if (typeof json?.data?.componentHtml === 'string') {
+			html = json.data.componentHtml;
+			sourceHtml = 'json.data.componentHtml';
+		}
 
-		console.log('[DEVLAB][PARSE][QUESTIONS_COUNT]', { count: questions.length, elapsed_ms: Date.now() - start });
+		console.log('[DEVLAB][EXTRACT]', { sourceQuestions, qCount: Array.isArray(questions) ? questions.length : 0, hasHtml: !!html });
 
 		if (!Array.isArray(questions) || questions.length === 0) {
 			throw new Error('devlab_no_questions');
 		}
 
-		return { questions, html, raw: answerObj };
+		return { questions, html, raw: (answerObj || json || {}), sourceQuestions, sourceHtml };
 	} catch (err) {
 		console.error('[DEVLAB][GW][ERROR]', err?.message || String(err));
 		throw err; // MUST THROW

@@ -703,6 +703,7 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
     const qArr = Array.isArray(devlabPayload?.questions) ? devlabPayload.questions : [];
     const htmlStr = typeof devlabPayload?.html === 'string' ? devlabPayload.html : null;
     try { console.log('[DEVLAB][GEN][AFTER_PARSE]', { questions_count: qArr.length, html_length: htmlStr ? htmlStr.length : 0 }); } catch {}
+    try { console.log('[DEVLAB][GEN][FINAL]', { qCount: Array.isArray(qArr) ? qArr.length : 0, htmlLength: htmlStr ? htmlStr.length : 0, sourceQuestions: devlabPayload?.sourceQuestions || 'unknown' }); } catch {}
     if (!Array.isArray(qArr) || qArr.length === 0) {
       return { error: "exam_creation_failed", message: "DevLab generation returned no questions" };
     }
