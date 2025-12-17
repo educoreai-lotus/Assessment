@@ -1924,7 +1924,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   try {
     const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
     const __tDev = Date.now();
-    try { console.log('[DEVLAB][GEN][BEFORE_SEND]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    try { console.log('[DEVLAB][GEN][START]', { exam_id: examId, attempt_id: attemptId }); } catch {}
     const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
     devlabPayload = await requestCodingWidgetHtml({
       attempt_id: attemptId,
@@ -1942,6 +1942,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       return;
     }
     codingQuestionsDecorated = qArr;
+    try { console.log('[DEVLAB][GEN][DONE]', { exam_id: examId, attempt_id: attemptId, questions: qArr.length }); } catch {}
   } catch (e) {
     await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'devlab_generate_failed', failed_step: 'devlab_generate', progress: 100 });
     return;
@@ -2014,7 +2015,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       course_id: course_id != null ? course_id : null,
       course_name: resolvedCourseName || undefined,
       questions,
-      coding_questions: codingQuestionsDecorated,
+      coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.map((q) => ({ question: q })) : [],
       time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
       expires_at_iso: null,
       devlab_ui: devlabUi,
@@ -2036,7 +2037,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   }
 
   await setExamStatus(examId, { status: 'READY', progress: 100 });
-  try { console.log('[TRACE][prepareExamAsync READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+  try { console.log('[EXAM][STATUS][READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
   } finally {
   try { __activePrepAttempts.delete(Number(attemptId)); } catch {}
 }
