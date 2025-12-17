@@ -18,7 +18,38 @@ async function sendToCoordinator({ targetService, payload, requester = (process.
       keys: Object.keys(envelope.payload || {}),
     });
   } catch {}
-  const ret = await postToCoordinator(envelope, targetService).catch(() => ({}));
+
+  // Hard timeout guard at the sender level (upper bound). DevLab defaults to 60s.
+  const hardTimeoutMs = (() => {
+    if (String(targetService) === 'devlab-service') {
+      const v = Number(process.env.DEVLAB_REQUEST_TIMEOUT_MS);
+      return Number.isFinite(v) && v > 0 ? v : 60000;
+    }
+    const v = Number(process.env.COORDINATOR_TIMEOUT_MS);
+    return Number.isFinite(v) && v > 0 ? v : 60000;
+  })();
+  const __t0 = Date.now();
+  try {
+    console.log('[COORD][SEND][START]', { target: targetService || 'unknown', timeout_ms: hardTimeoutMs });
+  } catch {}
+
+  const coreCall = postToCoordinator(envelope, targetService);
+  let ret;
+  try {
+    ret = await Promise.race([
+      coreCall,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(String(targetService) === 'devlab-service' ? 'DevLabTimeout' : 'CoordinatorTimeout')), hardTimeoutMs)),
+    ]);
+  } catch (err) {
+    try { console.log('[COORD][SEND][TIMEOUT]', { target: targetService || 'unknown', elapsed_ms: Date.now() - __t0, message: String(err?.message || '') }); } catch {}
+    throw err;
+  }
+
+  try {
+    const status = ret?.resp?.status;
+    const ok = !!ret?.resp?.ok;
+    console.log('[COORD][SEND][STATUS]', { target: targetService || 'unknown', status, ok, elapsed_ms: Date.now() - __t0 });
+  } catch {}
 
   // Normalize DevLab envelopes BEFORE logging, so logs don't show escaped JSON strings
   try {
@@ -71,6 +102,7 @@ async function sendToCoordinator({ targetService, payload, requester = (process.
 
   // Fallback: still keep a small snapshot of the raw data for non-DevLab or debugging
   try {
+    console.log('[COORD][SEND][PARSED]', { target: targetService || 'unknown', keys: ret && ret.data ? Object.keys(ret.data) : [] });
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;
