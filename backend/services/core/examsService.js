@@ -1883,10 +1883,27 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   const { validateTheoreticalQuestions, normalizeAiQuestion } = require("./theoryService");
   const devlabIntegration = require("../integrations/devlabService");
 
+  // Try to obtain DevLab widget + questions first; fallback to programmatic build
   let codingQuestionsDecorated = [];
+  let devlabWidgetResult = null;
   try {
     const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
-    codingQuestionsDecorated = await devlabIntegration.buildCodingQuestionsForExam({ amount: 2, skills: ids, humanLanguage: 'en', difficulty: 'medium' });
+    try {
+      const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
+      devlabWidgetResult = await requestCodingWidgetHtml({
+        attempt_id: attemptId,
+        skills: ids,
+        difficulty: 'medium',
+        amount: 2,
+        humanLanguage: 'en',
+      });
+      if (Array.isArray(devlabWidgetResult?.questions) && devlabWidgetResult.questions.length > 0) {
+        codingQuestionsDecorated = devlabWidgetResult.questions;
+      }
+    } catch {}
+    if (!Array.isArray(codingQuestionsDecorated) || codingQuestionsDecorated.length === 0) {
+      codingQuestionsDecorated = await devlabIntegration.buildCodingQuestionsForExam({ amount: 2, skills: ids, humanLanguage: 'en', difficulty: 'medium' });
+    }
   } catch { codingQuestionsDecorated = []; }
   await setExamStatus(examId, { progress: 55 });
 
