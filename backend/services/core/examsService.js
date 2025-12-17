@@ -347,16 +347,9 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
         count: Array.isArray(skillsPayload?.skills) ? skillsPayload.skills.length : 0,
       });
     } catch {}
-    if (isTest) {
-      try {
-        const { mockFetchPolicy } = require("../mocks/directoryMock");
-        policy = await mockFetchPolicy("baseline");
-      } catch {
-        policy = { passing_grade: 70, max_attempts: 1 };
-      }
-    } else {
-      policy = await safeFetchPolicy("baseline");
-    }
+    // Baseline: skip Directory policy entirely, use static fallback
+    policy = { passing_grade: 70 };
+    try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
   } else if (exam_type === "postcourse") {
     // Phase 1: Policy first, then coverage (with safe mocks)
     if (isTest) {
@@ -1881,11 +1874,10 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   try {
     if (exam_type === 'baseline') {
       const { safeFetchBaselineSkills } = require("../gateways/skillsEngineGateway");
-      const { safeFetchPolicy } = require("../gateways/directoryGateway");
       skillsPayload = await safeFetchBaselineSkills({ user_id });
-      policy = isTest
-        ? ({ passing_grade: 70, max_attempts: 1 })
-        : await safeFetchPolicy('baseline');
+      // Baseline: skip Directory policy entirely, use static fallback
+      policy = { passing_grade: 70 };
+      try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
     } else if (exam_type === 'postcourse') {
       const { safeFetchPolicy } = require("../gateways/directoryGateway");
       const { safeFetchCoverage } = require("../gateways/courseBuilderGateway");
