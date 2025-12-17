@@ -1919,7 +1919,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   if (isTest && (!Number.isFinite(questionCount) || questionCount < 2)) questionCount = 2;
   const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
   try { await pool.query(`UPDATE exam_attempts SET policy_snapshot = $1::jsonb, duration_minutes = $2 WHERE attempt_id = $3`, [JSON.stringify(policy || {}), durationMinutes || null, attemptId]); } catch {}
-  await setExamStatus(examId, { progress: 40 });
+  await setExamStatus(examId, { status: 'PREPARING', progress: 40 });
 
   // Generate questions and coding
   const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
@@ -1961,7 +1961,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: e?.message }); } catch {}
     return;
   }
-  await setExamStatus(examId, { progress: 55 });
+  await setExamStatus(examId, { status: 'PREPARING', progress: 55 });
 
   let questions = [];
   try {
@@ -2007,7 +2007,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       return;
     }
   }
-  await setExamStatus(examId, { progress: 80 });
+  await setExamStatus(examId, { status: 'PREPARING', progress: 80 });
 
   try {
     // Prepare optional DevLab UI block for UI rendering (if available)
