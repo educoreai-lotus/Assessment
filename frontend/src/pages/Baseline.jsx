@@ -39,6 +39,7 @@ export default function Baseline() {
 
   const [loading, setLoading] = useState(true);
   const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const [examId, setExamId] = useState(initialExamId);
@@ -53,6 +54,7 @@ export default function Baseline() {
   const [answers, setAnswers] = useState({});
   const [strikes, setStrikes] = useState(0);
   const [devlabWidget, setDevlabWidget] = useState(null);
+  const [devlabHtml, setDevlabHtml] = useState(null);
 
   async function waitForPackage(examId, maxWaitMs = 90000) {
     const start = Date.now();
@@ -166,6 +168,16 @@ export default function Baseline() {
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         try { setDevlabWidget(data?.devlab_widget || null); } catch {}
+        try {
+          const html =
+            data?.devlab_ui?.componentHtml ||
+            data?.devlabUi?.componentHtml ||
+            data?.devlab_ui_html ||
+            null;
+          setDevlabHtml(typeof html === 'string' && html.trim() !== '' ? html : null);
+          // eslint-disable-next-line no-console
+          console.log('[EXAM][PACKAGE][DEVLAB_UI]', !!html, typeof html === 'string' ? html.length : 0);
+        } catch {}
         const normalized = Array.isArray(data?.questions)
           ? data.questions.map((p, idx) => {
               const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
@@ -310,10 +322,8 @@ export default function Baseline() {
     return count;
   }, [questions, answers]);
 
-  const progress = useMemo(() => {
-    if (!questions.length) return 0;
-    return Math.round((answeredCount / questions.length) * 100);
-  }, [answeredCount, questions]);
+  const currentIndexDisplay = currentIdx + 1;
+  const totalQuestions = questions.length;
 
   function handleAnswer(id, value) {
     setAnswers((s) => ({ ...s, [id]: value }));
@@ -327,8 +337,10 @@ export default function Baseline() {
   }
 
   async function handleSubmit() {
+    if (isSubmitting) return;
     try {
-      setLoading(true);
+      // Immediate submit loading UI
+      setIsSubmitting(true);
       const devlabAnswers = await requestDevLabAnswers().catch(() => []);
       const payloadAnswers = questions.map((q) => ({
         question_id: q.originalId,
@@ -350,7 +362,8 @@ export default function Baseline() {
     } catch (e) {
       setError(e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
-      setLoading(false);
+      // Keep isSubmitting true until navigation; if we reach here due to error, allow retry
+      setIsSubmitting(false);
     }
   }
 
@@ -426,14 +439,15 @@ export default function Baseline() {
               )}
             </div>
             <div className="text-sm text-neutral-300">
-              Progress: {progress}% &nbsp; <span className="text-neutral-500">({answeredCount}/{questions.length} answered)</span>
+              Question {currentIndexDisplay} of {totalQuestions} &nbsp;
+              <span className="text-neutral-500">(Answered: {answeredCount}/{totalQuestions})</span>
             </div>
             {currentIdx < questions.length - 1 ? (
-              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk)}>
+              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
                 Next
               </button>
             ) : (
-              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !(cameraReady && cameraOk)}>
+              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
                 Submit
               </button>
             )}
@@ -452,6 +466,27 @@ export default function Baseline() {
       {/* Render DevLab widget in place when the current question is the injected devlab page */}
       {questions.length > 0 && questions[currentIdx]?.type === 'devlab' && devlabWidget && (
         <DevLabWidget widget={devlabWidget} iframeRef={devlabIframeRef} />
+      )}
+
+      {/* Dedicated Coding section using devlab_ui.componentHtml when present */}
+      {typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-3">Coding</h3>
+          <iframe
+            title="Coding Widget"
+            srcDoc={devlabHtml}
+            style={{ width: '100%', height: '700px', border: '0', borderRadius: '12px' }}
+            sandbox="allow-scripts allow-forms allow-same-origin"
+          />
+        </div>
+      )}
+
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-emerald-900/40 border border-emerald-700 rounded-xl p-6 w-[320px] text-center">
+            <LoadingSpinner label="Submitting exam..." />
+          </div>
+        </div>
       )}
     </div>
   );

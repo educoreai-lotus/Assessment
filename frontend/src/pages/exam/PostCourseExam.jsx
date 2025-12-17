@@ -112,6 +112,7 @@ export default function PostCourseExam() {
   const recreateOnceRef = useRef(false);
   const devlabIframeRef = useRef(null);
   const [devlabWidget, setDevlabWidget] = useState(null);
+  const [devlabHtml, setDevlabHtml] = useState(null);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
   [answers]);
@@ -309,6 +310,16 @@ export default function PostCourseExam() {
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         try { setDevlabWidget(data?.devlab_widget || null); } catch {}
+        try {
+          const html =
+            data?.devlab_ui?.componentHtml ||
+            data?.devlabUi?.componentHtml ||
+            data?.devlab_ui_html ||
+            null;
+          setDevlabHtml(typeof html === 'string' && html.trim() !== '' ? html : null);
+          // eslint-disable-next-line no-console
+          console.log('[EXAM][PACKAGE][DEVLAB_UI]', !!html, typeof html === 'string' ? html.length : 0);
+        } catch {}
         const normalized = Array.isArray(data?.questions)
           ? data.questions.map((p, idx) => {
               const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
@@ -668,6 +679,18 @@ export default function PostCourseExam() {
 
       {questions.length > 0 && questions[currentIdx]?.type === 'devlab' && devlabWidget && (
         <DevLabWidget widget={devlabWidget} iframeRef={devlabIframeRef} />
+      )}
+
+      {typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-3">Coding</h3>
+          <iframe
+            title="Coding Widget"
+            srcDoc={devlabHtml}
+            style={{ width: '100%', height: '700px', border: '0', borderRadius: '12px' }}
+            sandbox="allow-scripts allow-forms allow-same-origin"
+          />
+        </div>
       )}
     </div>
   );
