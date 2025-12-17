@@ -1858,213 +1858,258 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   __activePrepAttempts.add(Number(attemptId));
   const watchdogMs = Number.isFinite(Number(process.env.PREP_TIMEOUT_MS)) ? Number(process.env.PREP_TIMEOUT_MS) : 120000;
   const startedAt = Date.now();
-  try {
-  try { console.log('[ARCH][BOUNDARY] learning_analytics is external pull-only and never participates in exam build or DevLab flows'); } catch {}
-  const userStr = String(user_id);
-  const userInt = Number(userStr.replace(/[^0-9]/g, ""));
-  const courseInt = normalizeToInt(course_id);
-  try { console.log('[TRACE][prepareExamAsync started]', { exam_id: examId, attempt_id: attemptId, exam_type }); } catch {}
-  await setExamStatus(examId, { status: 'PREPARING', progress: 5 });
+  let watchdogTimer = null;
+  async function runPrep() {
+    try { console.log('[ARCH][BOUNDARY] learning_analytics is external pull-only and never participates in exam build or DevLab flows'); } catch {}
+    const userStr = String(user_id);
+    const userInt = Number(userStr.replace(/[^0-9]/g, ""));
+    const courseInt = normalizeToInt(course_id);
+    try { console.log('[TRACE][prepareExamAsync started]', { exam_id: examId, attempt_id: attemptId, exam_type }); } catch {}
+    await setExamStatus(examId, { status: 'PREPARING', progress: 5 });
 
-  // Fetch upstream policy/skills/coverage
-  let policy = {};
-  let skillsPayload = null;
-  let coveragePayload = null;
-  const isTest = String(process.env.NODE_ENV || '').toLowerCase() === 'test';
-  try {
+    // Fetch upstream policy/skills/coverage
+    let policy = {};
+    let skillsPayload = null;
+    let coveragePayload = null;
+    const isTest = String(process.env.NODE_ENV || '').toLowerCase() === 'test';
+    try {
+      if (exam_type === 'baseline') {
+        const { safeFetchBaselineSkills } = require("../gateways/skillsEngineGateway");
+        skillsPayload = await safeFetchBaselineSkills({ user_id });
+        // Baseline: skip Directory policy entirely, use static fallback
+        policy = { passing_grade: 70 };
+        try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
+      } else if (exam_type === 'postcourse') {
+        const { safeFetchPolicy } = require("../gateways/directoryGateway");
+        const { safeFetchCoverage } = require("../gateways/courseBuilderGateway");
+        policy = isTest
+          ? ({ passing_grade: 70, max_attempts: 3 })
+          : await safeFetchPolicy('postcourse');
+        coveragePayload = await safeFetchCoverage({
+          learner_id: user_id,
+          learner_name: undefined,
+          course_id,
+        });
+      } else {
+        await setExamStatus(examId, { status: 'FAILED', error_message: 'invalid_exam_type', failed_step: 'input_validation', progress: 100 });
+        return;
+      }
+    } catch (e) {
+      await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'fetch_failed', failed_step: 'fetch_upstream', progress: 100 });
+      return;
+    }
+    try { console.log('[PREP][CHECKPOINT][AFTER_DIRECTORY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+
+    // Normalize and compute duration
+    const { normalizeSkills } = require("./skillsUtils");
+    const normalizedBaselineSkills = normalizeSkills(skillsPayload?.skills || []);
+    const rawCoverage = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
+    const normalizedCoverageMap = rawCoverage.map((item) => ({ ...item, skills: normalizeSkills(item?.skills || []) })).filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
+    const skillsArray = exam_type === 'postcourse'
+      ? Array.from(new Map(normalizedCoverageMap.flatMap((it)=>it.skills).map((s)=>[String(s.skill_id), s])).values())
+      : normalizedBaselineSkills;
+    const coverageMap = normalizedCoverageMap;
+    const resolvedCourseName = exam_type === 'postcourse' ? (coveragePayload?.course_name || course_name || null) : null;
+    let questionCount = 0;
     if (exam_type === 'baseline') {
-      const { safeFetchBaselineSkills } = require("../gateways/skillsEngineGateway");
-      skillsPayload = await safeFetchBaselineSkills({ user_id });
-      // Baseline: skip Directory policy entirely, use static fallback
-      policy = { passing_grade: 70 };
-      try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
-    } else if (exam_type === 'postcourse') {
-      const { safeFetchPolicy } = require("../gateways/directoryGateway");
-      const { safeFetchCoverage } = require("../gateways/courseBuilderGateway");
-      policy = isTest
-        ? ({ passing_grade: 70, max_attempts: 3 })
-        : await safeFetchPolicy('postcourse');
-      coveragePayload = await safeFetchCoverage({
-        learner_id: user_id,
-        learner_name: undefined,
-        course_id,
+      questionCount = Array.isArray(skillsArray) ? skillsArray.length : 0;
+    } else {
+      const uniqueSkillIds = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
+      questionCount = uniqueSkillIds.length * 2;
+    }
+    if (isTest && (!Number.isFinite(questionCount) || questionCount < 2)) questionCount = 2;
+    const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
+    try { await pool.query(`UPDATE exam_attempts SET policy_snapshot = $1::jsonb, duration_minutes = $2 WHERE attempt_id = $3`, [JSON.stringify(policy || {}), durationMinutes || null, attemptId]); } catch {}
+    await setExamStatus(examId, { status: 'PREPARING', progress: 40 });
+
+    // Generate questions and coding
+    const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
+    const { validateTheoreticalQuestions, normalizeAiQuestion } = require("./theoryService");
+    const devlabIntegration = require("../integrations/devlabService");
+
+    // Try to obtain DevLab questions + optional UI payload first; fallback to programmatic build
+    let codingQuestionsDecorated = [];
+    let devlabPayload = null;
+    try {
+      try { console.log('[DEVLAB][GEN][ENTERED]'); } catch {}
+      const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
+      const __tDev = Date.now();
+      try { console.log('[DEVLAB][GEN][START]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+      const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
+      let timeoutHandle = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          try { console.log('[DEVLAB][GEN][TIMEOUT_FIRED]', { exam_id: examId, attempt_id: attemptId, ms: 65000 }); } catch {}
+          reject(new Error('devlab_timeout'));
+        }, 65000);
       });
-    } else {
-      await setExamStatus(examId, { status: 'FAILED', error_message: 'invalid_exam_type', failed_step: 'input_validation', progress: 100 });
+      try {
+        devlabPayload = await Promise.race([
+          requestCodingWidgetHtml({
+            attempt_id: attemptId,
+            skills: ids,
+            difficulty: 'medium',
+            amount: 2,
+            humanLanguage: 'en',
+          }),
+          timeoutPromise,
+        ]);
+      } finally {
+        try { if (timeoutHandle) clearTimeout(timeoutHandle); } catch {}
+      }
+      try { console.log('[DEVLAB][GEN][AFTER_RESPONSE]', { keys: Object.keys(devlabPayload || {}), elapsed_ms: Date.now() - __tDev }); } catch {}
+      const qArr = Array.isArray(devlabPayload?.questions) ? devlabPayload.questions : [];
+      const htmlStr = typeof devlabPayload?.html === 'string' ? devlabPayload.html : null;
+      try { console.log('[DEVLAB][GEN][AFTER_PARSE]', { questions_count: qArr.length, html_length: htmlStr ? htmlStr.length : 0 }); } catch {}
+      if (!Array.isArray(qArr) || qArr.length === 0) {
+        await setExamStatus(examId, { status: 'FAILED', error_message: 'DevLab returned no coding questions', failed_step: 'devlab_generate', progress: 100 });
+        try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: 'DevLab returned no coding questions' }); } catch {}
+        return;
+      }
+      codingQuestionsDecorated = qArr;
+      try { console.log('[DEVLAB][GEN][DONE]', { exam_id: examId, attempt_id: attemptId, questions: qArr.length }); } catch {}
+    } catch (e) {
+      try { console.log('[DEVLAB][GEN][ERROR]', { exam_id: examId, attempt_id: attemptId, name: e?.name || 'Error', message: e?.message || String(e) }); } catch {}
+      await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'devlab_generate_failed', failed_step: 'devlab_generate', progress: 100 });
+      try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: e?.message }); } catch {}
       return;
+    } finally {
+      try { console.log('[DEVLAB][GEN][END]', { exam_id: examId, attempt_id: attemptId, elapsed_ms: Date.now() - startedAt }); } catch {}
     }
-  } catch (e) {
-    await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'fetch_failed', failed_step: 'fetch_upstream', progress: 100 });
-    return;
-  }
-  try { console.log('[PREP][CHECKPOINT][AFTER_DIRECTORY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    await setExamStatus(examId, { status: 'PREPARING', progress: 55 });
 
-  // Normalize and compute duration
-  const { normalizeSkills } = require("./skillsUtils");
-  const normalizedBaselineSkills = normalizeSkills(skillsPayload?.skills || []);
-  const rawCoverage = Array.isArray(coveragePayload?.coverage_map) ? coveragePayload.coverage_map : [];
-  const normalizedCoverageMap = rawCoverage.map((item) => ({ ...item, skills: normalizeSkills(item?.skills || []) })).filter((it) => Array.isArray(it.skills) && it.skills.length > 0);
-  const skillsArray = exam_type === 'postcourse'
-    ? Array.from(new Map(normalizedCoverageMap.flatMap((it)=>it.skills).map((s)=>[String(s.skill_id), s])).values())
-    : normalizedBaselineSkills;
-  const coverageMap = normalizedCoverageMap;
-  const resolvedCourseName = exam_type === 'postcourse' ? (coveragePayload?.course_name || course_name || null) : null;
-  let questionCount = 0;
-  if (exam_type === 'baseline') {
-    questionCount = Array.isArray(skillsArray) ? skillsArray.length : 0;
-  } else {
-    const uniqueSkillIds = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
-    questionCount = uniqueSkillIds.length * 2;
-  }
-  if (isTest && (!Number.isFinite(questionCount) || questionCount < 2)) questionCount = 2;
-  const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
-  try { await pool.query(`UPDATE exam_attempts SET policy_snapshot = $1::jsonb, duration_minutes = $2 WHERE attempt_id = $3`, [JSON.stringify(policy || {}), durationMinutes || null, attemptId]); } catch {}
-  await setExamStatus(examId, { status: 'PREPARING', progress: 40 });
-
-  // Generate questions and coding
-  const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
-  const { validateTheoreticalQuestions, normalizeAiQuestion } = require("./theoryService");
-  const devlabIntegration = require("../integrations/devlabService");
-
-  // Try to obtain DevLab questions + optional UI payload first; fallback to programmatic build
-  let codingQuestionsDecorated = [];
-  let devlabPayload = null;
-  try {
-    try { console.log('[DEVLAB][GEN][ENTERED]'); } catch {}
-    const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
-    const __tDev = Date.now();
-    try { console.log('[DEVLAB][GEN][START]', { exam_id: examId, attempt_id: attemptId }); } catch {}
-    const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
-    devlabPayload = await Promise.race([
-      requestCodingWidgetHtml({
-      attempt_id: attemptId,
-      skills: ids,
-      difficulty: 'medium',
-      amount: 2,
-      humanLanguage: 'en',
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('devlab_timeout')), 65000)),
-    ]);
-    try { console.log('[DEVLAB][GEN][AFTER_RESPONSE]', { keys: Object.keys(devlabPayload || {}), elapsed_ms: Date.now() - __tDev }); } catch {}
-    const qArr = Array.isArray(devlabPayload?.questions) ? devlabPayload.questions : [];
-    const htmlStr = typeof devlabPayload?.html === 'string' ? devlabPayload.html : null;
-    try { console.log('[DEVLAB][GEN][AFTER_PARSE]', { questions_count: qArr.length, html_length: htmlStr ? htmlStr.length : 0 }); } catch {}
-    if (!Array.isArray(qArr) || qArr.length === 0) {
-      await setExamStatus(examId, { status: 'FAILED', error_message: 'DevLab returned no coding questions', failed_step: 'devlab_generate', progress: 100 });
-      try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: 'DevLab returned no coding questions' }); } catch {}
-      return;
-    }
-    codingQuestionsDecorated = qArr;
-    try { console.log('[DEVLAB][GEN][DONE]', { exam_id: examId, attempt_id: attemptId, questions: qArr.length }); } catch {}
-  } catch (e) {
-    await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'devlab_generate_failed', failed_step: 'devlab_generate', progress: 100 });
-    try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: e?.message }); } catch {}
-    return;
-  }
-  await setExamStatus(examId, { status: 'PREPARING', progress: 55 });
-
-  let questions = [];
-  try {
-    const uniqueSkills = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
-    const items = [];
-    if (exam_type === 'postcourse') {
-      for (const sid of uniqueSkills) { items.push({ skill_id: sid, type: 'mcq', difficulty: 'medium', humanLanguage: 'en' }); items.push({ skill_id: sid, type: 'open', difficulty: 'medium', humanLanguage: 'en' }); }
-    } else {
-      for (let i = 0; i < questionCount; i += 1) {
-        const sid = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
-        if (!sid) continue;
-        const type = i % 2 === 0 ? 'mcq' : 'open';
-        items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type });
+    let questions = [];
+    try {
+      const uniqueSkills = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
+      const items = [];
+      if (exam_type === 'postcourse') {
+        for (const sid of uniqueSkills) { items.push({ skill_id: sid, type: 'mcq', difficulty: 'medium', humanLanguage: 'en' }); items.push({ skill_id: sid, type: 'open', difficulty: 'medium', humanLanguage: 'en' }); }
+      } else {
+        for (let i = 0; i < questionCount; i += 1) {
+          const sid = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
+          if (!sid) continue;
+          const type = i % 2 === 0 ? 'mcq' : 'open';
+          items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type });
+        }
+      }
+      let generated = [];
+      if (isTest) {
+        const sid = (Array.isArray(items) && items[0]?.skill_id) || 's_general';
+        generated = [{ qid: 'test_mcq', type: 'mcq', skill_id: sid, difficulty: 'medium', question: `MCQ for ${sid}`, options: ['A','B','C'], correct_answer: 'A' },
+                     { qid: 'test_open', type: 'open', skill_id: sid, difficulty: 'medium', question: `Explain ${sid}` }];
+      } else {
+        const seed = `${Date.now()}-${Math.random()}`;
+        generated = await generateTheoreticalQuestions({ items, seed });
+      }
+      const validated = [];
+      for (const q of generated) {
+        let validation = { valid: true, reasons: [] };
+        if (!isTest) { try { validation = await validateQuestion({ question: q }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; } }
+        const hints = q?.hint ? [String(q.hint)] : undefined;
+        validated.push(normalizeAiQuestion({ ...q, hint: hints }));
+      }
+      questions = validateTheoreticalQuestions(validated);
+    } catch (e) {
+      try {
+        const { buildMockQuestions } = require("../mocks/theoryMock");
+        const skillsForMocks = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
+        const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
+        const normalizedMcqs = mocks.map((m) => ({ qid: m.qid, type: 'mcq', skill_id: m.skill_id, difficulty: 'medium', question: m.prompt?.question || '', stem: m.prompt?.question || '', options: Array.isArray(m.prompt?.options) ? m.prompt.options : [], correct_answer: m.prompt?.correct_answer || '' }));
+        const duplicatedForOpen = exam_type === 'postcourse' ? normalizedMcqs : [];
+        questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+      } catch (e2) {
+        await setExamStatus(examId, { status: 'FAILED', error_message: e2?.message || 'generation_failed', failed_step: 'generate_questions', progress: 100 });
+        return;
       }
     }
-    let generated = [];
-    if (isTest) {
-      const sid = (Array.isArray(items) && items[0]?.skill_id) || 's_general';
-      generated = [{ qid: 'test_mcq', type: 'mcq', skill_id: sid, difficulty: 'medium', question: `MCQ for ${sid}`, options: ['A','B','C'], correct_answer: 'A' },
-                   { qid: 'test_open', type: 'open', skill_id: sid, difficulty: 'medium', question: `Explain ${sid}` }];
-    } else {
-      const seed = `${Date.now()}-${Math.random()}`;
-      generated = await generateTheoreticalQuestions({ items, seed });
-    }
-    const validated = [];
-    for (const q of generated) {
-      let validation = { valid: true, reasons: [] };
-      if (!isTest) { try { validation = await validateQuestion({ question: q }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; } }
-      const hints = q?.hint ? [String(q.hint)] : undefined;
-      validated.push(normalizeAiQuestion({ ...q, hint: hints }));
-    }
-    questions = validateTheoreticalQuestions(validated);
-  } catch (e) {
-    try {
-      const { buildMockQuestions } = require("../mocks/theoryMock");
-      const skillsForMocks = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
-      const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
-      const normalizedMcqs = mocks.map((m) => ({ qid: m.qid, type: 'mcq', skill_id: m.skill_id, difficulty: 'medium', question: m.prompt?.question || '', stem: m.prompt?.question || '', options: Array.isArray(m.prompt?.options) ? m.prompt.options : [], correct_answer: m.prompt?.correct_answer || '' }));
-      const duplicatedForOpen = exam_type === 'postcourse' ? normalizedMcqs : [];
-      questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
-    } catch (e2) {
-      await setExamStatus(examId, { status: 'FAILED', error_message: e2?.message || 'generation_failed', failed_step: 'generate_questions', progress: 100 });
-      return;
-    }
-  }
-  await setExamStatus(examId, { status: 'PREPARING', progress: 80 });
+    await setExamStatus(examId, { status: 'PREPARING', progress: 80 });
 
-  try {
-    // Prepare optional DevLab UI block for UI rendering (if available)
-    const devlabUi = (() => {
-      const hasTopLevelHtml = !!(devlabPayload && typeof devlabPayload.html === 'string' && devlabPayload.html.trim() !== '');
-      if (hasTopLevelHtml) return { componentHtml: devlabPayload.html };
-      return undefined;
-    })();
-    try { console.log(`[DEVLAB][UI][${devlabUi ? 'PRESENT' : 'ABSENT'}]`, { componentHtml: !!devlabUi }); } catch {}
-
-    try { console.log('[PACKAGE][WRITE][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
-    const pkg = await buildExamPackageDoc({
-      exam_id: examId,
-      attempt_id: attemptId,
-      user_id: userStr,
-      exam_type,
-      policy,
-      skills: Array.isArray(skillsArray) ? skillsArray : [],
-      coverage_map: Array.isArray(coverageMap) ? coverageMap : [],
-      course_id: course_id != null ? course_id : null,
-      course_name: resolvedCourseName || undefined,
-      questions,
-      coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.map((q) => ({ question: q })) : [],
-      time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
-      expires_at_iso: null,
-      devlab_ui: devlabUi,
-    });
-    try { console.log('[PACKAGE][WRITE][AFTER]', { exam_id: examId, attempt_id: attemptId, package_id: String(pkg?._id || '') }); } catch {}
-    await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
     try {
-      console.log('[PERSIST][PACKAGE][SUCCESS]', {
+      // Prepare optional DevLab UI block for UI rendering (if available)
+      const devlabUi = (() => {
+        const hasTopLevelHtml = !!(devlabPayload && typeof devlabPayload.html === 'string' && devlabPayload.html.trim() !== '');
+        if (hasTopLevelHtml) return { componentHtml: devlabPayload.html };
+        return undefined;
+      })();
+      try { console.log(`[DEVLAB][UI][${devlabUi ? 'PRESENT' : 'ABSENT'}]`, { componentHtml: !!devlabUi }); } catch {}
+
+      try { console.log('[PACKAGE][WRITE][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+      const pkg = await buildExamPackageDoc({
         exam_id: examId,
         attempt_id: attemptId,
-        package_id: String(pkg?._id || ''),
-        questions: Array.isArray(questions) ? questions.length : 0,
-        coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.length : 0,
-        devlab_ui: devlabUi ? 'present' : 'absent',
+        user_id: userStr,
+        exam_type,
+        policy,
+        skills: Array.isArray(skillsArray) ? skillsArray : [],
+        coverage_map: Array.isArray(coverageMap) ? coverageMap : [],
+        course_id: course_id != null ? course_id : null,
+        course_name: resolvedCourseName || undefined,
+        questions,
+        coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.map((q) => ({ question: q })) : [],
+        time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
+        expires_at_iso: null,
+        devlab_ui: devlabUi,
       });
-    } catch {}
-  } catch (e) {
-    await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'persist_package_failed', failed_step: 'persist_package', progress: 100 });
-    return;
+      try { console.log('[PACKAGE][WRITE][AFTER]', { exam_id: examId, attempt_id: attemptId, package_id: String(pkg?._id || '') }); } catch {}
+      await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
+      try {
+        console.log('[PERSIST][PACKAGE][SUCCESS]', {
+          exam_id: examId,
+          attempt_id: attemptId,
+          package_id: String(pkg?._id || ''),
+          questions: Array.isArray(questions) ? questions.length : 0,
+          coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.length : 0,
+          devlab_ui: devlabUi ? 'present' : 'absent',
+        });
+      } catch {}
+    } catch (e) {
+      await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'persist_package_failed', failed_step: 'persist_package', progress: 100 });
+      return;
+    }
+
+    try { console.log('[EXAM][STATUS][READY][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    await setExamStatus(examId, { status: 'READY', progress: 100 });
+    try { console.log('[EXAM][STATUS][READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
   }
 
-  try { console.log('[EXAM][STATUS][READY][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
-  await setExamStatus(examId, { status: 'READY', progress: 100 });
-  try { console.log('[EXAM][STATUS][READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
-  } catch (e) {
-    // Any uncaught error: mark FAILED to avoid PREPARING hang
+  // Outer watchdog race
+  try {
+    const watchdogPromise = new Promise((_, reject) => {
+      watchdogTimer = setTimeout(async () => {
+        try {
+          const elapsed = Date.now() - startedAt;
+          try { console.log('[PREP][WATCHDOG][FIRE]', { exam_id: examId, attempt_id: attemptId, watchdogMs, elapsed_ms: elapsed }); } catch {}
+          await setExamStatus(examId, { status: 'FAILED', failed_step: 'prep_timeout', error_message: 'prep_timeout', progress: 100 });
+        } catch {}
+        reject(new Error('prep_timeout'));
+      }, watchdogMs);
+    });
+
+    await Promise.race([runPrep(), watchdogPromise]);
+
+    // Final guard: if still PREPARING here, flip to FAILED
     try {
-      await setExamStatus(examId, {
-        status: 'FAILED',
-        error_message: e?.message || 'prepare_failed',
-        failed_step: String(e?.message || '').toLowerCase().includes('prep_timeout') ? 'prep_timeout' : 'prep_unhandled',
-        progress: 100,
-      });
-      try { console.error('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, message: e?.message || 'prepare_failed' }); } catch {}
+      const { rows } = await pool.query(`SELECT status FROM exams WHERE exam_id = $1`, [examId]);
+      const finalStatus = rows && rows[0] ? String(rows[0].status || '') : null;
+      if (finalStatus === 'PREPARING') {
+        await setExamStatus(examId, { status: 'FAILED', failed_step: 'prep_finalizer', error_message: 'prep_finalizer', progress: 100 });
+      }
+    } catch {}
+  } catch (e) {
+    // Only mark FAILED if not already finalized
+    try {
+      const { rows } = await pool.query(`SELECT status FROM exams WHERE exam_id = $1`, [examId]).catch(() => ({ rows: [] }));
+      const cur = rows && rows[0] ? String(rows[0].status || '') : null;
+      if (cur !== 'READY' && cur !== 'FAILED') {
+        const isTimeout = String(e?.message || '').toLowerCase().includes('prep_timeout');
+        await setExamStatus(examId, {
+          status: 'FAILED',
+          error_message: isTimeout ? 'prep_timeout' : (e?.message || 'prepare_failed'),
+          failed_step: isTimeout ? 'prep_timeout' : 'prep_unhandled',
+          progress: 100,
+        });
+        try { console.error('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, message: e?.message || 'prepare_failed' }); } catch {}
+      }
     } catch {}
   } finally {
     // Emit final lifecycle log
@@ -2073,6 +2118,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       const finalStatus = rows && rows[0] ? rows[0].status : null;
       try { console.log('[PREP][DONE]', { exam_id: examId, attempt_id: attemptId, status: finalStatus }); } catch {}
     } catch {}
+    try { if (watchdogTimer) clearTimeout(watchdogTimer); } catch {}
     try { __activePrepAttempts.delete(Number(attemptId)); } catch {}
   }
 }
