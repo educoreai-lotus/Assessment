@@ -1,10 +1,15 @@
 function buildDirectoryPolicyPayload({ exam_type, user_id, course_id } = {}) {
-  return {
+  const isBaseline = String(exam_type) === 'baseline';
+  const base = {
     action: 'fetch-policy',
     exam_type: exam_type ?? null,
     user_id: user_id ?? null,
-    course_id: course_id ?? null,
+    // Baseline: do not include course_id in the policy request
+    ...(isBaseline ? {} : { course_id: course_id ?? null }),
+    // Explicit routing hints for Coordinator to avoid misroute to analytics
+    route: { destination: 'directory', strict: true },
   };
+  return base;
 }
 
 function buildDirectoryResultPayload({ user, exam } = {}) {
