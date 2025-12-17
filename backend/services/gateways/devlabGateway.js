@@ -113,48 +113,47 @@ async function sendCodingGradeEnvelope(payloadObj) {
 }
 
 // Request DevLab widget HTML (or URL) for coding questions session
-async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'medium', amount = 2, humanLanguage = 'en' }) {
+async function requestCodingWidgetHtml(input) {
+	const start = Date.now();
 	try {
-		const payload = {
-			action: 'coding',
-			attempt_id,
-			skills: Array.isArray(skills) ? skills : [],
-			difficulty,
-			amount,
-			humanLanguage,
-			programming_language: 'javascript',
-      // explicit routing + classification for Coordinator
-      route: { destination: 'devlab', strict: true },
-      content: { type: 'coding' },
-		};
-		// Rely on envelopeSender for timeouts; do not add silent fallbacks here
-		const { data: json } = await sendToCoordinator({ targetService: 'devlab-service', payload });
+		const { data: json } = await sendToCoordinator({
+			targetService: 'devlab-service',
+			payload: {
+				action: 'coding',
+				...(input || {}),
+				route: { destination: 'devlab', strict: true },
+				content: { type: 'coding' },
+			},
+		});
 
-		// Canonical parsing
-		let answerObj = null;
-		// 1) Preferred: response.answer as stringified JSON
+		console.log('[DEVLAB][GW][RAW_KEYS]', Object.keys(json || {}));
+
+		let answerObj;
+		// Preferred: response.answer (stringified JSON)
 		if (typeof json?.response?.answer === 'string') {
-			try {
-				answerObj = JSON.parse(json.response.answer);
-			} catch {
-				throw new Error('devlab_invalid_json_answer');
-			}
+			answerObj = JSON.parse(json.response.answer);
 		}
-		// 2) Fallback: top-level success format
-		if (!answerObj && json?.success === true) {
+		// Fallback: top-level success
+		else if (json?.success === true) {
 			answerObj = json;
 		}
-		if (!answerObj) {
+		else {
 			throw new Error('devlab_unrecognized_response_shape');
 		}
 
 		const questions = Array.isArray(answerObj.questions) ? answerObj.questions : [];
-		const html = (typeof answerObj.componentHtml === 'string') ? answerObj.componentHtml : null;
+		const html = typeof answerObj.componentHtml === 'string' ? answerObj.componentHtml : null;
+
+		console.log('[DEVLAB][GW][PARSED]', {
+			questions: questions.length,
+			html_len: html?.length || 0,
+			elapsed_ms: Date.now() - start,
+		});
 
 		return { questions, html, raw: answerObj };
 	} catch (err) {
-		// Surface the error; caller will deterministically mark FAILED
-		throw err;
+		console.error('[DEVLAB][GW][ERROR]', err?.message || String(err));
+		throw err; // MUST THROW
 	}
 }
 

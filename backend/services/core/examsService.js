@@ -1927,13 +1927,16 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     const __tDev = Date.now();
     try { console.log('[DEVLAB][GEN][START]', { exam_id: examId, attempt_id: attemptId }); } catch {}
     const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
-    devlabPayload = await requestCodingWidgetHtml({
+    devlabPayload = await Promise.race([
+      requestCodingWidgetHtml({
       attempt_id: attemptId,
       skills: ids,
       difficulty: 'medium',
       amount: 2,
       humanLanguage: 'en',
-    });
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('devlab_timeout')), 65000)),
+    ]);
     try { console.log('[DEVLAB][GEN][AFTER_RESPONSE]', { keys: Object.keys(devlabPayload || {}), elapsed_ms: Date.now() - __tDev }); } catch {}
     const qArr = Array.isArray(devlabPayload?.questions) ? devlabPayload.questions : [];
     const htmlStr = typeof devlabPayload?.html === 'string' ? devlabPayload.html : null;
