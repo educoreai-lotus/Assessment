@@ -121,6 +121,7 @@ async function requestCodingWidgetHtml(input) {
 			payload: {
 				action: 'coding',
 				...(input || {}),
+				programming_language: 'javascript',
 				route: { destination: 'devlab', strict: true },
 				content: { type: 'coding' },
 			},
