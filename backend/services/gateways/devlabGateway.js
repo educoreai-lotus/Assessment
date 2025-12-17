@@ -128,27 +128,23 @@ async function requestCodingWidgetHtml(input) {
 
 		console.log('[DEVLAB][GW][RAW_KEYS]', Object.keys(json || {}));
 
-		let answerObj;
-		// Preferred: response.answer (stringified JSON)
-		if (typeof json?.response?.answer === 'string') {
-			answerObj = JSON.parse(json.response.answer);
-		}
-		// Fallback: top-level success
-		else if (json?.success === true) {
-			answerObj = json;
-		}
-		else {
+		// ALWAYS unwrap response.answer JSON string; ignore top-level json.questions/data.questions
+		const answerStr = json?.response?.answer;
+		const answerObj = typeof answerStr === 'string' ? JSON.parse(answerStr) : answerStr;
+		if (!answerObj || typeof answerObj !== 'object') {
 			throw new Error('devlab_unrecognized_response_shape');
 		}
+
+		console.log('[DEVLAB][PARSE][RAW_ANSWER_KEYS]', Object.keys(answerObj || {}));
 
 		const questions = Array.isArray(answerObj.questions) ? answerObj.questions : [];
 		const html = typeof answerObj.componentHtml === 'string' ? answerObj.componentHtml : null;
 
-		console.log('[DEVLAB][GW][PARSED]', {
-			questions: questions.length,
-			html_len: html?.length || 0,
-			elapsed_ms: Date.now() - start,
-		});
+		console.log('[DEVLAB][PARSE][QUESTIONS_COUNT]', { count: questions.length, elapsed_ms: Date.now() - start });
+
+		if (!Array.isArray(questions) || questions.length === 0) {
+			throw new Error('devlab_no_questions');
+		}
 
 		return { questions, html, raw: answerObj };
 	} catch (err) {

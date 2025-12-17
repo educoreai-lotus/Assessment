@@ -1957,12 +1957,14 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     try { console.log('[DEVLAB][GEN][AFTER_PARSE]', { questions_count: qArr.length, html_length: htmlStr ? htmlStr.length : 0 }); } catch {}
     if (!Array.isArray(qArr) || qArr.length === 0) {
       await setExamStatus(examId, { status: 'FAILED', error_message: 'devlab_no_questions', failed_step: 'devlab_generate', progress: 100 });
+      try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: 'devlab_no_questions' }); } catch {}
       return;
     }
     codingQuestionsDecorated = qArr;
     try { console.log('[DEVLAB][GEN][DONE]', { exam_id: examId, attempt_id: attemptId, questions: qArr.length }); } catch {}
   } catch (e) {
     await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'devlab_generate_failed', failed_step: 'devlab_generate', progress: 100 });
+    try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: e?.message }); } catch {}
     return;
   }
   await setExamStatus(examId, { progress: 55 });
