@@ -2077,8 +2077,6 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   }
 }
 
-}
-
 module.exports = {
   createExam,
   createExamRecord,
