@@ -127,29 +127,35 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
       route: { destination: 'devlab', strict: true },
       content: { type: 'coding' },
 		};
-		const call = sendToCoordinator({ targetService: 'devlab-service', payload });
-		const timeoutMs = Number.isFinite(Number(process.env.DEVLAB_REQUEST_TIMEOUT_MS)) ? Number(process.env.DEVLAB_REQUEST_TIMEOUT_MS) : 60000;
-		const timed = await Promise.race([
-			call,
-			new Promise((_, reject) => setTimeout(() => reject(new Error('devlab_timeout')), timeoutMs)),
-		]).catch((e) => { throw e; });
-		const json = (timed && timed.data) ? timed.data : {};
-		// Support both wrapped and top-level formats
-		const src = (json && json.success && json.data) ? json.data : json;
-		const questions = Array.isArray(src?.questions) ? src.questions
-			: (Array.isArray(json?.response?.questions) ? json.response.questions : []);
-		const html = (typeof src?.componentHtml === 'string' && src.componentHtml)
-			|| (typeof src?.componentHTML === 'string' && src.componentHTML)
-			|| (typeof src?.component_html === 'string' && src.component_html)
-			|| (typeof src?.html === 'string' && src.html)
-			|| (typeof json?.response?.answers === 'string' && json.response.answers)
-			|| null;
-		return { html, questions, raw: null };
+		// Rely on envelopeSender for timeouts; do not add silent fallbacks here
+		const { data: json } = await sendToCoordinator({ targetService: 'devlab-service', payload });
+
+		// Canonical parsing
+		let answerObj = null;
+		// 1) Preferred: response.answer as stringified JSON
+		if (typeof json?.response?.answer === 'string') {
+			try {
+				answerObj = JSON.parse(json.response.answer);
+			} catch {
+				throw new Error('devlab_invalid_json_answer');
+			}
+		}
+		// 2) Fallback: top-level success format
+		if (!answerObj && json?.success === true) {
+			answerObj = json;
+		}
+		if (!answerObj) {
+			throw new Error('devlab_unrecognized_response_shape');
+		}
+
+		const questions = Array.isArray(answerObj.questions) ? answerObj.questions : [];
+		const html = (typeof answerObj.componentHtml === 'string') ? answerObj.componentHtml : null;
+
+		return { questions, html, raw: answerObj };
 	} catch (err) {
-		try { console.log('[MOCK-FALLBACK][DevLab][coding-widget][error]', { message: err?.message }); } catch {}
+		// Surface the error; caller will deterministically mark FAILED
+		throw err;
 	}
-	// Fallback: return nothing; caller enforces determinism
-	return { html: null, questions: [], raw: null };
 }
 
 module.exports = { sendToDevlabEnvelope, requestCodingQuestions, sendCodingGradeEnvelope, requestCodingWidgetHtml };
