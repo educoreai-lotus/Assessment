@@ -127,48 +127,28 @@ async function requestCodingWidgetHtml({ attempt_id, skills, difficulty = 'mediu
       route: { destination: 'devlab', strict: true },
       content: { type: 'coding' },
 		};
-		const { data: json } = await sendToCoordinator({ targetService: 'devlab-service', payload }).catch(() => ({ data: {} }));
-		// Expected modern format: include widget + questions
-		if (json && json.success && json.data) {
-			const html = typeof json.data.componentHtml === 'string'
-        ? json.data.componentHtml
-        : (typeof json.data.componentHTML === 'string'
-          ? json.data.componentHTML
-          : (typeof json.data.component_html === 'string'
-            ? json.data.component_html
-            : (typeof json.data.html === 'string' ? json.data.html : null)));
-			const questions = Array.isArray(json.data.questions) ? json.data.questions : [];
-			return { html, questions, raw: null };
-		}
-		// Legacy: try response.answers (HTML) and response.answer (double-encoded JSON string)
-		let html = typeof json?.response?.answers === 'string' ? json.response.answers : null;
-		let questions = Array.isArray(json?.response?.questions) ? json.response.questions : [];
-    let raw = null;
-		// Parse response.answer if it is a JSON string or object
-		if (json?.response?.answer) {
-			try {
-        raw = typeof json.response.answer === 'string' ? json.response.answer : JSON.stringify(json.response.answer);
-				let parsed = typeof json.response.answer === 'string' ? JSON.parse(json.response.answer) : json.response.answer;
-        if (typeof parsed === 'string') {
-          try { parsed = JSON.parse(parsed); } catch {}
-        }
-				if (parsed && typeof parsed === 'object') {
-					if (!html && typeof parsed.componentHtml === 'string') html = parsed.componentHtml;
-          if (!html && typeof parsed.componentHTML === 'string') html = parsed.componentHTML;
-          if (!html && typeof parsed.component_html === 'string') html = parsed.component_html;
-          if (!html && typeof parsed.html === 'string') html = parsed.html;
-					if (Array.isArray(parsed.questions)) questions = parsed.questions;
-					else if (!questions.length && Array.isArray(parsed.results)) questions = parsed.results;
-				} else if (Array.isArray(parsed)) {
-					questions = parsed;
-				}
-			} catch { /* ignore parse errors */ }
-		}
-		if (html || (questions && questions.length > 0)) return { html, questions, raw };
+		const call = sendToCoordinator({ targetService: 'devlab-service', payload });
+		const timeoutMs = Number.isFinite(Number(process.env.DEVLAB_REQUEST_TIMEOUT_MS)) ? Number(process.env.DEVLAB_REQUEST_TIMEOUT_MS) : 60000;
+		const timed = await Promise.race([
+			call,
+			new Promise((_, reject) => setTimeout(() => reject(new Error('devlab_timeout')), timeoutMs)),
+		]).catch((e) => { throw e; });
+		const json = (timed && timed.data) ? timed.data : {};
+		// Support both wrapped and top-level formats
+		const src = (json && json.success && json.data) ? json.data : json;
+		const questions = Array.isArray(src?.questions) ? src.questions
+			: (Array.isArray(json?.response?.questions) ? json.response.questions : []);
+		const html = (typeof src?.componentHtml === 'string' && src.componentHtml)
+			|| (typeof src?.componentHTML === 'string' && src.componentHTML)
+			|| (typeof src?.component_html === 'string' && src.component_html)
+			|| (typeof src?.html === 'string' && src.html)
+			|| (typeof json?.response?.answers === 'string' && json.response.answers)
+			|| null;
+		return { html, questions, raw: null };
 	} catch (err) {
 		try { console.log('[MOCK-FALLBACK][DevLab][coding-widget][error]', { message: err?.message }); } catch {}
 	}
-	// Fallback: return nothing; UI will render only theoretical part
+	// Fallback: return nothing; caller enforces determinism
 	return { html: null, questions: [], raw: null };
 }
 

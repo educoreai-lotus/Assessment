@@ -158,7 +158,34 @@ async function buildExamPackageDoc({
         metadata: { type: type || "mcq", difficulty },
       };
     }),
-    coding_questions: Array.isArray(coding_questions) ? coding_questions : [],
+    coding_questions: (() => {
+      const arr = Array.isArray(coding_questions) ? coding_questions : [];
+      return arr.map((q) => {
+        if (typeof q === 'string') {
+          return { question: q };
+        }
+        if (q && typeof q === 'object') {
+          const questionText =
+            (typeof q.question === 'string' && q.question) ||
+            (typeof q.stem === 'string' && q.stem) ||
+            (typeof q?.prompt?.question === 'string' && q.prompt.question) ||
+            '';
+          const out = {
+            question: questionText,
+          };
+          if (typeof q.starter_code === 'string') out.starter_code = q.starter_code;
+          if (typeof q.expected_output === 'string') out.expected_output = q.expected_output;
+          if (Array.isArray(q.test_cases)) out.test_cases = q.test_cases;
+          if (typeof q.humanLanguage === 'string') out.humanLanguage = q.humanLanguage;
+          if (typeof q.programming_language === 'string') out.programming_language = q.programming_language;
+          if (Array.isArray(q.skills)) out.skills = q.skills.map(String);
+          if (typeof q.difficulty === 'string') out.difficulty = q.difficulty;
+          if (q.renderedComponent != null) out.renderedComponent = q.renderedComponent;
+          return out;
+        }
+        return { question: String(q ?? '') };
+      });
+    })(),
     coverage_map: coverage_map || [],
     final_status: "draft",
     lineage: {
@@ -645,7 +672,7 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   } catch {}
 
   // Build ExamPackage in Mongo
-  // Phase 08.2 – Build coding questions via DevLab envelope and store in dedicated field
+  // Phase 08.2 – Build coding questions via DevLab envelope (MANDATORY)
   const skillsForCoding = (() => {
     const ids = [];
     if (Array.isArray(skillsArray) && skillsArray.length > 0) {
@@ -662,6 +689,8 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   let codingQuestionsDecorated = [];
   let devlabPayload = null;
   try {
+    const __tDev = Date.now();
+    try { console.log('[DEVLAB][GEN][BEFORE_SEND]', { exam_id: examId, attempt_id: attemptId }); } catch {}
     const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
     devlabPayload = await requestCodingWidgetHtml({
       attempt_id: attemptId,
@@ -670,24 +699,16 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
       amount: 2,
       humanLanguage: 'en',
     });
-    try { console.log('[DEVLAB][ANSWER][PARSED]', { has_questions: Array.isArray(devlabPayload?.questions) ? devlabPayload.questions.length : 0, has_componentHtml: !!devlabPayload?.html }); } catch {}
-    if (Array.isArray(devlabPayload?.questions) && devlabPayload.questions.length > 0) {
-      codingQuestionsDecorated = devlabPayload.questions;
+    try { console.log('[DEVLAB][GEN][AFTER_RESPONSE]', { keys: Object.keys(devlabPayload || {}), elapsed_ms: Date.now() - __tDev }); } catch {}
+    const qArr = Array.isArray(devlabPayload?.questions) ? devlabPayload.questions : [];
+    const htmlStr = typeof devlabPayload?.html === 'string' ? devlabPayload.html : null;
+    try { console.log('[DEVLAB][GEN][AFTER_PARSE]', { questions_count: qArr.length, html_length: htmlStr ? htmlStr.length : 0 }); } catch {}
+    if (!Array.isArray(qArr) || qArr.length === 0) {
+      return { error: "exam_creation_failed", message: "DevLab generation returned no questions" };
     }
-  } catch {}
-  if (!Array.isArray(codingQuestionsDecorated) || codingQuestionsDecorated.length === 0) {
-    try {
-      codingQuestionsDecorated =
-        await devlabIntegration.buildCodingQuestionsForExam({
-          amount: 2,
-          skills: skillsForCoding,
-          humanLanguage: "en",
-          difficulty: "medium",
-        });
-    } catch (e) {
-      try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'devlab_build_failed', message: e?.message }); } catch {}
-      codingQuestionsDecorated = [];
-    }
+    codingQuestionsDecorated = qArr;
+  } catch (e) {
+    return { error: "exam_creation_failed", message: e?.message || "DevLab generation failed" };
   }
   try {
     console.log(`[TRACE][${String(exam_type).toUpperCase()}][DEVLAB]`, {
@@ -1902,24 +1923,29 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   let devlabPayload = null;
   try {
     const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
-    try {
-      const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
-      devlabPayload = await requestCodingWidgetHtml({
-        attempt_id: attemptId,
-        skills: ids,
-        difficulty: 'medium',
-        amount: 2,
-        humanLanguage: 'en',
-      });
-      try { console.log('[DEVLAB][ANSWER][PARSED]', { has_questions: Array.isArray(devlabPayload?.questions) ? devlabPayload.questions.length : 0, has_componentHtml: !!devlabPayload?.html }); } catch {}
-      if (Array.isArray(devlabPayload?.questions) && devlabPayload.questions.length > 0) {
-        codingQuestionsDecorated = devlabPayload.questions;
-      }
-    } catch {}
-    if (!Array.isArray(codingQuestionsDecorated) || codingQuestionsDecorated.length === 0) {
-      codingQuestionsDecorated = await devlabIntegration.buildCodingQuestionsForExam({ amount: 2, skills: ids, humanLanguage: 'en', difficulty: 'medium' });
+    const __tDev = Date.now();
+    try { console.log('[DEVLAB][GEN][BEFORE_SEND]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
+    devlabPayload = await requestCodingWidgetHtml({
+      attempt_id: attemptId,
+      skills: ids,
+      difficulty: 'medium',
+      amount: 2,
+      humanLanguage: 'en',
+    });
+    try { console.log('[DEVLAB][GEN][AFTER_RESPONSE]', { keys: Object.keys(devlabPayload || {}), elapsed_ms: Date.now() - __tDev }); } catch {}
+    const qArr = Array.isArray(devlabPayload?.questions) ? devlabPayload.questions : [];
+    const htmlStr = typeof devlabPayload?.html === 'string' ? devlabPayload.html : null;
+    try { console.log('[DEVLAB][GEN][AFTER_PARSE]', { questions_count: qArr.length, html_length: htmlStr ? htmlStr.length : 0 }); } catch {}
+    if (!Array.isArray(qArr) || qArr.length === 0) {
+      await setExamStatus(examId, { status: 'FAILED', error_message: 'devlab_no_questions', failed_step: 'devlab_generate', progress: 100 });
+      return;
     }
-  } catch { codingQuestionsDecorated = []; }
+    codingQuestionsDecorated = qArr;
+  } catch (e) {
+    await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'devlab_generate_failed', failed_step: 'devlab_generate', progress: 100 });
+    return;
+  }
   await setExamStatus(examId, { progress: 55 });
 
   let questions = [];
