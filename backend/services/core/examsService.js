@@ -1866,6 +1866,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   const watchdogMs = Number.isFinite(Number(process.env.PREP_TIMEOUT_MS)) ? Number(process.env.PREP_TIMEOUT_MS) : 120000;
   const startedAt = Date.now();
   try {
+  try { console.log('[ARCH][BOUNDARY] learning_analytics is external pull-only and never participates in exam build or DevLab flows'); } catch {}
   const userStr = String(user_id);
   const userInt = Number(userStr.replace(/[^0-9]/g, ""));
   const courseInt = normalizeToInt(course_id);

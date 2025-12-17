@@ -55,6 +55,21 @@ exports.handlePostIntegration = async (req, res, next) => {
       return res.status(400).json({ error: 'api_caller_required' });
     }
 
+  // ARCHITECTURAL GUARD: learning_analytics is pull-only (GET) and must not be invoked via POST/internal flows
+  if (String(apiCaller).toLowerCase() === 'learning_analytics') {
+    try {
+      // eslint-disable-next-line no-console
+      console.error('[ARCH][BOUNDARY][VIOLATION]', {
+        path: req.originalUrl,
+        method: req.method,
+        api_caller: apiCaller,
+        message: 'learning_analytics is external pull-only and cannot be used in exam creation/prep/DevLab/grade flows',
+      });
+    } catch {}
+    // fail loudly; do not fallback
+    throw new Error('learning_analytics is external pull-only and cannot be used internally');
+  }
+
     switch (apiCaller) {
       case 'skills_engine': {
         // Start baseline exam flow scaffold
