@@ -22,6 +22,18 @@ async function safeFetchPolicy(examType) {
     return await fetchPolicy(examType, undefined, undefined);
   } catch (err) {
     try { console.log('[MOCK-FALLBACK][Directory][policy]', { examType, reason: err?.message }); } catch {}
+    // Hard fallback with explicit architectural logging for baseline/postcourse
+    if (String(examType) === 'baseline') {
+      try {
+        // eslint-disable-next-line no-console
+        console.warn('[BASELINE][POLICY][FALLBACK] passing_grade=70 (directory unavailable)');
+      } catch {}
+    } else if (String(examType) === 'postcourse') {
+      try {
+        // eslint-disable-next-line no-console
+        console.warn('[POSTCOURSE][POLICY][FALLBACK] {"passing_grade":70,"max_attempts":3} (directory unavailable)');
+      } catch {}
+    }
     return mockFetchPolicy(examType);
   }
 }
