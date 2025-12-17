@@ -34,6 +34,9 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+// In-memory guard to ensure idempotent async preparation per attempt (process-local)
+const __activePrepAttempts = new Set();
+
 async function ensureUserExists({ user_id_numeric, user_name, company_id }) {
   if (!Number.isFinite(Number(user_id_numeric))) return;
   const uid = Number(user_id_numeric);
@@ -92,8 +95,10 @@ async function buildExamPackageDoc({
   coding_questions,
   time_allocated_minutes,
   expires_at_iso,
-  devlab_widget,
-  devlab_raw,
+  // legacy params kept for backward compatibility but intentionally ignored:
+  // devlab_widget,
+  // devlab_raw,
+  devlab_ui,
 }) {
   const doc = new ExamPackage({
     // assessment_type explicitly persisted alongside IDs for reporting/filtering
@@ -167,8 +172,8 @@ async function buildExamPackageDoc({
       course_name,
       time_allocated_minutes: time_allocated_minutes ?? undefined,
       expires_at: expires_at_iso ?? undefined,
-      devlab_widget: devlab_widget || undefined,
-      devlab_raw: devlab_raw || undefined,
+      // Transparent UI pass-through (optional)
+      devlab_ui: devlab_ui || undefined,
     },
   });
   // Emit full package payload before persisting, for postcourse only
@@ -655,18 +660,19 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   // eslint-disable-next-line no-console
   console.debug("Coding generation skills:", skillsForCoding);
   let codingQuestionsDecorated = [];
-  let devlabWidgetResult = null;
+  let devlabPayload = null;
   try {
     const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
-    devlabWidgetResult = await requestCodingWidgetHtml({
+    devlabPayload = await requestCodingWidgetHtml({
       attempt_id: attemptId,
       skills: skillsForCoding,
       difficulty: 'medium',
       amount: 2,
       humanLanguage: 'en',
     });
-    if (Array.isArray(devlabWidgetResult?.questions) && devlabWidgetResult.questions.length > 0) {
-      codingQuestionsDecorated = devlabWidgetResult.questions;
+    try { console.log('[DEVLAB][ANSWER][PARSED]', { has_questions: Array.isArray(devlabPayload?.questions) ? devlabPayload.questions.length : 0, has_componentHtml: !!devlabPayload?.html }); } catch {}
+    if (Array.isArray(devlabPayload?.questions) && devlabPayload.questions.length > 0) {
+      codingQuestionsDecorated = devlabPayload.questions;
     }
   } catch {}
   if (!Array.isArray(codingQuestionsDecorated) || codingQuestionsDecorated.length === 0) {
@@ -913,6 +919,7 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
         coding_questions: codingQuestionsDecorated,
         time_allocated_minutes: durationMinutes || undefined,
         expires_at_iso: expiresAtIso || undefined,
+        devlab_ui: (devlabPayload && typeof devlabPayload.html === 'string' && devlabPayload.html.trim() !== '') ? { componentHtml: devlabPayload.html } : undefined,
       });
       __lap('buildExamPackageDoc end');
       // Backfill package_ref in PG
@@ -1363,7 +1370,6 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
         ? examPackage.coding_questions
         : [],
       codingAnswers,
-      sessionToken: devlab?.session_token,
       attempt: { attempt_id: attemptIdNum },
     });
   const codingGraded = (Array.isArray(gradingResults) ? gradingResults : []).map((r) => {
@@ -1732,7 +1738,7 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
   // Idempotency: existing PREPARING/READY exam
   try {
     const sql = `
-      SELECT e.exam_id, COALESCE(e.status, 'READY') AS status,
+      SELECT e.exam_id, COALESCE(e.status, 'READY') AS status, COALESCE(e.progress, 0) AS progress,
              (SELECT ea.attempt_id FROM exam_attempts ea WHERE ea.exam_id = e.exam_id ORDER BY ea.attempt_no DESC, ea.attempt_id DESC LIMIT 1) AS attempt_id
       FROM exams e
       WHERE e.user_id = $1 AND e.exam_type = $2
@@ -1751,6 +1757,8 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
         exam_type,
         user_id: userInt,
         course_id: Number.isFinite(Number(course_id)) ? Number(course_id) : null,
+        status: row.status,
+        progress: Number(row.progress || 0),
         duration_seconds: null,
         started_at: null,
         expires_at: null,
@@ -1817,6 +1825,12 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
 }
 
 async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_id, course_name }) {
+  if (__activePrepAttempts.has(Number(attemptId))) {
+    try { console.log('[TRACE][PREP][IDEMPOTENT][SKIP]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    return;
+  }
+  __activePrepAttempts.add(Number(attemptId));
+  try {
   const userStr = String(user_id);
   const userInt = Number(userStr.replace(/[^0-9]/g, ""));
   const courseInt = normalizeToInt(course_id);
@@ -1883,22 +1897,23 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   const { validateTheoreticalQuestions, normalizeAiQuestion } = require("./theoryService");
   const devlabIntegration = require("../integrations/devlabService");
 
-  // Try to obtain DevLab widget + questions first; fallback to programmatic build
+  // Try to obtain DevLab questions + optional UI payload first; fallback to programmatic build
   let codingQuestionsDecorated = [];
-  let devlabWidgetResult = null;
+  let devlabPayload = null;
   try {
     const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
     try {
       const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
-      devlabWidgetResult = await requestCodingWidgetHtml({
+      devlabPayload = await requestCodingWidgetHtml({
         attempt_id: attemptId,
         skills: ids,
         difficulty: 'medium',
         amount: 2,
         humanLanguage: 'en',
       });
-      if (Array.isArray(devlabWidgetResult?.questions) && devlabWidgetResult.questions.length > 0) {
-        codingQuestionsDecorated = devlabWidgetResult.questions;
+      try { console.log('[DEVLAB][ANSWER][PARSED]', { has_questions: Array.isArray(devlabPayload?.questions) ? devlabPayload.questions.length : 0, has_componentHtml: !!devlabPayload?.html }); } catch {}
+      if (Array.isArray(devlabPayload?.questions) && devlabPayload.questions.length > 0) {
+        codingQuestionsDecorated = devlabPayload.questions;
       }
     } catch {}
     if (!Array.isArray(codingQuestionsDecorated) || codingQuestionsDecorated.length === 0) {
@@ -1954,19 +1969,13 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   await setExamStatus(examId, { progress: 80 });
 
   try {
-    // Prepare optional DevLab widget block for UI rendering (if available)
-    let devlabWidgetBlock = undefined;
-    if (devlabWidgetResult && (devlabWidgetResult.html || devlabWidgetResult.url)) {
-      devlabWidgetBlock = {
-        provider: 'devlab',
-        mode: devlabWidgetResult.html ? 'srcdoc' : 'iframe',
-        url: devlabWidgetResult.url || null,
-        srcdoc: devlabWidgetResult.html || null,
-        session_token: devlabWidgetResult.session_token || null,
-        skills: skillsForCoding,
-        difficulty: 'medium',
-      };
-    }
+    // Prepare optional DevLab UI block for UI rendering (if available)
+    const devlabUi = (() => {
+      const hasTopLevelHtml = !!(devlabPayload && typeof devlabPayload.html === 'string' && devlabPayload.html.trim() !== '');
+      if (hasTopLevelHtml) return { componentHtml: devlabPayload.html };
+      return undefined;
+    })();
+    try { console.log(`[DEVLAB][UI][${devlabUi ? 'PRESENT' : 'ABSENT'}]`, { componentHtml: !!devlabUi }); } catch {}
 
     const pkg = await buildExamPackageDoc({
       exam_id: examId,
@@ -1982,18 +1991,17 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       coding_questions: codingQuestionsDecorated,
       time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
       expires_at_iso: null,
-      devlab_widget: devlabWidgetBlock,
-      devlab_raw: (typeof devlabWidgetResult?.raw === 'string') ? devlabWidgetResult.raw : undefined,
+      devlab_ui: devlabUi,
     });
     await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
     try {
-      console.log('[TRACE][PACKAGE][SAVE_OK]', {
+      console.log('[PERSIST][PACKAGE][SUCCESS]', {
         exam_id: examId,
         attempt_id: attemptId,
         package_id: String(pkg?._id || ''),
         questions: Array.isArray(questions) ? questions.length : 0,
         coding_questions: Array.isArray(codingQuestionsDecorated) ? codingQuestionsDecorated.length : 0,
-        devlab: !!devlabWidgetBlock && (devlabWidgetBlock.srcdoc || devlabWidgetBlock.url) ? 'widget_present' : 'none',
+        devlab_ui: devlabUi ? 'present' : 'absent',
       });
     } catch {}
   } catch (e) {
@@ -2003,6 +2011,10 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
 
   await setExamStatus(examId, { status: 'READY', progress: 100 });
   try { console.log('[TRACE][prepareExamAsync READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+  } finally {
+  try { __activePrepAttempts.delete(Number(attemptId)); } catch {}
+}
+
 }
 
 module.exports = {

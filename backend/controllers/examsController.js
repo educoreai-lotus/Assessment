@@ -141,13 +141,18 @@ exports.createExam = async (req, res, next) => {
       return res.status(400).json({ error: errorCode, message: resp.message || errorCode });
     }
 
-    // Immediately kick off async preparation (do NOT await)
+    // Immediately kick off async preparation (do NOT await), unless an in-flight prep already started
     try {
-      setImmediate(() => {
-        try { console.log('[TRACE] prepareExamAsync started', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id }); } catch {}
-        prepareExamAsync(resp.exam_id, resp.attempt_id, { user_id: userStr, exam_type, course_id, course_name })
-          .catch((e) => { try { console.log('[TRACE][prepareExamAsync ERROR]', { message: e?.message }); } catch {} });
-      });
+      const alreadyPreparing = String(resp?.status || '').toUpperCase() === 'PREPARING' && Number(resp?.progress || 0) > 0;
+      if (!alreadyPreparing) {
+        setImmediate(() => {
+          try { console.log('[TRACE] prepareExamAsync started', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id }); } catch {}
+          prepareExamAsync(resp.exam_id, resp.attempt_id, { user_id: userStr, exam_type, course_id, course_name })
+            .catch((e) => { try { console.log('[TRACE][prepareExamAsync ERROR]', { message: e?.message }); } catch {} });
+        });
+      } else {
+        try { console.log('[TRACE][PREP][IDEMPOTENT][REUSE]', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id }); } catch {}
+      }
     } catch {}
 
     try { console.log('[TRACE] POST /api/exams -> 201 in %dms', Date.now() - __t0); } catch {}
@@ -361,7 +366,7 @@ exports.startExam = async (req, res, next) => {
         allow_empty_submit: true,
       },
       coding_questions: Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : [],
-      devlab_widget: pkg?.metadata?.devlab_widget || null,
+      devlab_ui: pkg?.metadata?.devlab_ui || null,
       time_allocated_minutes: pkg?.metadata?.time_allocated_minutes ?? null,
       expires_at: pkg?.metadata?.expires_at ?? null,
       started_at: startedAtVal,
@@ -459,7 +464,6 @@ exports.submitExam = async (req, res, next) => {
       attempt_id: attemptIdNum,
       answers,
       devlab: {
-        session_token: devlabBlock && devlabBlock.session_token ? String(devlabBlock.session_token) : undefined,
         answers: Array.isArray(devlabBlock?.answers) ? devlabBlock.answers : undefined,
       },
     });

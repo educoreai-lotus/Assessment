@@ -35,6 +35,8 @@ const ExamPackageCodingQuestionSchema = new Schema(
     programming_language: { type: String, default: 'javascript' },
     skills: { type: [String], default: [] },
     difficulty: { type: String, default: 'medium' },
+    // Optional UI payload from DevLab, passed through transparently when present
+    renderedComponent: Schema.Types.Mixed,
     requested_at: { type: Date, default: Date.now },
   },
   { _id: false }

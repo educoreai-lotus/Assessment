@@ -12,13 +12,12 @@ function buildDevLabCodingRequestPayload({ amount, skills, humanLanguage = 'en',
   };
 }
 
-function buildDevLabGradePayload({ attempt, answers, questions, session_token } = {}) {
+function buildDevLabGradePayload({ attempt, answers, questions } = {}) {
   return {
     action: 'grade-coding',
     attempt_id: attempt?.attempt_id ?? null,
     answers: Array.isArray(answers) ? answers : [],
     questions: Array.isArray(questions) ? questions : undefined,
-    session_token: session_token || undefined,
     // explicit routing and classification for Coordinator
     route: { destination: 'devlab', strict: true },
     content: { type: 'coding' },

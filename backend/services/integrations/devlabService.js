@@ -84,7 +84,6 @@ exports.decorateDevLabResponse = function decorateDevLabResponse(resp) {
 exports.gradeCodingAnswersForExam = async function gradeCodingAnswersForExam({
 	codingQuestions,
 	codingAnswers,
-  sessionToken,
   attempt,
 }) {
 	const questions = Array.isArray(codingQuestions) ? codingQuestions : [];
@@ -140,7 +139,6 @@ exports.gradeCodingAnswersForExam = async function gradeCodingAnswersForExam({
         answers: answersPayload,
         questions,
         attempt,
-        session_token: sessionToken,
       })) || [];
   } catch (err) {
     try {

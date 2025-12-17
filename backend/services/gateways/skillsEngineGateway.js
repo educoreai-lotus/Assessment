@@ -9,8 +9,28 @@ function getCoordinatorUrl() {
   return String(base).replace(/\/+$/, '');
 }
 
+function isUuidV1ToV5(value) {
+  if (typeof value !== 'string') return false;
+  const str = value.trim();
+  // UUID v1-v5 regex
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
 async function safeFetchBaselineSkills(params) {
+  const t0 = Date.now();
   try {
+    const userOriginal = params?.user_id ?? params?.userId ?? params?.user ?? null;
+    // Fail fast when user_id is not a UUID (Coordinator/Skills Engine requires UUID)
+    if (!isUuidV1ToV5(String(userOriginal || ''))) {
+      try {
+        console.log('[SKILLS_ENGINE][SKIPPED_NON_UUID]', { user_id_original: userOriginal });
+      } catch {}
+      try {
+        console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: 'non_uuid_user_id' });
+      } catch {}
+      return mockFetchBaselineSkills(params || {});
+    }
+
     const payload = buildSkillsEngineFetchBaselinePayload(params || {});
     try {
       // eslint-disable-next-line no-console
@@ -18,7 +38,10 @@ async function safeFetchBaselineSkills(params) {
         payload_keys: Object.keys(payload || {}),
       });
     } catch {}
-    const ret = await sendToCoordinator({ targetService: 'skills-engine', payload }).catch(() => ({}));
+    const ret = await sendToCoordinator({ targetService: 'skills-engine', payload }).catch((err) => {
+      try { console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: 'request_rejected' }); } catch {}
+      return {};
+    });
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;
@@ -69,6 +92,7 @@ async function safeFetchBaselineSkills(params) {
           categories: Object.keys(grouped || {}).length,
           total_skills: flattenedSkills.length,
         });
+        console.log('[SKILLS_ENGINE][SUCCESS]', { elapsed_ms: Date.now() - t0 });
       } catch {}
       return { user_id, skills: flattenedSkills };
     }
@@ -82,6 +106,7 @@ async function safeFetchBaselineSkills(params) {
     } catch {}
     return { user_id: params?.user_id ?? null, skills: Array.isArray(answer) ? answer : [] };
   } catch (err) {
+    try { console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: err?.message || 'unknown_error' }); } catch {}
     console.warn('SkillsEngine baseline fetch via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockFetchBaselineSkills(params || {});
   }
