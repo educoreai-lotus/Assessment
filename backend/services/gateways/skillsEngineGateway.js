@@ -18,6 +18,15 @@ function isUuidV1ToV5(value) {
 
 async function safeFetchBaselineSkills(params) {
   const t0 = Date.now();
+  const JS_BASELINE = [
+    { skill_id: 'js_loops', skill_name: 'Loops', topic_name: 'javascript' },
+    { skill_id: 'js_if_else', skill_name: 'If/Else', topic_name: 'javascript' },
+    { skill_id: 'js_promises', skill_name: 'Promises', topic_name: 'javascript' },
+  ];
+  const enforceBaselineJs = (user_id_in) => {
+    try { console.log('[SKILLS_ENGINE][BASELINE][TAXONOMY_ENFORCED]', { topics: ['javascript'], skills: JS_BASELINE.map(s => s.skill_id) }); } catch {}
+    return { user_id: user_id_in ?? (params?.user_id ?? null), skills: JS_BASELINE };
+  };
   try {
     const userOriginal = params?.user_id ?? params?.userId ?? params?.user ?? null;
     // Fail fast when user_id is not a UUID (Coordinator/Skills Engine requires UUID)
@@ -28,7 +37,8 @@ async function safeFetchBaselineSkills(params) {
       try {
         console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: 'non_uuid_user_id' });
       } catch {}
-      return mockFetchBaselineSkills(params || {});
+      // Always enforce JavaScript-only baseline taxonomy
+      return enforceBaselineJs(userOriginal);
     }
 
     const payload = buildSkillsEngineFetchBaselinePayload(params || {});
@@ -81,7 +91,7 @@ async function safeFetchBaselineSkills(params) {
 
     if (!hasNew && (!answer || isEmptyObject || isEmptyArray)) {
       try { console.log('[MOCK-FALLBACK][SkillsEngine][baseline-skills]', { hasParams: !!params }); } catch {}
-      return mockFetchBaselineSkills(params || {});
+      return enforceBaselineJs(params?.user_id ?? null);
     }
 
     // Normalize output to { user_id, skills: [{ skill_id, skill_name }] }
@@ -94,7 +104,8 @@ async function safeFetchBaselineSkills(params) {
         });
         console.log('[SKILLS_ENGINE][SUCCESS]', { elapsed_ms: Date.now() - t0 });
       } catch {}
-      return { user_id, skills: flattenedSkills };
+      // Enforce JS-only taxonomy regardless of upstream content
+      return enforceBaselineJs(user_id);
     }
 
     // Legacy normalization: if answer is array of skills already
@@ -104,11 +115,12 @@ async function safeFetchBaselineSkills(params) {
         count: Array.isArray(answer) ? answer.length : undefined,
       });
     } catch {}
-    return { user_id: params?.user_id ?? null, skills: Array.isArray(answer) ? answer : [] };
+    // Legacy path: ignore upstream and enforce baseline JS taxonomy
+    return enforceBaselineJs(params?.user_id ?? null);
   } catch (err) {
     try { console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: err?.message || 'unknown_error' }); } catch {}
     console.warn('SkillsEngine baseline fetch via Coordinator failed, using mock. Reason:', err?.message || err);
-    return mockFetchBaselineSkills(params || {});
+    return enforceBaselineJs(params?.user_id ?? null);
   }
 }
 
