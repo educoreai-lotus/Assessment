@@ -55,6 +55,32 @@ export default function Baseline() {
   const [remainingSec, setRemainingSec] = useState(null);
   const [devlabHtml, setDevlabHtml] = useState(null);
 
+  // DevLab grading ingestion (iframe-safe postMessage)
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event?.data?.type !== 'assessmentSolutionsSubmitted') return;
+      const { evaluation, questions, solutions } = event.data || {};
+      const score = (evaluation && typeof evaluation.score === 'number') ? evaluation.score : 0;
+      const skillsFeedback = (evaluation && typeof evaluation.skills === 'object' && evaluation.skills) ? evaluation.skills : {};
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[DEVLAB][GRADE][RECEIVED]', { score, skillsFeedback });
+      } catch {}
+      try {
+        http.post('/api/exams/submit-coding-grade', {
+          exam_id: examId,
+          attempt_id: attemptId,
+          score,
+          skillsFeedback,
+          questions,
+          solutions,
+        }).catch(() => {});
+      } catch {}
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [examId, attemptId]);
+
   async function waitForPackage(examId, maxWaitMs = 90000) {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {

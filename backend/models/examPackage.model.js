@@ -72,6 +72,8 @@ const ExamPackageSchema = new Schema(
     coding_grading_results: { type: Array, default: [] },
     coding_score_total: { type: Number, default: 0 },
     coding_score_max: { type: Number, default: 0 },
+    // DevLab final grading result envelope (iframe ingestion)
+    coding_results: { type: Schema.Types.Mixed, required: false },
     grading: {
       final_grade: Number,
       passed: Boolean,

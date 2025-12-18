@@ -118,6 +118,32 @@ export default function PostCourseExam() {
   [answers]);
   const totalCount = questions.length;
 
+  // DevLab grading ingestion (iframe-safe postMessage)
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event?.data?.type !== 'assessmentSolutionsSubmitted') return;
+      const { evaluation, questions, solutions } = event.data || {};
+      const score = (evaluation && typeof evaluation.score === 'number') ? evaluation.score : 0;
+      const skillsFeedback = (evaluation && typeof evaluation.skills === 'object' && evaluation.skills) ? evaluation.skills : {};
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[DEVLAB][GRADE][RECEIVED]', { score, skillsFeedback });
+      } catch {}
+      try {
+        http.post('/api/exams/submit-coding-grade', {
+          exam_id: examId,
+          attempt_id: attemptId,
+          score,
+          skillsFeedback,
+          questions,
+          solutions,
+        }).catch(() => {});
+      } catch {}
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [examId, attemptId]);
+
   useEffect(() => {
     let mounted = true;
     async function bootstrap() {
