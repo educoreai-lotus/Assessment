@@ -522,36 +522,83 @@ exports.submitCodingGrade = async (req, res, next) => {
     }
 
     // [DEVLAB][GRADE][RECEIVE][START]
-    try { console.log('[DEVLAB][GRADE][RECEIVE][START]', { exam_id: examIdNum, attempt_id: attemptIdNum, score, q: questions.length, s: solutions.length }); } catch {}
+    try {
+      console.log('[DEVLAB][GRADE][RECEIVE][START]', {
+        exam_id: examIdNum,
+        attempt_id: attemptIdNum,
+        score,
+        hasSkills: !!skillsFeedback,
+        questionsCount: Array.isArray(questions) ? questions.length : 0,
+        solutionsCount: Array.isArray(solutions) ? solutions.length : 0,
+      });
+    } catch {}
 
     // Validate attempt belongs to exam
-    const { rows } = await pool.query(
-      `SELECT ea.attempt_id, ea.exam_id, ea.status, ea.submitted_at
-       FROM exam_attempts ea
-       WHERE ea.attempt_id = $1`,
-      [attemptIdNum],
-    ).catch(() => ({ rows: [] }));
-    const att = rows?.[0] || null;
-    if (!att) return res.status(404).json({ error: 'attempt_not_found' });
+    let att = null;
+    let examType = null;
+    let codingSubmittedAt = null;
+    let codingScoreExisting = null;
+    try {
+      // Try extended select including coding_* fields and exam_type
+      const { rows } = await pool.query(
+        `SELECT ea.attempt_id, ea.exam_id, ea.status, ea.submitted_at,
+                ea.coding_score, ea.coding_status, ea.coding_submitted_at,
+                e.exam_type
+         FROM exam_attempts ea
+         JOIN exams e ON e.exam_id = ea.exam_id
+         WHERE ea.attempt_id = $1`,
+        [attemptIdNum],
+      );
+      att = rows?.[0] || null;
+      if (att) {
+        examType = att.exam_type || null;
+        codingSubmittedAt = att.coding_submitted_at || null;
+        codingScoreExisting = att.coding_score != null ? Number(att.coding_score) : null;
+      }
+    } catch {
+      // Fallback minimal select if columns not present
+      const { rows } = await pool.query(
+        `SELECT ea.attempt_id, ea.exam_id, ea.status, ea.submitted_at
+         FROM exam_attempts ea
+         WHERE ea.attempt_id = $1`,
+        [attemptIdNum],
+      ).catch(() => ({ rows: [] }));
+      att = rows?.[0] || null;
+    }
+
+    if (!att) {
+      try {
+        console.error('[DEVLAB][GRADE][ERROR]', {
+          exam_id: examIdNum,
+          attempt_id: attemptIdNum,
+          error: 'attempt_not_found',
+          stack: null,
+        });
+      } catch {}
+      return res.status(404).json({ error: 'attempt_not_found' });
+    }
     if (Number(att.exam_id) !== Number(examIdNum)) {
       return res.status(400).json({ error: 'exam_mismatch' });
     }
 
-    // Idempotency: if coding already persisted in PG columns, skip
-    let duplicate = false;
+    // [DEVLAB][GRADE][ATTEMPT][FOUND]
     try {
-      // Try to read coding_submitted_at/status if present (ignore failures for missing columns)
-      const check = await pool.query(
-        `SELECT coding_submitted_at, coding_status FROM exam_attempts WHERE attempt_id = $1`,
-        [attemptIdNum],
-      );
-      const row = check?.rows?.[0];
-      if (row && (row.coding_submitted_at != null || String(row.coding_status || '').toLowerCase() === 'graded')) {
-        duplicate = true;
-      }
+      console.log('[DEVLAB][GRADE][ATTEMPT][FOUND]', {
+        attempt_id: attemptIdNum,
+        exam_type: examType,
+        existingCodingScore: codingScoreExisting,
+        alreadySubmitted: !!codingSubmittedAt,
+      });
     } catch {}
-    if (duplicate) {
-      try { console.log('[DEVLAB][GRADE][DUPLICATE][SKIP]', { attempt_id: attemptIdNum }); } catch {}
+
+    // Idempotency: if coding already persisted in PG columns, skip
+    if (codingSubmittedAt != null) {
+      try {
+        console.log('[DEVLAB][GRADE][DUPLICATE][SKIP]', {
+          attempt_id: attemptIdNum,
+          coding_score: codingScoreExisting,
+        });
+      } catch {}
       return res.json({ ok: true, duplicate: true });
     }
 
@@ -567,6 +614,13 @@ exports.submitCodingGrade = async (req, res, next) => {
           source: 'devlab',
         },
       };
+      try {
+        console.log('[DEVLAB][GRADE][MONGO][WRITE]', {
+          exam_id: examIdNum,
+          score,
+          skillsCount: Object.keys(skillsFeedback || {}).length,
+        });
+      } catch {}
       await ExamPackage.updateOne(
         { attempt_id: String(attemptIdNum) },
         { $set: patch },
@@ -576,6 +630,12 @@ exports.submitCodingGrade = async (req, res, next) => {
 
     // Persist to Postgres if columns exist (best-effort, non-fatal)
     try {
+      try {
+        console.log('[DEVLAB][GRADE][POSTGRES][WRITE]', {
+          attempt_id: attemptIdNum,
+          score,
+        });
+      } catch {}
       await pool.query(
         `UPDATE exam_attempts
          SET coding_score = $1,
@@ -588,8 +648,25 @@ exports.submitCodingGrade = async (req, res, next) => {
 
     // [DEVLAB][GRADE][PERSIST][OK]
     try { console.log('[DEVLAB][GRADE][PERSIST][OK]', { attempt_id: attemptIdNum, score }); } catch {}
+
+    // [DEVLAB][GRADE][SUCCESS]
+    try {
+      console.log('[DEVLAB][GRADE][SUCCESS]', {
+        exam_id: examIdNum,
+        attempt_id: attemptIdNum,
+        score,
+      });
+    } catch {}
     return res.json({ ok: true });
   } catch (err) {
+    try {
+      console.error('[DEVLAB][GRADE][ERROR]', {
+        exam_id: normalizeToInt(req.body?.exam_id),
+        attempt_id: normalizeToInt(req.body?.attempt_id),
+        error: err?.message,
+        stack: err?.stack,
+      });
+    } catch {}
     return next(err);
   }
 };
