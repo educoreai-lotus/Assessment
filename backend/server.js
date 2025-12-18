@@ -15,6 +15,7 @@ const { mountSwagger } = require('./swagger');
 const testEmailRouter = require("./routes/testEmail");
 const emailTestRoute = require("./routes/emailTest");
 const aiQueryRouter = require('./routes/aiQuery');
+const grpcServer = require('./src/grpc/server');
 
 const PORT = process.env.PORT || 4000;
 const API_BASE = '/api/v1';
@@ -212,6 +213,24 @@ if (!global.__PROCESS_ERROR_HANDLERS_INSTALLED__) {
 }
 
 if (process.env.NODE_ENV !== 'test') {
+  // Start GRPC server alongside HTTP server
+  grpcServer.start().catch((err) => {
+    try {
+      console.error('[GRPC][STARTUP_ERROR]', { message: err && err.message, stack: err && err.stack });
+    } catch {}
+    process.exitCode = 1;
+  });
+
+  // Graceful shutdown handlers
+  const shutdown = async () => {
+    try {
+      await grpcServer.shutdown();
+    } catch {}
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
