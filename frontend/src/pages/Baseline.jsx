@@ -353,6 +353,31 @@ export default function Baseline() {
         attempt_id: attemptId,
         answers: payloadAnswers,
       });
+      if (result && result.status === 'PENDING_CODING') {
+        // Wait for coding grading
+        let attempts = 0;
+        while (attempts < 60) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const res = await examApi.attempt(attemptId);
+          if (res && res.status === 'PENDING_CODING') {
+            attempts += 1;
+            continue;
+          }
+          if (res && res.status === 'CANCELED') {
+            navigate('/exam/cancelled', { replace: true, state: { reason: 'phone_detected' } });
+            return;
+          }
+          navigate(`/results/baseline?attemptId=${encodeURIComponent(attemptId)}`, { state: { result: res } });
+          return;
+        }
+        // Fallback after timeout
+        navigate(`/results/baseline?attemptId=${encodeURIComponent(attemptId)}`);
+        return;
+      }
+      if (result && result.status === 'CANCELED') {
+        navigate('/exam/cancelled', { replace: true, state: { reason: 'phone_detected' } });
+        return;
+      }
       navigate(`/results/baseline?attemptId=${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
       setError(e?.response?.data?.error || e?.message || 'Submit failed');

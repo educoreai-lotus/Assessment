@@ -62,6 +62,8 @@ async function getAttemptDetail(attemptId) {
   );
   if (rows.length === 0) return null;
   const a = rows[0];
+  const status = a.status || null;
+  const cancelReason = a.cancel_reason || null;
   const { rows: skillRows } = await pool.query(
     `SELECT * FROM attempt_skills WHERE attempt_id = $1 ORDER BY skill_id ASC`,
     [attemptInt]
@@ -83,6 +85,8 @@ async function getAttemptDetail(attemptId) {
       score: Number(s.score),
       status: s.status,
     })),
+    status: status,
+    cancel_reason: cancelReason,
     submitted_at: a.submitted_at ? new Date(a.submitted_at).toISOString() : null,
   };
   if (a.exam_type === 'postcourse') {
@@ -98,6 +102,16 @@ async function getAttemptDetail(attemptId) {
       attempt_no: a.attempt_no,
       max_attempts: maxAttempts,
     };
+  }
+  // Attach coding results summary if present
+  if (pkg) {
+    const codingBlock = {
+      answers: Array.isArray(pkg.coding_answers) ? pkg.coding_answers : [],
+      grading: Array.isArray(pkg.coding_grading_results) ? pkg.coding_grading_results : [],
+      score_total: Number(pkg.coding_score_total || 0),
+      score_max: Number(pkg.coding_score_max || 0),
+    };
+    return { ...base, coding_results: codingBlock };
   }
   return base;
 }

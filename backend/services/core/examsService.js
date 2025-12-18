@@ -1141,13 +1141,13 @@ async function recomputeFinalResults(attemptIdNum) {
     scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
   const passed = finalGrade >= passThreshold;
 
-  // Update Postgres: mark submitted/graded if appropriate
+  // Update Postgres: mark completed (unless canceled) and set submitted_at
   try {
     await pool.query(
       `UPDATE exam_attempts
        SET final_grade = $1,
            passed = $2,
-           status = CASE WHEN status = 'canceled' THEN status ELSE 'submitted' END,
+           status = CASE WHEN status = 'canceled' THEN status ELSE 'completed' END,
            submitted_at = COALESCE(submitted_at, NOW()),
            coding_status = 'graded'
        WHERE attempt_id = $3`,
@@ -1182,6 +1182,13 @@ async function recomputeFinalResults(attemptIdNum) {
       final_grade: Number(finalGrade),
       passed: !!passed,
       skills_total: finalPerSkill.length,
+    });
+  } catch {}
+  try {
+    console.log('[EXAM][FINALIZE][AFTER_CODING][SUCCESS]', {
+      attempt_id: attemptIdNum,
+      final_grade: Number(finalGrade),
+      passed: !!passed,
     });
   } catch {}
 

@@ -16,6 +16,13 @@ exports.getAttemptById = async (req, res, next) => {
     const { attemptId } = req.params;
     const data = await getAttemptDetail(attemptId);
     if (!data) return res.status(404).json({ error: 'not_found' });
+    const status = data?.status || null;
+    if (String(status) === 'pending_coding') {
+      return res.json({ status: 'PENDING_CODING' });
+    }
+    if (String(status) === 'canceled') {
+      return res.json({ status: 'CANCELED', reason: data?.cancel_reason || 'canceled' });
+    }
     return res.json(data);
   } catch (err) {
     return next(err);

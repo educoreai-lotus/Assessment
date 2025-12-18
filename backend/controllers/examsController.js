@@ -350,6 +350,27 @@ exports.startExam = async (req, res, next) => {
       metadata: q.metadata || {},
       sequence: idx + 1,
     }));
+    // If coding questions exist, mark coding_required/pending (attempt state remains 'started')
+    try {
+      const hasCoding = Array.isArray(pkg?.coding_questions) && pkg.coding_questions.length > 0;
+      if (hasCoding) {
+        try {
+          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_required BOOLEAN`);
+          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_status VARCHAR(20)`);
+        } catch {}
+        try {
+          await pool.query(
+            `UPDATE exam_attempts
+               SET status = 'started',
+                   coding_required = TRUE,
+                   coding_status = COALESCE(coding_status, 'pending')
+             WHERE attempt_id = $1 AND COALESCE(status,'') <> 'canceled'`,
+            [attemptIdNum],
+          );
+        } catch {}
+      }
+    } catch {}
+
     // Return ONLY theoretical questions in 'questions' for clean stage separation.
     // Coding questions are available via 'coding_questions' and UI block via 'devlab_ui'.
     const questionsForResponse = theoreticalForResponse;
@@ -463,6 +484,11 @@ exports.submitExam = async (req, res, next) => {
       return res.status(403).json({ error: 'proctoring_not_started', message: 'Proctoring session not started' });
     }
 
+    // Allow empty submissions (log and continue)
+    if (!answers || answers.length === 0) {
+      try { console.log('[EXAM][SUBMIT][EMPTY][ALLOWED]', { exam_id: Number(examId), attempt_id: attemptIdNum }); } catch {}
+    }
+
     // Coding grading sync: if coding is required and not yet graded, do not finalize
     try {
       // Determine coding_required from package (best-effort)
@@ -491,6 +517,16 @@ exports.submitExam = async (req, res, next) => {
         codingStatus = csRows && csRows[0] ? (csRows[0].coding_status || null) : null;
         const codingReqFlag = csRows && csRows[0] ? !!csRows[0].coding_required : codingRequired;
         if (codingReqFlag && String(codingStatus || '').toLowerCase() !== 'graded') {
+          // Move attempt into pending_coding state
+          try {
+            await pool.query(
+              `UPDATE exam_attempts SET status = 'pending_coding' WHERE attempt_id = $1 AND COALESCE(status,'') <> 'canceled'`,
+              [attemptIdNum],
+            );
+            try {
+              console.log('[EXAM][FINALIZE][BLOCKED][WAITING_FOR_CODING]', { exam_id: Number(examId), attempt_id: attemptIdNum });
+            } catch {}
+          } catch {}
           return res.json({ status: 'PENDING_CODING' });
         }
       } catch {}
@@ -613,6 +649,13 @@ exports.submitCodingGrade = async (req, res, next) => {
     if (Number(att.exam_id) !== Number(examIdNum)) {
       return res.status(400).json({ error: 'exam_mismatch' });
     }
+    // Hard block if attempt canceled
+    if (String(att.status || '').toLowerCase() === 'canceled') {
+      return res.status(409).json({
+        status: 'CANCELED',
+        reason: att.cancel_reason || 'canceled',
+      });
+    }
 
     // [DEVLAB][GRADE][ATTEMPT][FOUND]
     try {
@@ -637,6 +680,12 @@ exports.submitCodingGrade = async (req, res, next) => {
 
     // Persist to Mongo ExamPackage
     try {
+      const gradingArray = Object.entries(skillsFeedback || {}).map(([k, v]) => ({
+        skill_id: k,
+        score: Number.isFinite(Number(v?.score)) ? Number(v?.score) : 0,
+        feedback: v?.feedback,
+        source: 'devlab',
+      }));
       const patch = {
         coding_results: {
           questions,
@@ -646,6 +695,10 @@ exports.submitCodingGrade = async (req, res, next) => {
           graded_at: new Date(),
           source: 'devlab',
         },
+        // Ensure summary fields exist to avoid 0/0 on results
+        coding_score_total: Number.isFinite(Number(score)) ? Number(score) : 0,
+        coding_score_max: 100,
+        ...(Array.isArray(gradingArray) ? { 'coding_grading_results': gradingArray } : {}),
       };
       try {
         console.log('[DEVLAB][GRADE][MONGO][WRITE]', {

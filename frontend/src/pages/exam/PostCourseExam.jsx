@@ -523,6 +523,30 @@ export default function PostCourseExam() {
         answers: filteredAnswers,
       });
       console.trace('[UI][SUBMIT][DONE]');
+      if (result && result.status === 'PENDING_CODING') {
+        // Wait for coding grading to complete
+        let tries = 0;
+        while (tries < 60) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const res = await examApi.attempt(attemptId);
+          if (res && res.status === 'PENDING_CODING') {
+            tries += 1;
+            continue;
+          }
+          if (res && res.status === 'CANCELED') {
+            navigate('/exam/cancelled', { replace: true, state: { message: 'Exam canceled due to phone detection' } });
+            return;
+          }
+          navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result: res } });
+          return;
+        }
+        navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`);
+        return;
+      }
+      if (result && result.status === 'CANCELED') {
+        navigate('/exam/cancelled', { replace: true, state: { message: 'Exam canceled due to phone detection' } });
+        return;
+      }
       navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
       console.trace('[UI][SUBMIT][ERROR] Error:', e?.message || e);
