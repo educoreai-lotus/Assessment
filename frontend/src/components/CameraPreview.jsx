@@ -33,10 +33,20 @@ export default function CameraPreview({ onReady, onError, attemptId, onPhoneDete
 
         // Start phone detection loop after camera is active
         try {
+          // start only when attemptId and video exist
+          if (!attemptId || !videoRef.current) {
+            return;
+          }
           // Load model once
           if (!detectorRef.current) {
             detectorRef.current = await cocoSsd.load();
           }
+          // log start once
+          console.log('[PHONE-DETECT][START]', {
+            attemptId,
+            width: videoRef.current?.videoWidth,
+            height: videoRef.current?.videoHeight,
+          });
           // Poll every ~900ms
           if (!intervalRef.current && detectorRef.current && videoRef.current) {
             intervalRef.current = setInterval(async () => {
@@ -44,10 +54,19 @@ export default function CameraPreview({ onReady, onError, attemptId, onPhoneDete
               if (phoneDetectedRef.current) return;
               const videoEl = videoRef.current;
               if (!videoEl) return;
+              // ensure video is ready
+              if (!videoEl.videoWidth || !videoEl.videoHeight) {
+                return;
+              }
               try {
                 const predictions = await detectorRef.current.detect(videoEl);
+                // log raw predictions (mandatory)
+                console.log('[PHONE-DETECT][RAW]', predictions.map(p => ({
+                  class: p.class,
+                  score: Number(p.score || 0).toFixed(2),
+                })));
                 const phone = Array.isArray(predictions)
-                  ? predictions.find((p) => p && p.class === 'cell phone' && Number(p.score || 0) >= 0.6)
+                  ? predictions.find((p) => p && ['cell phone', 'remote'].includes(p.class) && p.score >= 0.35)
                   : null;
                 if (phone && attemptId) {
                   phoneDetectedRef.current = true;
@@ -55,16 +74,13 @@ export default function CameraPreview({ onReady, onError, attemptId, onPhoneDete
                     clearInterval(intervalRef.current);
                     intervalRef.current = null;
                   }
-                  try {
-                    await fetch(`/api/proctoring/${encodeURIComponent(attemptId)}/incident`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ type: 'phone_detected' }),
-                    }).catch(() => {});
-                  } catch {}
-                  try {
-                    onPhoneDetected?.(phone);
-                  } catch {}
+                  console.warn('[PROCTORING][PHONE][DETECTED]', phone);
+                  await fetch(`/api/proctoring/${encodeURIComponent(attemptId)}/incident`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'phone_detected' }),
+                  });
+                  onPhoneDetected?.(phone);
                 }
               } catch {}
             }, 900);
