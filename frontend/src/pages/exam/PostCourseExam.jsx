@@ -110,7 +110,7 @@ export default function PostCourseExam() {
   const [expiresAtIso, setExpiresAtIso] = useState(null);
   const [remainingSec, setRemainingSec] = useState(null);
   const recreateOnceRef = useRef(false);
-  const devlabIframeRef = useRef(null);
+  // DevLab iframe runs self-contained via srcDoc; no JS bridge
   const [stage, setStage] = useState('theory'); // 'theory' | 'coding' | 'submit'
   const [devlabHtml, setDevlabHtml] = useState(null);
   const answeredCount = useMemo(() =>
@@ -380,35 +380,7 @@ export default function PostCourseExam() {
     return () => { cancelled = false; };
   }, [examId, attemptId, cameraReady, cameraOk, navigate]);
 
-  async function requestDevLabAnswers(timeoutMs = 5000) {
-    const iframe = devlabIframeRef.current;
-    if (!iframe || !iframe.contentWindow) return [];
-    return new Promise((resolve) => {
-      let done = false;
-      const to = setTimeout(() => {
-        if (!done) {
-          done = true;
-          window.removeEventListener('message', onMessage);
-          resolve([]);
-        }
-      }, timeoutMs);
-      function onMessage(ev) {
-        const data = ev?.data || {};
-        if (data && data.type === 'devlab:answers') {
-          done = true;
-          clearTimeout(to);
-          window.removeEventListener('message', onMessage);
-          resolve(Array.isArray(data.answers) ? data.answers : []);
-        }
-      }
-      window.addEventListener('message', onMessage);
-      try {
-        iframe.contentWindow.postMessage({ type: 'devlab:getAnswers' }, '*');
-      } catch {
-        resolve([]);
-      }
-    });
-  }
+  // DevLab answers bridge removed; DevLab graded asynchronously server-side
 
   // Countdown timer
   useEffect(() => {
@@ -512,7 +484,6 @@ export default function PostCourseExam() {
     try {
       console.trace('[UI][SUBMIT][START]');
       setIsSubmitting(true);
-      const devlabAnswers = await requestDevLabAnswers().catch(() => []);
       // Only send answers for questions in current attempt's package with metadata
       const filteredAnswers = Object.entries(answers)
         .filter(([questionId]) => questions.find((q) => String(q.originalId || q.id) === String(questionId)))
@@ -524,9 +495,6 @@ export default function PostCourseExam() {
       const result = await examApi.submit(examId, {
         attempt_id: attemptId,
         answers: filteredAnswers,
-        devlab: {
-          answers: Array.isArray(devlabAnswers) ? devlabAnswers : [],
-        },
       });
       console.trace('[UI][SUBMIT][DONE]');
       navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });

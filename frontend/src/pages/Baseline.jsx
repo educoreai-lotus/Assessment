@@ -10,7 +10,6 @@ import { http } from '../services/http';
 export default function Baseline() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const devlabIframeRef = useRef(null);
 
   // Gate: redirect to Intro unless accepted for this attempt
   useEffect(() => {
@@ -225,35 +224,6 @@ export default function Baseline() {
     };
   }, [examId, attemptId, cameraReady, cameraOk]);
 
-  async function requestDevLabAnswers(timeoutMs = 5000) {
-    const iframe = devlabIframeRef.current;
-    if (!iframe || !iframe.contentWindow) return [];
-    return new Promise((resolve) => {
-      let done = false;
-      const to = setTimeout(() => {
-        if (!done) {
-          done = true;
-          window.removeEventListener('message', onMessage);
-          resolve([]);
-        }
-      }, timeoutMs);
-      function onMessage(ev) {
-        const data = ev?.data || {};
-        if (data && data.type === 'devlab:answers') {
-          done = true;
-          clearTimeout(to);
-          window.removeEventListener('message', onMessage);
-          resolve(Array.isArray(data.answers) ? data.answers : []);
-        }
-      }
-      window.addEventListener('message', onMessage);
-      try {
-        iframe.contentWindow.postMessage({ type: 'devlab:getAnswers' }, '*');
-      } catch {
-        resolve([]);
-      }
-    });
-  }
 
   // Anti-cheating: three-strike system
   useEffect(() => {
@@ -347,7 +317,6 @@ export default function Baseline() {
     try {
       // Immediate submit loading UI
       setIsSubmitting(true);
-      const devlabAnswers = await requestDevLabAnswers().catch(() => []);
       const payloadAnswers = questions.map((q) => ({
         question_id: q.originalId,
         type: q.type === 'text' ? 'open' : q.type,
@@ -357,12 +326,6 @@ export default function Baseline() {
       const result = await examApi.submit(examId, {
         attempt_id: attemptId,
         answers: payloadAnswers,
-        devlab: devlabWidget
-          ? {
-              session_token: devlabWidget?.session_token || undefined,
-              answers: Array.isArray(devlabAnswers) ? devlabAnswers : [],
-            }
-          : undefined,
       });
       navigate(`/results/baseline?attemptId=${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
