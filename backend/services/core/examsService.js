@@ -1221,12 +1221,17 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
   try {
     const mcqCount = theoreticalAnswers.filter(a => String(a?.type||'').toLowerCase()==='mcq').length;
     const openCount = theoreticalAnswers.filter(a => String(a?.type||'').toLowerCase()==='open').length;
+    const codingSkillsCountFromIngest =
+      examPackage && examPackage.coding_results && examPackage.coding_results.skills && typeof examPackage.coding_results.skills === 'object'
+        ? Object.keys(examPackage.coding_results.skills).length
+        : 0;
+    const codeCount = codingAnswers.length > 0 ? codingAnswers.length : codingSkillsCountFromIngest;
     // eslint-disable-next-line no-console
     console.log('[TRACE][EXAM][SUBMIT][COUNTS]', {
       theoretical_total: theoreticalAnswers.length,
       mcq: mcqCount,
       open: openCount,
-      code: codingAnswers.length,
+      code: codeCount,
     });
   } catch {}
 
@@ -1407,6 +1412,40 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
     };
   });
 
+  // 6.1) Merge coding skills from ingestion (ExamPackage.coding_results.skills)
+  let codingSkillsMerged = [];
+  try {
+    const skillsMap =
+      examPackage && examPackage.coding_results && typeof examPackage.coding_results.skills === 'object'
+        ? examPackage.coding_results.skills
+        : null;
+    if (skillsMap && Object.keys(skillsMap).length > 0) {
+      const merged = [];
+      for (const [sid, meta] of Object.entries(skillsMap)) {
+        const numericScore = Number(meta && meta.score);
+        const scoreVal = Number.isFinite(numericScore) ? numericScore : 0;
+        const statusVal = scoreVal > 0 ? "acquired" : "failed";
+        merged.push({
+          question_id: "", // not applicable for merged coding skills
+          skill_id: String(sid || "unassigned"),
+          type: "code",
+          raw_answer: "",
+          score: scoreVal,
+          status: statusVal,
+          source: "devlab-merge",
+          feedback: typeof meta?.feedback === 'string' ? meta.feedback : undefined,
+        });
+      }
+      codingSkillsMerged = merged;
+      try {
+        console.log('[DEVLAB][MERGE][CODING][SKILLS]', {
+          attempt_id: attemptIdNum,
+          from_ingestion: Object.keys(skillsMap).length,
+        });
+      } catch {}
+    }
+  } catch {}
+
   // Persist coding grading details to Mongo ExamPackage
   if (process.env.NODE_ENV !== "test") {
     try {
@@ -1429,8 +1468,8 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
     } catch {}
   }
 
-  // 7) Merge grades
-  const gradedItems = [...theoreticalGraded, ...codingGraded];
+  // 7) Merge grades (theory + computed coding + ingested coding skills)
+  const gradedItems = [...theoreticalGraded, ...codingGraded, ...codingSkillsMerged];
 
   // 8) Per-skill aggregation
   const bySkill = new Map();
@@ -1456,17 +1495,26 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
       numericScores.length > 0
         ? numericScores.reduce((a, b) => a + b, 0) / numericScores.length
         : 0;
-    const status = avg >= passing ? "acquired" : "failed";
+    // Default status by policy threshold; will be overridden for coding-ingest below
+    let status = avg >= passing ? "acquired" : "failed";
     let name =
       skillIdToName.get(sid) ||
       (qById.get(String(items[0]?.question_id))?.prompt?.skill_name || sid);
     if (!name || String(name).trim() === "") name = sid;
-    perSkill.push({
+    const out = {
       skill_id: sid,
       skill_name: name || sid,
       score: Number(avg),
       status,
-    });
+    };
+    // If ingestion provided explicit coding feedback/score, override
+    const override = codingSkillsMerged.find((i) => String(i.skill_id) === String(sid));
+    if (override) {
+      out.score = Number(override.score || 0);
+      out.status = Number(override.score || 0) > 0 ? "acquired" : "failed";
+      if (override.feedback) out.feedback = override.feedback;
+    }
+    perSkill.push(out);
   }
 
   // 9) Final grade
@@ -1501,6 +1549,13 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
       skills: perSkill.length,
       final_grade: Number(finalGrade),
       passed,
+    });
+    // Emit explicit merged result log
+    console.log('[EXAM][RESULT][FINAL][MERGED]', {
+      attempt_id: attemptIdNum,
+      skills_total: perSkill.length,
+      coding_skills: codingSkillsMerged.length,
+      final_grade: Number(finalGrade),
     });
   } catch {}
   try {

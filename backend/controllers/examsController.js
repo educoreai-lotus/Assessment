@@ -608,7 +608,7 @@ exports.submitCodingGrade = async (req, res, next) => {
         coding_results: {
           questions,
           solutions,
-          skillsFeedback,
+          skills: skillsFeedback,
           score,
           graded_at: new Date(),
           source: 'devlab',
