@@ -1604,24 +1604,7 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
   // 13) Return response and enqueue/push outbox integrations
   const submittedAtIso = nowIso();
 
-  // 3.1) Directory (postcourse only)
-  if (examType === "postcourse") {
-    const payloadDirectory = {
-      course_id: attempt.course_id != null ? Number(attempt.course_id) : null,
-      user_id: attempt.user_id != null ? Number(attempt.user_id) : null,
-      attempt_no: attempt.attempt_no || 1,
-      exam_type: examType,
-      final_grade: Number(finalGrade),
-      passing_grade: Number(passing),
-      passed,
-      submitted_at: submittedAtIso,
-    };
-    await pool.query(
-      `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-      ["directory_results", JSON.stringify(payloadDirectory), "directory"],
-    );
-    safePushDirectoryResults(payloadDirectory).catch(() => {});
-  }
+  // 3.1) Directory – disabled for postcourse by design (Course Builder is the only sink)
 
   // 3.2) Skills Engine
   // Use original user_id from ExamPackage (string/UUID) if available; fallback to numeric
@@ -1648,11 +1631,13 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
     payloadSkills.coverage_map = examPackage?.coverage_map || [];
     payloadSkills.final_status = "completed";
   }
-  await pool.query(
-    `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-    ["skills_engine_results", JSON.stringify(payloadSkills), "skills_engine"],
-  );
-  safePushSkillsResults(payloadSkills).catch(() => {});
+  if (examType !== "postcourse") {
+    await pool.query(
+      `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
+      ["skills_engine_results", JSON.stringify(payloadSkills), "skills_engine"],
+    );
+    safePushSkillsResults(payloadSkills).catch(() => {});
+  }
 
   // 3.3) Course Builder (postcourse only)
   if (examType === "postcourse") {
@@ -1851,7 +1836,7 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
   };
 }
 
-async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_id, course_name }) {
+async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_id, course_name, coverage_map }) {
   if (__activePrepAttempts.has(Number(attemptId))) {
     try { console.log('[TRACE][PREP][IDEMPOTENT][SKIP]', { exam_id: examId, attempt_id: attemptId }); } catch {}
     return;
@@ -1881,12 +1866,9 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         policy = { passing_grade: 70 };
         try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
     } else if (exam_type === 'postcourse') {
-        const { safeFetchPolicy } = require("../gateways/directoryGateway");
-        policy = isTest
-          ? ({ passing_grade: 70, max_attempts: 3 })
-          : await safeFetchPolicy('postcourse');
-      // If integration provided coverage_map, use it directly; otherwise fetch from Course Builder
-      const injectedCoverage = Array.isArray(arguments?.[2]?.coverage_map) ? arguments[2].coverage_map : null;
+      // Post-course: STATIC policy; DO NOT call Directory or external coverage
+      policy = { passing_grade: 60, max_attempts: 3 };
+      const injectedCoverage = Array.isArray(coverage_map) ? coverage_map : null;
       if (Array.isArray(injectedCoverage)) {
         coveragePayload = {
           coverage_map: injectedCoverage,
@@ -1894,12 +1876,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         };
         try { console.log('[POSTCOURSE][COVERAGE][INJECTED]', { exam_id: examId, attempt_id: attemptId, items: injectedCoverage.length }); } catch {}
       } else {
-        const { safeFetchCoverage } = require("../gateways/courseBuilderGateway");
-        coveragePayload = await safeFetchCoverage({
-          learner_id: user_id,
-          learner_name: undefined,
-          course_id,
-        });
+        await setExamStatus(examId, { status: 'FAILED', error_message: 'coverage_required', failed_step: 'fetch_upstream', progress: 100 });
+        return;
       }
       } else {
         await setExamStatus(examId, { status: 'FAILED', error_message: 'invalid_exam_type', failed_step: 'input_validation', progress: 100 });
