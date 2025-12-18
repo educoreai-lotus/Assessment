@@ -1873,24 +1873,34 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     let skillsPayload = null;
     let coveragePayload = null;
     const isTest = String(process.env.NODE_ENV || '').toLowerCase() === 'test';
-    try {
-      if (exam_type === 'baseline') {
+  try {
+    if (exam_type === 'baseline') {
         const { safeFetchBaselineSkills } = require("../gateways/skillsEngineGateway");
         skillsPayload = await safeFetchBaselineSkills({ user_id });
         // Baseline: skip Directory policy entirely, use static fallback
         policy = { passing_grade: 70 };
         try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
-      } else if (exam_type === 'postcourse') {
+    } else if (exam_type === 'postcourse') {
         const { safeFetchPolicy } = require("../gateways/directoryGateway");
-        const { safeFetchCoverage } = require("../gateways/courseBuilderGateway");
         policy = isTest
           ? ({ passing_grade: 70, max_attempts: 3 })
           : await safeFetchPolicy('postcourse');
+      // If integration provided coverage_map, use it directly; otherwise fetch from Course Builder
+      const injectedCoverage = Array.isArray(arguments?.[2]?.coverage_map) ? arguments[2].coverage_map : null;
+      if (Array.isArray(injectedCoverage)) {
+        coveragePayload = {
+          coverage_map: injectedCoverage,
+          course_name: course_name || undefined,
+        };
+        try { console.log('[POSTCOURSE][COVERAGE][INJECTED]', { exam_id: examId, attempt_id: attemptId, items: injectedCoverage.length }); } catch {}
+      } else {
+        const { safeFetchCoverage } = require("../gateways/courseBuilderGateway");
         coveragePayload = await safeFetchCoverage({
           learner_id: user_id,
           learner_name: undefined,
           course_id,
         });
+      }
       } else {
         await setExamStatus(examId, { status: 'FAILED', error_message: 'invalid_exam_type', failed_step: 'input_validation', progress: 100 });
         return;
