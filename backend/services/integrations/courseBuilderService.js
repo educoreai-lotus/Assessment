@@ -1,5 +1,6 @@
 // Phase 08.5c – Delegates to gateway; no axios/env here
 const { sendCourseBuilderExamResults } = require('../gateways/courseBuilderGateway');
+const pool = require('../../config/supabaseDB');
 const examsService = require('../core/examsService');
 
 exports.sendExamResultsToCourseBuilder = async (payloadObj) => {
@@ -66,6 +67,23 @@ exports.handleInbound = async (payload) => {
       user_name: null,
       company_id: null,
     });
+
+    // Persist coverage snapshot on attempt for later prepareExamAsync
+    try {
+      if (created?.attempt_id) {
+        await pool.query(
+          `ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS coverage_snapshot JSONB`,
+        ).catch(() => {});
+        await pool.query(
+          `UPDATE exam_attempts SET coverage_snapshot = $1::jsonb WHERE attempt_id = $2`,
+          [JSON.stringify({ coverage_map }), Number(created.attempt_id)],
+        );
+        try { console.log('[INBOUND][COURSE_BUILDER][create_assessment][COVERAGE_SNAPSHOT_SAVED]', { attempt_id: created.attempt_id, items: coverage_map.length }); } catch {}
+      }
+    } catch (e) {
+      try { console.log('[INBOUND][COURSE_BUILDER][create_assessment][COVERAGE_SNAPSHOT_ERROR]', { message: e?.message }); } catch {}
+      // continue; prep will fail with clear error if snapshot missing
+    }
 
     // Kick off preparation with injected coverage_map (skip external coverage fetch)
     try {

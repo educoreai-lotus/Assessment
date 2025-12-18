@@ -93,6 +93,15 @@ async function ensureExamStatusColumns(pool) {
     ) THEN
       ALTER TABLE exams ADD COLUMN updated_at TIMESTAMP;
     END IF;
+
+    -- exam_attempts.coverage_snapshot for post-course coverage persistence
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'exam_attempts' AND column_name = 'coverage_snapshot'
+    ) THEN
+      ALTER TABLE exam_attempts ADD COLUMN coverage_snapshot JSONB;
+    END IF;
   END
   $$;`;
   try {

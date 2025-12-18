@@ -1868,17 +1868,24 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     } else if (exam_type === 'postcourse') {
       // Post-course: STATIC policy; DO NOT call Directory or external coverage
       policy = { passing_grade: 60, max_attempts: 3 };
-      const injectedCoverage = Array.isArray(coverage_map) ? coverage_map : null;
-      if (Array.isArray(injectedCoverage)) {
-        coveragePayload = {
-          coverage_map: injectedCoverage,
-          course_name: course_name || undefined,
-        };
-        try { console.log('[POSTCOURSE][COVERAGE][INJECTED]', { exam_id: examId, attempt_id: attemptId, items: injectedCoverage.length }); } catch {}
-      } else {
-        await setExamStatus(examId, { status: 'FAILED', error_message: 'coverage_required', failed_step: 'fetch_upstream', progress: 100 });
+      // Load coverage snapshot from attempt
+      let snapshot = null;
+      try {
+        const { rows } = await pool.query(
+          `SELECT coverage_snapshot FROM exam_attempts WHERE attempt_id = $1`,
+          [Number(attemptId)],
+        );
+        snapshot = rows && rows[0] ? rows[0].coverage_snapshot : null;
+      } catch (err) {
+        // fall through to missing snapshot handling
+      }
+      const snapArray = Array.isArray(snapshot) ? snapshot : (snapshot && Array.isArray(snapshot.coverage_map) ? snapshot.coverage_map : null);
+      if (!Array.isArray(snapArray) || snapArray.length === 0) {
+        await setExamStatus(examId, { status: 'FAILED', error_message: 'coverage_snapshot_missing', failed_step: 'prepare_context', progress: 100 });
         return;
       }
+      coveragePayload = { coverage_map: snapArray, course_name: course_name || undefined };
+      try { console.log('[POSTCOURSE][COVERAGE][SNAPSHOT]', { exam_id: examId, attempt_id: attemptId, items: snapArray.length }); } catch {}
       } else {
         await setExamStatus(examId, { status: 'FAILED', error_message: 'invalid_exam_type', failed_step: 'input_validation', progress: 100 });
         return;
