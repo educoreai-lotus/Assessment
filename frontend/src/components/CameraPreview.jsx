@@ -1,8 +1,13 @@
 import { useEffect, useRef } from 'react';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import '@tensorflow/tfjs';
 
-export default function CameraPreview({ onReady, onError }) {
+export default function CameraPreview({ onReady, onError, attemptId, onPhoneDetected }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const detectorRef = useRef(null);
+  const intervalRef = useRef(null);
+  const phoneDetectedRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -25,6 +30,46 @@ export default function CameraPreview({ onReady, onError }) {
           } catch {}
         }
         onReady?.();
+
+        // Start phone detection loop after camera is active
+        try {
+          // Load model once
+          if (!detectorRef.current) {
+            detectorRef.current = await cocoSsd.load();
+          }
+          // Poll every ~900ms
+          if (!intervalRef.current && detectorRef.current && videoRef.current) {
+            intervalRef.current = setInterval(async () => {
+              if (!mounted) return;
+              if (phoneDetectedRef.current) return;
+              const videoEl = videoRef.current;
+              if (!videoEl) return;
+              try {
+                const predictions = await detectorRef.current.detect(videoEl);
+                const phone = Array.isArray(predictions)
+                  ? predictions.find((p) => p && p.class === 'cell phone' && Number(p.score || 0) >= 0.6)
+                  : null;
+                if (phone && attemptId) {
+                  phoneDetectedRef.current = true;
+                  if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                  }
+                  try {
+                    await fetch(`/api/proctoring/${encodeURIComponent(attemptId)}/incident`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ type: 'phone_detected' }),
+                    }).catch(() => {});
+                  } catch {}
+                  try {
+                    onPhoneDetected?.(phone);
+                  } catch {}
+                }
+              } catch {}
+            }, 900);
+          }
+        } catch {}
       } catch (e) {
         const msg =
           e?.name === 'NotAllowedError'
@@ -41,6 +86,10 @@ export default function CameraPreview({ onReady, onError }) {
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((t) => t.stop());
           streamRef.current = null;
+        }
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
         }
       } catch {}
     };

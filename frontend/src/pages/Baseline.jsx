@@ -54,6 +54,8 @@ export default function Baseline() {
   const [stage, setStage] = useState('theory'); // 'theory' | 'coding' | 'submit'
   const [remainingSec, setRemainingSec] = useState(null);
   const [devlabHtml, setDevlabHtml] = useState(null);
+  const [examCanceled, setExamCanceled] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState('');
 
   // DevLab grading ingestion (iframe-safe postMessage)
   useEffect(() => {
@@ -423,6 +425,20 @@ export default function Baseline() {
     setCameraOk(false);
   }
 
+  function handlePhoneDetected() {
+    setExamCanceled(true);
+    setCancelMessage('Exam canceled due to phone detection');
+    try {
+      setTimeout(() => {
+        if (attemptId) {
+          navigate(`/results/baseline?attemptId=${encodeURIComponent(attemptId)}`, { replace: true, state: { reason: 'phone_detected' } });
+        } else {
+          navigate('/exam/cancelled', { replace: true, state: { reason: 'phone_detected' } });
+        }
+      }, 1500);
+    } catch {}
+  }
+
   if (loading && !attemptId) return <LoadingSpinner label="Initializing baseline exam..." />;
 
   return (
@@ -440,7 +456,7 @@ export default function Baseline() {
           </div>
           {attemptId && (
             <div className="w-56">
-              <CameraPreview onReady={handleCameraReady} onError={handleCameraError} />
+              <CameraPreview onReady={handleCameraReady} onError={handleCameraError} attemptId={attemptId} onPhoneDetected={handlePhoneDetected} />
             </div>
           )}
         </div>
@@ -457,7 +473,7 @@ export default function Baseline() {
         </div>
       )}
 
-      {questions.length > 0 && stage === 'theory' && (
+      {!examCanceled && questions.length > 0 && stage === 'theory' && (
         <div className="space-y-5">
           <motion.div
             key={questions[currentIdx].id}
@@ -493,7 +509,7 @@ export default function Baseline() {
         </div>
       )}
 
-      {questions.length === 0 && (cameraError ? (
+      {!examCanceled && questions.length === 0 && (cameraError ? (
         <div className="text-sm text-neutral-400">
           Camera access is required to start the exam. Please allow camera access and refresh.
         </div>
@@ -502,7 +518,7 @@ export default function Baseline() {
       ))}
 
       {/* Coding stage: show only DevLab HTML */}
-      {stage === 'coding' && typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
+      {!examCanceled && stage === 'coding' && typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-3">Coding</h3>
           <iframe
@@ -520,7 +536,7 @@ export default function Baseline() {
       )}
 
       {/* Submit stage: show final submit button with loading */}
-      {stage === 'submit' && (
+      {!examCanceled && stage === 'submit' && (
         <div className="mt-8 flex items-center justify-center">
           <button className="btn-emerald px-8 py-3 text-lg" onClick={handleSubmit} disabled={isSubmitting || !cameraOk}>
             Submit Exam
@@ -532,6 +548,15 @@ export default function Baseline() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-emerald-900/40 border border-emerald-700 rounded-xl p-6 w-[320px] text-center">
             <LoadingSpinner label="Submitting exam..." />
+          </div>
+        </div>
+      )}
+
+      {examCanceled && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-red-900/40 border border-red-700 rounded-xl p-6 w-[360px] text-center text-red-100">
+            <div className="text-lg font-semibold mb-2">Exam canceled</div>
+            <div className="text-sm">{cancelMessage || 'Exam canceled due to policy violation'}</div>
           </div>
         </div>
       )}

@@ -106,6 +106,8 @@ export default function PostCourseExam() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [strikes, setStrikes] = useState(0);
+  const [examCanceled, setExamCanceled] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState('');
   const proctoringStartedRef = useRef(false);
   const [expiresAtIso, setExpiresAtIso] = useState(null);
   const [remainingSec, setRemainingSec] = useState(null);
@@ -566,6 +568,19 @@ export default function PostCourseExam() {
     setCameraReady(false);
     setCameraOk(false);
   }, []);
+  const handlePhoneDetected = useCallback(() => {
+    setExamCanceled(true);
+    setCancelMessage('Exam canceled due to phone detection');
+    try {
+      setTimeout(() => {
+        if (attemptId) {
+          navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { replace: true, state: { message: 'Exam canceled due to phone detection' } });
+        } else {
+          navigate('/exam/cancelled', { replace: true, state: { message: 'Exam canceled due to phone detection' } });
+        }
+      }, 1500);
+    } catch {}
+  }, [attemptId, navigate]);
 
   // Start proctoring once when all prerequisites are ready
   useEffect(() => {
@@ -615,7 +630,7 @@ export default function PostCourseExam() {
           </div>
           {attemptId && (
             <div className="w-56">
-              <CameraPreview onReady={handleCameraReady} onError={handleCameraError} />
+              <CameraPreview onReady={handleCameraReady} onError={handleCameraError} attemptId={attemptId} onPhoneDetected={handlePhoneDetected} />
             </div>
           )}
         </div>
@@ -632,7 +647,7 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {questions.length > 0 && stage === 'theory' && (
+      {!examCanceled && questions.length > 0 && stage === 'theory' && (
         <div className="space-y-5">
           <motion.div
             key={questions[currentIdx].id}
@@ -667,7 +682,7 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {questions.length === 0 && (cameraError ? (
+      {!examCanceled && questions.length === 0 && (cameraError ? (
         <div className="text-sm text-neutral-400">
           Camera access is required to start the exam. Please allow camera access and refresh.
         </div>
@@ -683,7 +698,7 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {stage === 'coding' && typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
+      {!examCanceled && stage === 'coding' && typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-3">Coding</h3>
           <iframe
@@ -700,11 +715,20 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {stage === 'submit' && (
+      {!examCanceled && stage === 'submit' && (
         <div className="mt-8 flex items-center justify-center">
           <button className="btn-emerald px-8 py-3 text-lg" onClick={handleSubmit} disabled={isSubmitting || !cameraOk}>
             Submit Exam
           </button>
+        </div>
+      )}
+
+      {examCanceled && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-red-900/40 border border-red-700 rounded-xl p-6 w-[360px] text-center text-red-100">
+            <div className="text-lg font-semibold mb-2">Exam canceled</div>
+            <div className="text-sm">{cancelMessage || 'Exam canceled due to policy violation'}</div>
+          </div>
         </div>
       )}
     </div>
