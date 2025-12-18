@@ -353,6 +353,7 @@ export default function Baseline() {
         attempt_id: attemptId,
         answers: payloadAnswers,
       });
+      console.log('[UI][SUBMIT][RESP]', result);
       if (result && result.status === 'PENDING_CODING') {
         // Wait for coding grading
         let attempts = 0;

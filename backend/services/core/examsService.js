@@ -34,6 +34,21 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+/**
+ * Determine whether coding grading is pending for a given attempt and package.
+ * Coding is considered present if there are coding_questions or a DevLab UI block.
+ * Pending if coding exists and attempt.coding_status !== 'graded'.
+ */
+function isCodingPending({ attemptRow, examPackage }) {
+  const hasDevlabUi =
+    !!(examPackage && examPackage.metadata && examPackage.metadata.devlab_ui && examPackage.metadata.devlab_ui.componentHtml);
+  const hasCodingQuestions = Array.isArray(examPackage && examPackage.coding_questions) && (examPackage.coding_questions.length > 0);
+  const codingExists = hasCodingQuestions || hasDevlabUi;
+  const status = String(attemptRow && attemptRow.coding_status || '').toLowerCase();
+  const pending = codingExists && status !== 'graded';
+  return { codingExists, pending };
+}
+
 // In-memory guard to ensure idempotent async preparation per attempt (process-local)
 const __activePrepAttempts = new Set();
 
@@ -1338,6 +1353,46 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
     }
   }
 
+  // 3.1) HARD GATE: If coding exists and not graded, block finalization here (service-layer)
+  try {
+    // Ensure columns exist before any updates
+    try {
+      await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_required BOOLEAN DEFAULT FALSE`);
+      await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_status VARCHAR(20) DEFAULT 'pending'`);
+    } catch {}
+
+    const { codingExists, pending } = isCodingPending({ attemptRow: attempt, examPackage });
+    if (codingExists) {
+      // Persist coding_required true and ensure pending status if not graded
+      try {
+        const { rowCount } = await pool.query(
+          `UPDATE exam_attempts
+             SET coding_required = TRUE,
+                 coding_status = COALESCE(coding_status, 'pending')
+           WHERE attempt_id = $1`,
+          [attemptIdNum],
+        );
+        try { console.log('[CODING][REQUIRED][SET]', { attempt_id: attemptIdNum, exam_id: attempt.exam_id, coding_questions_count: Array.isArray(examPackage?.coding_questions) ? examPackage.coding_questions.length : 0, updated_rows: rowCount }); } catch {}
+        if (String(attempt.coding_status || '').toLowerCase() !== 'graded') {
+          try { console.log('[CODING][STATUS][SET_PENDING]', { attempt_id: attemptIdNum }); } catch {}
+        }
+      } catch {}
+    }
+    if (pending) {
+      // Move attempt to pending_coding and return a PENDING payload
+      try {
+        const { rowCount } = await pool.query(
+          `UPDATE exam_attempts
+             SET status = 'pending_coding'
+           WHERE attempt_id = $1 AND COALESCE(status,'') <> 'canceled'`,
+          [attemptIdNum],
+        );
+        try { console.log('[EXAM][FINALIZE][BLOCKED][CODING_PENDING]', { attempt_id: attemptIdNum, exam_id: attempt.exam_id, updated_rows: rowCount }); } catch {}
+      } catch {}
+      return { status: 'PENDING_CODING', message: 'Waiting for coding grading' };
+    }
+  } catch {}
+
   // 4) Split answers
   const allAnswers = Array.isArray(answers) ? answers : [];
   const codingAnswersFromPayload = allAnswers.filter((a) => String(a?.type || "").toLowerCase() === "code");
@@ -1744,7 +1799,7 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
       SET submitted_at = NOW(),
           final_grade = $1,
           passed = $2,
-          status = CASE WHEN status = 'canceled' THEN status ELSE 'submitted' END
+          status = CASE WHEN status = 'canceled' THEN status ELSE 'completed' END
       WHERE attempt_id = $3
     `,
     [finalGrade, passed, attemptIdNum],

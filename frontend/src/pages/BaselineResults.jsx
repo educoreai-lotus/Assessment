@@ -29,8 +29,18 @@ export default function BaselineResults() {
       }
       try {
         setLoading(true);
-        const data = await examApi.attempt(attemptId);
+        let data = await examApi.attempt(attemptId);
         if (!mounted) return;
+        if (data && data.status === 'PENDING_CODING') {
+          // Poll until completed
+          console.log('[UI][POLL][RESULTS] start', { attemptId });
+          let tries = 0;
+          while (mounted && data && data.status === 'PENDING_CODING' && tries < 90) {
+            await new Promise((r) => setTimeout(r, 2000));
+            data = await examApi.attempt(attemptId).catch(() => data);
+            tries += 1;
+          }
+        }
         setResult(data);
       } catch (e) {
         if (!mounted) return;

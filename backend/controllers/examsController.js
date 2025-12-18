@@ -352,14 +352,15 @@ exports.startExam = async (req, res, next) => {
     }));
     // If coding questions exist, mark coding_required/pending (attempt state remains 'started')
     try {
-      const hasCoding = Array.isArray(pkg?.coding_questions) && pkg.coding_questions.length > 0;
+      const hasCoding = (Array.isArray(pkg?.coding_questions) && pkg.coding_questions.length > 0) ||
+                        !!(pkg?.metadata?.devlab_ui);
       if (hasCoding) {
         try {
-          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_required BOOLEAN`);
-          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_status VARCHAR(20)`);
+          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_required BOOLEAN DEFAULT FALSE`);
+          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_status VARCHAR(20) DEFAULT 'pending'`);
         } catch {}
         try {
-          await pool.query(
+          const { rowCount } = await pool.query(
             `UPDATE exam_attempts
                SET status = 'started',
                    coding_required = TRUE,
@@ -367,6 +368,8 @@ exports.startExam = async (req, res, next) => {
              WHERE attempt_id = $1 AND COALESCE(status,'') <> 'canceled'`,
             [attemptIdNum],
           );
+          try { console.log('[CODING][REQUIRED][SET]', { attempt_id: attempt_id, exam_id: Number(examId), coding_questions_count: Array.isArray(pkg?.coding_questions) ? pkg.coding_questions.length : 0, updated_rows: rowCount }); } catch {}
+          try { console.log('[CODING][STATUS][SET_PENDING]', { attempt_id: attempt_id }); } catch {}
         } catch {}
       }
     } catch {}
@@ -651,10 +654,7 @@ exports.submitCodingGrade = async (req, res, next) => {
     }
     // Hard block if attempt canceled
     if (String(att.status || '').toLowerCase() === 'canceled') {
-      return res.status(409).json({
-        status: 'CANCELED',
-        reason: att.cancel_reason || 'canceled',
-      });
+      return res.status(403).json({ status: 'CANCELED', reason: att.cancel_reason || 'canceled' });
     }
 
     // [DEVLAB][GRADE][ATTEMPT][FOUND]

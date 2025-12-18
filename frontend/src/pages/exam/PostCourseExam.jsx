@@ -523,6 +523,7 @@ export default function PostCourseExam() {
         answers: filteredAnswers,
       });
       console.trace('[UI][SUBMIT][DONE]');
+      console.log('[UI][SUBMIT][RESP]', result);
       if (result && result.status === 'PENDING_CODING') {
         // Wait for coding grading to complete
         let tries = 0;
