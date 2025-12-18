@@ -1924,13 +1924,13 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     await setExamStatus(examId, { status: 'PREPARING', progress: 40 });
 
     // Generate questions and coding
-    const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
+  const { generateTheoreticalQuestions, validateQuestion } = require("../gateways/aiGateway");
     const { validateTheoreticalQuestions, normalizeAiQuestion } = require("./theoryService");
-    const devlabIntegration = require("../integrations/devlabService");
+  const devlabIntegration = require("../integrations/devlabService");
 
     // Try to obtain DevLab questions + optional UI payload first; fallback to programmatic build
-    let codingQuestionsDecorated = [];
-    let devlabPayload = null;
+  let codingQuestionsDecorated = [];
+  let devlabPayload = null;
     try {
       try { console.log('[DEVLAB][GEN][ENTERED]'); } catch {}
       const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));

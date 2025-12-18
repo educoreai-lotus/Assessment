@@ -208,6 +208,26 @@ exports.startExam = async (req, res, next) => {
       return res.status(403).json({ error: 'attempt_canceled', message: 'Attempt was canceled' });
     }
 
+    // Guard: exam must be READY before start (aligns postcourse with baseline flow)
+    try {
+      const { rows: examRows } = await pool.query(
+        `SELECT COALESCE(status, 'READY') AS status FROM exams WHERE exam_id = $1`,
+        [examIdNum],
+      ).catch(() => ({ rows: [] }));
+      const examRow = examRows?.[0] || null;
+      const examStatus = examRow ? String(examRow.status || '') : null;
+      if (!examRow) {
+        return res.status(404).json({ error: 'exam_not_found' });
+      }
+      if (examStatus !== 'READY') {
+        try { console.log('[TRACE][EXAM][START][NOT_READY]', { exam_id: examIdNum, attempt_id: attemptIdNum, status: examStatus }); } catch {}
+        return res.status(409).json({ error: 'exam_not_ready', status: examStatus });
+      }
+    } catch (e) {
+      try { console.log('[TRACE][EXAM][START][STATUS_CHECK_ERROR]', { exam_id: examIdNum, message: e?.message }); } catch {}
+      return res.status(500).json({ error: 'exam_status_check_failed' });
+    }
+
     // Enforce camera activation prior to starting
     let session = null;
     try {
