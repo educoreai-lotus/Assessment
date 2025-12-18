@@ -1063,6 +1063,131 @@ async function markAttemptStarted({ attempt_id }) {
   return { ok: true, already_started: true };
 }
 
+/**
+ * Recompute final results for an attempt using existing persisted exam package and
+ * previously computed theoretical per-skill (if any), merging in latest coding results
+ * from DevLab ingestion. This function does not re-call external services and is safe
+ * to invoke from submit-coding-grade to finalize PENDING_CODING attempts.
+ */
+async function recomputeFinalResults(attemptIdNum) {
+  // Load attempt and policy
+  const { rows: attemptRows } = await pool.query(
+    `SELECT ea.*, e.exam_type, e.course_id, e.user_id
+     FROM exam_attempts ea
+     JOIN exams e ON e.exam_id = ea.exam_id
+     WHERE ea.attempt_id = $1`,
+    [attemptIdNum],
+  );
+  if (!attemptRows || attemptRows.length === 0) {
+    throw new Error('attempt_not_found');
+  }
+  const attempt = attemptRows[0];
+  if (String(attempt.status || '').toLowerCase() === 'canceled') {
+    // Do not finalize canceled attempts
+    return { skipped: true, reason: 'canceled' };
+  }
+  const policy = attempt.policy_snapshot || {};
+  const passThreshold = Number.isFinite(Number(policy?.passing_grade))
+    ? Number(policy.passing_grade)
+    : 0;
+
+  const pkg = await getPackageByAttemptId(String(attemptIdNum));
+  if (!pkg) {
+    throw new Error('package_not_found');
+  }
+
+  // Start with any previously computed theoretical per-skill from package.grading
+  const basePerSkill = Array.isArray(pkg?.grading?.per_skill) ? [...pkg.grading.per_skill] : [];
+
+  // Build coding skills from ingested results (examPackage.coding_results.skills)
+  const codingSkills = [];
+  const skillsMap =
+    pkg?.coding_results && typeof pkg.coding_results === 'object'
+      ? (pkg.coding_results.skills || null)
+      : null;
+  if (skillsMap && typeof skillsMap === 'object') {
+    for (const [sid, meta] of Object.entries(skillsMap)) {
+      const val = Number(meta && meta.score);
+      const scoreVal = Number.isFinite(val) ? val : 0;
+      const skillIdStr = String(sid || 'unassigned');
+      const name =
+        (Array.isArray(pkg?.metadata?.skills) ? pkg.metadata.skills : [])
+          .map((s) => ({
+            id: String(s?.id ?? s?.skill_id ?? ''),
+            name: s?.name ?? s?.skill_name,
+          }))
+          .find((x) => x.id === skillIdStr)?.name || skillIdStr;
+      codingSkills.push({
+        skill_id: skillIdStr,
+        skill_name: name,
+        score: scoreVal,
+        status: scoreVal > 0 ? 'acquired' : 'failed',
+        feedback: typeof meta?.feedback === 'string' ? meta.feedback : undefined,
+      });
+    }
+  }
+
+  // Merge: coding overrides same skill_id from base list
+  const map = new Map();
+  for (const s of basePerSkill) {
+    map.set(String(s?.skill_id || ''), { ...s });
+  }
+  for (const c of codingSkills) {
+    map.set(String(c?.skill_id || ''), { ...c });
+  }
+  const finalPerSkill = Array.from(map.values());
+  const scores = finalPerSkill.map((s) => Number(s?.score || 0));
+  const finalGrade =
+    scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  const passed = finalGrade >= passThreshold;
+
+  // Update Postgres: mark submitted/graded if appropriate
+  try {
+    await pool.query(
+      `UPDATE exam_attempts
+       SET final_grade = $1,
+           passed = $2,
+           status = CASE WHEN status = 'canceled' THEN status ELSE 'submitted' END,
+           submitted_at = COALESCE(submitted_at, NOW()),
+           coding_status = 'graded'
+       WHERE attempt_id = $3`,
+      [Number(finalGrade), !!passed, attemptIdNum],
+    );
+  } catch {}
+
+  // Update package grading block with merged results
+  if (process.env.NODE_ENV !== 'test') {
+    try {
+      await ExamPackage.updateOne(
+        { attempt_id: String(attemptIdNum) },
+        {
+          $set: {
+            grading: {
+              final_grade: Number(finalGrade),
+              passed: !!passed,
+              per_skill: finalPerSkill,
+              engine: 'internal+devlab',
+              completed_at: new Date(),
+            },
+          },
+        },
+        { upsert: false },
+      );
+    } catch {}
+  }
+
+  try {
+    console.log('[EXAM][RESULT][FINAL][MERGED]', {
+      attempt_id: attemptIdNum,
+      final_grade: Number(finalGrade),
+      passed: !!passed,
+      skills_total: finalPerSkill.length,
+    });
+  } catch {}
+
+  return { ok: true, final_grade: Number(finalGrade), per_skill: finalPerSkill };
+}
+
 async function getPackageByExamId(exam_id) {
   const doc = await ExamPackage.findOne({ exam_id: String(exam_id) })
     .sort({ created_at: -1 })
@@ -2200,4 +2325,5 @@ module.exports = {
   getPackageByExamId,
   getPackageByAttemptId,
   submitAttempt,
+  recomputeFinalResults,
 };

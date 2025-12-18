@@ -463,6 +463,39 @@ exports.submitExam = async (req, res, next) => {
       return res.status(403).json({ error: 'proctoring_not_started', message: 'Proctoring session not started' });
     }
 
+    // Coding grading sync: if coding is required and not yet graded, do not finalize
+    try {
+      // Determine coding_required from package (best-effort)
+      const pkg = await ExamPackage.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
+      const codingRequired = !!(pkg && Array.isArray(pkg.coding_questions) && pkg.coding_questions.length > 0);
+      // Persist coding_required/coding_status best-effort
+      try {
+        await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_required BOOLEAN`);
+        await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_status VARCHAR(20)`);
+      } catch {}
+      if (codingRequired) {
+        try {
+          await pool.query(
+            `UPDATE exam_attempts SET coding_required = TRUE, coding_status = COALESCE(coding_status, 'pending') WHERE attempt_id = $1`,
+            [attemptIdNum],
+          );
+        } catch {}
+      }
+      // Read coding_status
+      let codingStatus = null;
+      try {
+        const { rows: csRows } = await pool.query(
+          `SELECT coding_required, coding_status FROM exam_attempts WHERE attempt_id = $1`,
+          [attemptIdNum],
+        );
+        codingStatus = csRows && csRows[0] ? (csRows[0].coding_status || null) : null;
+        const codingReqFlag = csRows && csRows[0] ? !!csRows[0].coding_required : codingRequired;
+        if (codingReqFlag && String(codingStatus || '').toLowerCase() !== 'graded') {
+          return res.json({ status: 'PENDING_CODING' });
+        }
+      } catch {}
+    } catch {}
+
     const response = await submitAttempt({
       attempt_id: attemptIdNum,
       answers,
@@ -657,7 +690,14 @@ exports.submitCodingGrade = async (req, res, next) => {
         score,
       });
     } catch {}
-    return res.json({ ok: true });
+
+    // Trigger recompute of final results now that coding is graded
+    try {
+      const { recomputeFinalResults } = require('../services/core/examsService');
+      await recomputeFinalResults(attemptIdNum);
+    } catch {}
+
+    return res.json({ ok: true, status: 'CODING_GRADED' });
   } catch (err) {
     try {
       console.error('[DEVLAB][GRADE][ERROR]', {

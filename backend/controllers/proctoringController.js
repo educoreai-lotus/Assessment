@@ -172,6 +172,24 @@ exports.reportIncident = async (req, res, next) => {
 
     // Persist incident
     if (process.env.NODE_ENV === 'test') {
+      // Enforce strict cancellation policy in test as well
+      if (String(type) === 'phone_detected') {
+        try { console.log('[PROCTORING][PHONE][DETECTED]', { attempt_id, exam_id: examId }); } catch {}
+        try {
+          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS status VARCHAR(20)`);
+          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS cancel_reason TEXT`);
+          await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP WITH TIME ZONE`);
+          await pool.query(
+            `UPDATE exam_attempts
+               SET status = 'canceled',
+                   cancel_reason = 'phone_detected',
+                   cancelled_at = NOW()
+             WHERE attempt_id = $1 AND COALESCE(status,'') <> 'canceled'`,
+            [attempt_id],
+          );
+        } catch {}
+        return res.json({ status: 'CANCELED', reason: 'phone_detected' });
+      }
       // Avoid Mongo writes in tests; respond with ok
       return res.json({ ok: true });
     }
@@ -191,6 +209,32 @@ exports.reportIncident = async (req, res, next) => {
       },
       tags: ['baseline', 'proctoring', 'client'],
     });
+
+    // Strict policy: immediate cancellation on phone detection
+    if (String(type) === 'phone_detected') {
+      try { console.log('[PROCTORING][PHONE][DETECTED]', { attempt_id, exam_id: examId }); } catch {}
+      try {
+        await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS status VARCHAR(20)`);
+        await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS cancel_reason TEXT`);
+        await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP WITH TIME ZONE`);
+      } catch {}
+      try {
+        const { rowCount } = await pool.query(
+          `UPDATE exam_attempts
+             SET status = 'canceled',
+                 cancel_reason = 'phone_detected',
+                 cancelled_at = NOW()
+           WHERE attempt_id = $1 AND COALESCE(status,'') <> 'canceled'`,
+          [attempt_id],
+        );
+        if (rowCount && rowCount > 0) {
+          try { console.log('[EXAM][CANCELLED][PHONE_DETECTED]', { attempt_id, exam_id: examId }); } catch {}
+        }
+      } catch (e) {
+        try { console.error('[PROCTORING][PHONE][CANCEL_ERROR]', { attempt_id, error: e?.message }); } catch {}
+      }
+      return res.json({ status: 'CANCELED', reason: 'phone_detected' });
+    }
 
     return res.json({ ok: true });
   } catch (err) {
