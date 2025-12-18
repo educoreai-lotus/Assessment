@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import QuestionCard from '../components/QuestionCard';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 import CameraPreview from '../components/CameraPreview';
-import DevLabWidget from '../components/DevLabWidget';
 import { examApi } from '../services/examApi';
 import { http } from '../services/http';
 
@@ -53,7 +52,8 @@ export default function Baseline() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [strikes, setStrikes] = useState(0);
-  const [devlabWidget, setDevlabWidget] = useState(null);
+  const [stage, setStage] = useState('theory'); // 'theory' | 'coding' | 'submit'
+  const [remainingSec, setRemainingSec] = useState(null);
   const [devlabHtml, setDevlabHtml] = useState(null);
 
   async function waitForPackage(examId, maxWaitMs = 90000) {
@@ -167,7 +167,6 @@ export default function Baseline() {
         }
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
-        try { setDevlabWidget(data?.devlab_widget || null); } catch {}
         try {
           const html =
             data?.devlab_ui?.componentHtml ||
@@ -177,6 +176,17 @@ export default function Baseline() {
           setDevlabHtml(typeof html === 'string' && html.trim() !== '' ? html : null);
           // eslint-disable-next-line no-console
           console.log('[EXAM][PACKAGE][DEVLAB_UI]', !!html, typeof html === 'string' ? html.length : 0);
+        } catch {}
+        // Initialize remaining seconds from expires_at or duration_seconds
+        try {
+          if (data?.expires_at) {
+            const now = Date.now();
+            const exp = new Date(String(data.expires_at)).getTime();
+            const diff = Math.max(0, Math.floor((exp - now) / 1000));
+            setRemainingSec(Number.isFinite(diff) ? diff : null);
+          } else if (Number.isFinite(Number(data?.duration_seconds))) {
+            setRemainingSec(Number(data.duration_seconds));
+          }
         } catch {}
         const normalized = Array.isArray(data?.questions)
           ? data.questions.map((p, idx) => {
@@ -199,21 +209,10 @@ export default function Baseline() {
               };
             })
           : [];
-        // Inject DevLab widget as a dedicated "question page" at the end, if present
-        if (data?.devlab_widget && (data.devlab_widget.url || data.devlab_widget.srcdoc)) {
-          normalized.push({
-            id: 'devlab_widget',
-            originalId: 'devlab_widget',
-            type: 'devlab',
-            prompt: '',
-            options: [],
-            skill: 'Coding',
-            skill_id: null,
-          });
-        }
         setQuestions(normalized);
         setCurrentIdx(0);
         setAnswers({});
+        setStage('theory');
       } catch (e) {
         setError(e?.response?.data?.error || e?.message || 'Failed to start exam');
       } finally {
@@ -333,7 +332,14 @@ export default function Baseline() {
     setCurrentIdx((i) => Math.max(0, i - 1));
   }
   function goNext() {
-    setCurrentIdx((i) => Math.min(Math.max(0, questions.length - 1), i + 1));
+    setCurrentIdx((i) => {
+      const next = Math.min(Math.max(0, questions.length - 1), i + 1);
+      // Transition to coding after the last theoretical question
+      if (next >= questions.length - 1 && i === questions.length - 1) {
+        setStage('coding');
+      }
+      return next;
+    });
   }
 
   async function handleSubmit() {
@@ -367,6 +373,24 @@ export default function Baseline() {
     }
   }
 
+  // Countdown timer
+  useEffect(() => {
+    if (!Number.isFinite(remainingSec) || remainingSec == null) return;
+    let cancelled = false;
+    const id = setInterval(() => {
+      if (cancelled) return;
+      setRemainingSec((s) => {
+        if (s == null) return s;
+        const next = s - 1;
+        return next <= 0 ? 0 : next;
+      });
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [remainingSec]);
+
   // Camera callbacks
   async function handleCameraReady() {
     setCameraReady(true);
@@ -394,6 +418,11 @@ export default function Baseline() {
           <div className="text-xs text-neutral-400">
             Camera: {cameraReady && cameraOk ? 'active' : (cameraError ? 'error' : 'starting...')}
           </div>
+          <div className="px-3 py-1 rounded-md bg-emerald-900/50 border border-emerald-700 text-emerald-200 font-mono text-sm">
+            {Number.isFinite(remainingSec) && remainingSec != null
+              ? new Date(Math.max(0, remainingSec) * 1000).toISOString().substr(11, 8)
+              : '--:--:--'}
+          </div>
           {attemptId && (
             <div className="w-56">
               <CameraPreview onReady={handleCameraReady} onError={handleCameraError} />
@@ -413,7 +442,7 @@ export default function Baseline() {
         </div>
       )}
 
-      {questions.length > 0 && (
+      {questions.length > 0 && stage === 'theory' && (
         <div className="space-y-5">
           <motion.div
             key={questions[currentIdx].id}
@@ -442,15 +471,9 @@ export default function Baseline() {
               Question {currentIndexDisplay} of {totalQuestions} &nbsp;
               <span className="text-neutral-500">(Answered: {answeredCount}/{totalQuestions})</span>
             </div>
-            {currentIdx < questions.length - 1 ? (
-              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
-                Next
-              </button>
-            ) : (
-              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
-                Submit
-              </button>
-            )}
+            <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
+              Next
+            </button>
           </div>
         </div>
       )}
@@ -463,13 +486,8 @@ export default function Baseline() {
         <LoadingSpinner label="Preparing questions..." />
       ))}
 
-      {/* Render DevLab widget in place when the current question is the injected devlab page */}
-      {questions.length > 0 && questions[currentIdx]?.type === 'devlab' && devlabWidget && (
-        <DevLabWidget widget={devlabWidget} iframeRef={devlabIframeRef} />
-      )}
-
-      {/* Dedicated Coding section using devlab_ui.componentHtml when present */}
-      {typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
+      {/* Coding stage: show only DevLab HTML */}
+      {stage === 'coding' && typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-3">Coding</h3>
           <iframe
@@ -478,6 +496,20 @@ export default function Baseline() {
             style={{ width: '100%', height: '700px', border: '0', borderRadius: '12px' }}
             sandbox="allow-scripts allow-forms allow-same-origin"
           />
+          <div className="mt-4 flex justify-end">
+            <button className="btn-emerald" onClick={() => setStage('submit')} disabled={isSubmitting}>
+              Proceed to Submit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Submit stage: show final submit button with loading */}
+      {stage === 'submit' && (
+        <div className="mt-8 flex items-center justify-center">
+          <button className="btn-emerald px-8 py-3 text-lg" onClick={handleSubmit} disabled={isSubmitting || !cameraOk}>
+            Submit Exam
+          </button>
         </div>
       )}
 

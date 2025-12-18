@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import QuestionCard from '../../components/QuestionCard';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import CameraPreview from '../../components/CameraPreview';
-import DevLabWidget from '../../components/DevLabWidget';
+
 import { examApi } from '../../services/examApi';
 import { http } from '../../services/http';
 
@@ -111,7 +111,7 @@ export default function PostCourseExam() {
   const [remainingSec, setRemainingSec] = useState(null);
   const recreateOnceRef = useRef(false);
   const devlabIframeRef = useRef(null);
-  const [devlabWidget, setDevlabWidget] = useState(null);
+  const [stage, setStage] = useState('theory'); // 'theory' | 'coding' | 'submit'
   const [devlabHtml, setDevlabHtml] = useState(null);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
@@ -309,7 +309,7 @@ export default function PostCourseExam() {
         setQuestionsLoading(true);
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
-        try { setDevlabWidget(data?.devlab_widget || null); } catch {}
+        setStage('theory');
         try {
           const html =
             data?.devlab_ui?.componentHtml ||
@@ -341,18 +341,6 @@ export default function PostCourseExam() {
               };
             })
           : [];
-        // Inject DevLab widget as a dedicated page at the end, if present
-        if (data?.devlab_widget && (data.devlab_widget.url || data.devlab_widget.srcdoc)) {
-          normalized.push({
-            id: 'devlab_widget',
-            originalId: 'devlab_widget',
-            type: 'devlab',
-            prompt: '',
-            options: [],
-            skill: 'Coding',
-            skill_id: null,
-          });
-        }
         setQuestions(normalized);
         setCurrentIdx(0);
         setAnswers({});
@@ -510,7 +498,13 @@ export default function PostCourseExam() {
     setCurrentIdx((i) => Math.max(0, i - 1));
   }
   function goNext() {
-    setCurrentIdx((i) => Math.min(Math.max(0, questions.length - 1), i + 1));
+    setCurrentIdx((i) => {
+      const next = Math.min(Math.max(0, questions.length - 1), i + 1);
+      if (next >= questions.length - 1 && i === questions.length - 1) {
+        setStage('coding');
+      }
+      return next;
+    });
   }
 
   async function handleSubmit() {
@@ -530,12 +524,9 @@ export default function PostCourseExam() {
       const result = await examApi.submit(examId, {
         attempt_id: attemptId,
         answers: filteredAnswers,
-        devlab: devlabWidget
-          ? {
-              session_token: devlabWidget?.session_token || undefined,
-              answers: Array.isArray(devlabAnswers) ? devlabAnswers : [],
-            }
-          : undefined,
+        devlab: {
+          answers: Array.isArray(devlabAnswers) ? devlabAnswers : [],
+        },
       });
       console.trace('[UI][SUBMIT][DONE]');
       navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });
@@ -593,9 +584,11 @@ export default function PostCourseExam() {
           <div className="text-xs text-neutral-400">
             Camera: {cameraReady && cameraOk ? 'active' : (cameraError ? 'error' : 'starting...')}
           </div>
-          <div className="text-sm text-neutral-300">
-            {answeredCount}/{totalCount} answered
-          </div>
+          {stage === 'theory' && (
+            <div className="text-sm text-neutral-300">
+              {answeredCount}/{totalCount} answered
+            </div>
+          )}
           <div className="px-3 py-1 rounded-md bg-emerald-900/50 border border-emerald-700 text-emerald-200 font-mono">
             {Number.isFinite(remainingSec) && remainingSec != null
               ? new Date(remainingSec * 1000).toISOString().substr(11, 8)
@@ -620,7 +613,7 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {questions.length > 0 && (
+      {questions.length > 0 && stage === 'theory' && (
         <div className="space-y-5">
           <motion.div
             key={questions[currentIdx].id}
@@ -648,15 +641,9 @@ export default function PostCourseExam() {
             <div className="text-gray-400 text-sm">
               Question {currentIndexDisplay} of {questions.length}
             </div>
-            {currentIdx < questions.length - 1 ? (
-              <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
-                Next
-              </button>
-            ) : (
-              <button className="btn-emerald" onClick={handleSubmit} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
-                Submit
-              </button>
-            )}
+            <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
+              Next
+            </button>
           </div>
         </div>
       )}
@@ -677,11 +664,7 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {questions.length > 0 && questions[currentIdx]?.type === 'devlab' && devlabWidget && (
-        <DevLabWidget widget={devlabWidget} iframeRef={devlabIframeRef} />
-      )}
-
-      {typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
+      {stage === 'coding' && typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-3">Coding</h3>
           <iframe
@@ -690,6 +673,19 @@ export default function PostCourseExam() {
             style={{ width: '100%', height: '700px', border: '0', borderRadius: '12px' }}
             sandbox="allow-scripts allow-forms allow-same-origin"
           />
+          <div className="mt-4 flex justify-end">
+            <button className="btn-emerald" onClick={() => setStage('submit')} disabled={isSubmitting}>
+              Proceed to Submit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {stage === 'submit' && (
+        <div className="mt-8 flex items-center justify-center">
+          <button className="btn-emerald px-8 py-3 text-lg" onClick={handleSubmit} disabled={isSubmitting || !cameraOk}>
+            Submit Exam
+          </button>
         </div>
       )}
     </div>

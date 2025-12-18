@@ -330,26 +330,9 @@ exports.startExam = async (req, res, next) => {
       metadata: q.metadata || {},
       sequence: idx + 1,
     }));
-    // Also surface coding questions in the generic questions array for legacy UIs
-    const codingForResponse = (Array.isArray(pkg?.coding_questions) ? pkg.coding_questions : []).map((cq, idx) => {
-      const qid = String(cq?.qid || cq?.question_id || cq?.id || `code_${idx + 1}`);
-      const skillsArr = Array.isArray(cq?.skills) ? cq.skills.map(String) : [];
-      const skillId = skillsArr.length > 0 ? skillsArr[0] : (typeof cq?.skill_id === 'string' ? cq.skill_id : null);
-      return {
-        question_id: qid,
-        skill_id: skillId,
-        prompt: {
-          question: typeof cq?.question === 'string' ? cq.question : (typeof cq?.stem === 'string' ? cq.stem : ''),
-          programming_language: typeof cq?.programming_language === 'string' ? cq.programming_language : 'javascript',
-          expected_output: cq?.expected_output ?? '',
-          test_cases: Array.isArray(cq?.test_cases) ? cq.test_cases : [],
-        },
-        options: [],
-        metadata: { type: 'code', difficulty: typeof cq?.difficulty === 'string' ? cq.difficulty : 'medium' },
-        sequence: theoreticalForResponse.length + idx + 1,
-      };
-    });
-    const questionsForResponse = [...theoreticalForResponse, ...codingForResponse];
+    // Return ONLY theoretical questions in 'questions' for clean stage separation.
+    // Coding questions are available via 'coding_questions' and UI block via 'devlab_ui'.
+    const questionsForResponse = theoreticalForResponse;
     return res.json({
       exam_id: Number(pkg.exam_id),
       attempt_id: Number(pkg.attempt_id),
