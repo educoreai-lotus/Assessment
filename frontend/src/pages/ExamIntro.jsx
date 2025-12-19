@@ -68,6 +68,7 @@ export default function ExamIntro() {
     if (courseName) params.set('courseName', courseName);
     if (userId) params.set('userId', userId);
     if (userName) params.set('userName', userName);
+    if (skillName) params.set('skillName', skillName);
     params.set('introAccepted', 'true');
     const qs = params.toString();
     if (examType === 'postcourse') {
