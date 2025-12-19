@@ -16,6 +16,70 @@ function isUuidV1ToV5(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 }
 
+// Normalize Skills Engine coordinator response into a consistent shape.
+// Returns: { competency_name?: string, skills: Array<{ skill_id, skill_name }> }
+function normalizeSkillsEngineResponse(body) {
+  try {
+    const out = { skills: [] };
+    if (!body || typeof body !== 'object') return out;
+    const response = body.response && typeof body.response === 'object' ? body.response : {};
+    const payload = body.payload && typeof body.payload === 'object' ? body.payload : {};
+
+    // Try direct skills
+    let skills = Array.isArray(response.skills) ? response.skills : null;
+
+    // Try response.data.skills
+    if (!skills && response.data && typeof response.data === 'object' && Array.isArray(response.data.skills)) {
+      skills = response.data.skills;
+    }
+
+    // Try response.answer JSON string
+    if (!skills && typeof response.answer === 'string') {
+      try {
+        const ans = JSON.parse(response.answer);
+        if (ans && typeof ans === 'object') {
+          if (Array.isArray(ans.skills)) skills = ans.skills;
+          else if (ans.data && Array.isArray(ans.data.skills)) skills = ans.data.skills;
+          else if (ans.response && Array.isArray(ans.response.skills)) skills = ans.response.skills;
+          if (typeof ans.competency_name === 'string' && !out.competency_name) out.competency_name = ans.competency_name;
+        }
+      } catch {
+        // ignore parse error
+      }
+    }
+
+    // Fallback: payload.skills
+    if (!skills && Array.isArray(payload.skills)) {
+      skills = payload.skills;
+    }
+
+    // competency_name passthrough
+    if (typeof response.competency_name === 'string') out.competency_name = response.competency_name;
+    if (!out.competency_name && typeof payload.competency_name === 'string') out.competency_name = payload.competency_name;
+
+    // Normalize items
+    const norm = [];
+    for (const s of Array.isArray(skills) ? skills : []) {
+      if (s == null) continue;
+      if (typeof s === 'string') {
+        const id = s.trim();
+        if (id) norm.push({ skill_id: id, skill_name: id });
+        continue;
+      }
+      if (typeof s === 'object') {
+        const sid = String(s.skill_id || s.id || '').trim();
+        const sname = String(s.skill_name || s.name || sid).trim();
+        if (sid) norm.push({ skill_id: sid, skill_name: sname || sid });
+      }
+    }
+    out.skills = norm;
+    return out;
+  } catch (e) {
+    try { console.warn('[SKILLS_ENGINE][NORMALIZE][WARN]', e?.message || e); } catch {}
+    return { skills: [] };
+  }
+}
+
 async function safeFetchBaselineSkills(params) {
   const t0 = Date.now();
   try {
@@ -39,71 +103,9 @@ async function safeFetchBaselineSkills(params) {
     else respString = JSON.stringify((ret && ret.data) || {});
     const resp = JSON.parse(respString || '{}');
 
-    // New response format: response contains user_id and a grouped skills object
-    // {
-    //   response: {
-    //     user_id: "user-123",
-    //     skills: {
-    //       "Category A": [{ skill_id, skill_name }, ...],
-    //       "Category B": [...]
-    //     }
-    //   }
-    // }
-    const responseBlock = resp?.response || {};
-    const grouped = responseBlock?.skills && typeof responseBlock.skills === 'object' ? responseBlock.skills : null;
-    let flattenedSkills = [];
-    if (grouped && !Array.isArray(grouped)) {
-      for (const [_, arr] of Object.entries(grouped)) {
-        if (Array.isArray(arr)) {
-          for (const s of arr) {
-            const sid = typeof s?.skill_id === 'string' ? s.skill_id : String(s?.skill_id || '');
-            const sname = typeof s?.skill_name === 'string' ? s.skill_name : String(s?.skill_name || sid);
-            if (sid) flattenedSkills.push({ skill_id: sid, skill_name: sname || sid });
-          }
-        }
-      }
-    }
-    const hasNew = Array.isArray(flattenedSkills) && flattenedSkills.length > 0;
-
-    // Legacy support: response.answer as array/object
-    const answer = resp?.response?.answer;
-    const isEmptyObject = answer && typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0;
-    const isEmptyArray = Array.isArray(answer) && answer.length === 0;
-
-    if (!hasNew && (!answer || isEmptyObject || isEmptyArray)) {
-      try { console.log('[MOCK-FALLBACK][SkillsEngine][baseline-skills-empty]', { hasParams: !!params }); } catch {}
-      return { user_id: params?.user_id ?? null, skills: [] };
-    }
-
-    // Normalize output to { user_id, skills: [{ skill_id, skill_name }] }
-    if (hasNew) {
-      const user_id = responseBlock?.user_id ?? params?.user_id ?? null;
-      try {
-        console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][SUCCESS][GROUPED]', {
-          categories: Object.keys(grouped || {}).length,
-          total_skills: flattenedSkills.length,
-        });
-        console.log('[SKILLS_ENGINE][SUCCESS]', { elapsed_ms: Date.now() - t0 });
-      } catch {}
-      return { user_id, skills: flattenedSkills };
-    }
-
-    // Legacy normalization: if answer is array of skills already
-    try {
-      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][FETCH_SKILLS][SUCCESS][LEGACY]', {
-        received_type: Array.isArray(answer) ? 'array' : (answer && typeof answer),
-        count: Array.isArray(answer) ? answer.length : undefined,
-      });
-    } catch {}
-    // Legacy path: pass through as { skill_id, skill_name }
-    const skills = Array.isArray(answer)
-      ? answer.map((s) => ({
-          skill_id: typeof s === 'string' ? s : (s?.skill_id || s?.id || ''),
-          skill_name: typeof s === 'string' ? s : (s?.skill_name || s?.name || (s?.skill_id || '')),
-        })).filter((s) => s.skill_id)
-      : [];
-    const user_id = params?.user_id ?? null;
-    return { user_id, skills };
+    const normalized = normalizeSkillsEngineResponse(resp);
+    try { console.log('[SKILLS_ENGINE][SUCCESS]', { elapsed_ms: Date.now() - t0 }); } catch {}
+    return { user_id: params?.user_id ?? null, skills: normalized.skills || [] };
   } catch (err) {
     try { console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: err?.message || 'unknown_error' }); } catch {}
     console.warn('SkillsEngine baseline fetch via Coordinator failed. Reason:', err?.message || err);
@@ -154,6 +156,6 @@ async function safePushAssessmentResults(payload) {
   }
 }
 
-module.exports = { safeFetchBaselineSkills, safePushAssessmentResults };
+module.exports = { safeFetchBaselineSkills, safePushAssessmentResults, normalizeSkillsEngineResponse };
 
 

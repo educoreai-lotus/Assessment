@@ -2141,51 +2141,48 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         };
         try { console.log('[BASELINE][SKILLS_ENGINE][FETCH]', { exam_id: examId, attempt_id: attemptId, user_id: ctx.user_id, competency_name: ctx.competency_name }); } catch {}
         const { sendToCoordinator } = require('../integrations/envelopeSender');
+        const { normalizeSkillsEngineResponse } = require('../gateways/skillsEngineGateway');
         let resp;
         try {
-          const ret = await sendToCoordinator({ targetService: 'skills-engine', payload });
+          // Enforce 10s timeout for baseline skills fetch
+          const timeoutMs = 10000;
+          const coreCall = sendToCoordinator({ targetService: 'skills-engine', payload });
+          const timeoutCall = new Promise((_, reject) => setTimeout(() => reject(new Error('SkillsEngineTimeout')), timeoutMs));
+          const ret = await Promise.race([coreCall, timeoutCall]);
           let respString;
           if (typeof ret === 'string') respString = ret;
           else if (ret && typeof ret.data === 'string') respString = ret.data;
           else respString = JSON.stringify((ret && ret.data) || {});
           resp = JSON.parse(respString || '{}');
         } catch (e) {
-          try { console.error('[BASELINE][SKILLS_ENGINE][FETCH_ERROR]', e?.message || e); } catch {}
-          await setExamStatus(examId, { status: 'FAILED', error_message: 'fetch_failed', failed_step: 'fetch_baseline_skills', progress: 100 });
-          return;
-        }
-        // Normalize grouped or array answers into flat skills
-        const responseBlock = resp?.response || {};
-        const grouped = responseBlock?.skills && typeof responseBlock.skills === 'object' ? responseBlock.skills : null;
-        let flattenedSkills = [];
-        if (grouped && !Array.isArray(grouped)) {
-          for (const arr of Object.values(grouped)) {
-            if (Array.isArray(arr)) {
-              for (const s of arr) {
-                const sid = typeof s?.skill_id === 'string' ? s.skill_id : String(s?.skill_id || '');
-                const sname = typeof s?.skill_name === 'string' ? s.skill_name : String(s?.skill_name || sid);
-                if (sid) flattenedSkills.push({ skill_id: sid, skill_name: sname || sid });
-              }
-            }
+          if (String(e?.message || '') === 'SkillsEngineTimeout') {
+            try { console.warn('[BASELINE][SKILLS_ENGINE][TIMEOUT]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+            resp = {}; // proceed with fallback below
+          } else {
+            try { console.error('[BASELINE][SKILLS_ENGINE][FETCH_ERROR]', e?.message || e); } catch {}
+            await setExamStatus(examId, { status: 'FAILED', error_message: 'fetch_failed', failed_step: 'fetch_baseline_skills', progress: 100 });
+            return;
           }
         }
-        if (!Array.isArray(flattenedSkills) || flattenedSkills.length === 0) {
-          const answer = resp?.response?.answer;
-          if (Array.isArray(answer)) {
-            flattenedSkills = answer.map((s) => ({
-              skill_id: typeof s === 'string' ? s : (s?.skill_id || s?.id || ''),
-              skill_name: typeof s === 'string' ? s : (s?.skill_name || s?.name || (s?.skill_id || '')),
-            })).filter((s) => s.skill_id);
-          }
+        // Normalize Skills Engine response (supports multiple shapes)
+        const normalized = normalizeSkillsEngineResponse(resp || {});
+        const skillsFromSe = Array.isArray(normalized?.skills) ? normalized.skills : [];
+        try { console.log('[BASELINE][SKILLS_ENGINE][RESPONSE_NORMALIZED]', { exam_id: examId, attempt_id: attemptId, skills_count: skillsFromSe.length }); } catch {}
+
+        // Fallback to competency_name-derived minimal skill if none returned
+        let effectiveSkills = skillsFromSe;
+        if (effectiveSkills.length === 0) {
+          const slug = String(ctx.competency_name || 'baseline').toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+          effectiveSkills = [{ skill_id: slug || 'baseline', skill_name: ctx.competency_name }];
         }
-        if (!Array.isArray(flattenedSkills) || flattenedSkills.length === 0) {
-          await setExamStatus(examId, { status: 'FAILED', error_message: 'skills_empty', failed_step: 'fetch_baseline_skills', progress: 100 });
-          return;
-        }
-        skillsPayload = { user_id: ctx.user_id, skills: flattenedSkills };
+
+        skillsPayload = { user_id: ctx.user_id, skills: effectiveSkills };
         // Baseline: static policy
         policy = { passing_grade: 70 };
         try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
+        await setExamStatus(examId, { status: 'PREPARING', progress: 35 });
     } else if (exam_type === 'postcourse') {
       // Post-course: STATIC policy; DO NOT call Directory or external coverage
       policy = { passing_grade: 60, max_attempts: 3 };
