@@ -356,7 +356,15 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
         return { error: "baseline_already_completed" };
       }
     }
-    skillsPayload = await safeFetchBaselineSkills({ user_id });
+    // If available, include competency/topic captured from Directory redirect
+    let competencyName = null;
+    try {
+      const { ExamContext } = require('../../models');
+      const ctx = await ExamContext.findOne({ user_id: String(user_id), exam_type: 'baseline' });
+      competencyName = ctx && typeof ctx.competency_name === 'string' ? ctx.competency_name : null;
+      try { console.log('[BASELINE][CONTEXT]', { user_id, competency_name: competencyName || null }); } catch {}
+    } catch {}
+    skillsPayload = await safeFetchBaselineSkills({ user_id, competency_name: competencyName || undefined });
     try {
       // eslint-disable-next-line no-console
       console.log('[TRACE][BASELINE][CREATE][SKILLS]', {

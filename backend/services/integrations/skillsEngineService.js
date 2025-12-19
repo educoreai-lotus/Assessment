@@ -1,9 +1,20 @@
 // Phase 08.5c – Delegates to gateway; no axios/env here
 const { safePushAssessmentResults } = require('../gateways/skillsEngineGateway');
+const { sendToCoordinator } = require('./envelopeSender');
 const examsService = require('../core/examsService');
 
 exports.sendResultsToSkillsEngine = async (payloadObj) => {
   return await safePushAssessmentResults(payloadObj || {});
+};
+
+// Fire-and-forget sender for result envelopes; logs failures only
+exports.sendResultsAsync = (payloadObj) => {
+  try {
+    setImmediate(() => {
+      sendToCoordinator({ targetService: 'skills-engine', payload: payloadObj || {} })
+        .catch((e) => { try { console.warn('[SKILLS_ENGINE][ASYNC_PUSH][ERROR]', e?.message || e); } catch {} });
+    });
+  } catch {}
 };
 
 // Phase 09 – Inbound handler for Skills Engine

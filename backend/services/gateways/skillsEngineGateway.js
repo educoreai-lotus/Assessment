@@ -18,28 +18,9 @@ function isUuidV1ToV5(value) {
 
 async function safeFetchBaselineSkills(params) {
   const t0 = Date.now();
-  const JS_BASELINE = [
-    { skill_id: 'js_loops', skill_name: 'Loops', topic_name: 'javascript' },
-    { skill_id: 'js_if_else', skill_name: 'If/Else', topic_name: 'javascript' },
-    { skill_id: 'js_promises', skill_name: 'Promises', topic_name: 'javascript' },
-  ];
-  const enforceBaselineJs = (user_id_in) => {
-    try { console.log('[SKILLS_ENGINE][BASELINE][TAXONOMY_ENFORCED]', { topics: ['javascript'], skills: JS_BASELINE.map(s => s.skill_id) }); } catch {}
-    return { user_id: user_id_in ?? (params?.user_id ?? null), skills: JS_BASELINE };
-  };
   try {
     const userOriginal = params?.user_id ?? params?.userId ?? params?.user ?? null;
-    // Fail fast when user_id is not a UUID (Coordinator/Skills Engine requires UUID)
-    if (!isUuidV1ToV5(String(userOriginal || ''))) {
-      try {
-        console.log('[SKILLS_ENGINE][SKIPPED_NON_UUID]', { user_id_original: userOriginal });
-      } catch {}
-      try {
-        console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: 'non_uuid_user_id' });
-      } catch {}
-      // Always enforce JavaScript-only baseline taxonomy
-      return enforceBaselineJs(userOriginal);
-    }
+    // Allow request to proceed even if user_id is not a UUID (upstream may still accept or map)
 
     const payload = buildSkillsEngineFetchBaselinePayload(params || {});
     try {
@@ -49,7 +30,7 @@ async function safeFetchBaselineSkills(params) {
       });
     } catch {}
     const ret = await sendToCoordinator({ targetService: 'skills-engine', payload }).catch((err) => {
-      try { console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: 'request_rejected' }); } catch {}
+      try { console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: 'request_rejected', message: err?.message }); } catch {}
       return {};
     });
     let respString;
@@ -90,8 +71,8 @@ async function safeFetchBaselineSkills(params) {
     const isEmptyArray = Array.isArray(answer) && answer.length === 0;
 
     if (!hasNew && (!answer || isEmptyObject || isEmptyArray)) {
-      try { console.log('[MOCK-FALLBACK][SkillsEngine][baseline-skills]', { hasParams: !!params }); } catch {}
-      return enforceBaselineJs(params?.user_id ?? null);
+      try { console.log('[MOCK-FALLBACK][SkillsEngine][baseline-skills-empty]', { hasParams: !!params }); } catch {}
+      return { user_id: params?.user_id ?? null, skills: [] };
     }
 
     // Normalize output to { user_id, skills: [{ skill_id, skill_name }] }
@@ -104,8 +85,7 @@ async function safeFetchBaselineSkills(params) {
         });
         console.log('[SKILLS_ENGINE][SUCCESS]', { elapsed_ms: Date.now() - t0 });
       } catch {}
-      // Enforce JS-only taxonomy regardless of upstream content
-      return enforceBaselineJs(user_id);
+      return { user_id, skills: flattenedSkills };
     }
 
     // Legacy normalization: if answer is array of skills already
@@ -115,12 +95,19 @@ async function safeFetchBaselineSkills(params) {
         count: Array.isArray(answer) ? answer.length : undefined,
       });
     } catch {}
-    // Legacy path: ignore upstream and enforce baseline JS taxonomy
-    return enforceBaselineJs(params?.user_id ?? null);
+    // Legacy path: pass through as { skill_id, skill_name }
+    const skills = Array.isArray(answer)
+      ? answer.map((s) => ({
+          skill_id: typeof s === 'string' ? s : (s?.skill_id || s?.id || ''),
+          skill_name: typeof s === 'string' ? s : (s?.skill_name || s?.name || (s?.skill_id || '')),
+        })).filter((s) => s.skill_id)
+      : [];
+    const user_id = params?.user_id ?? null;
+    return { user_id, skills };
   } catch (err) {
     try { console.log('[SKILLS_ENGINE][FALLBACK_USED]', { reason: err?.message || 'unknown_error' }); } catch {}
-    console.warn('SkillsEngine baseline fetch via Coordinator failed, using mock. Reason:', err?.message || err);
-    return enforceBaselineJs(params?.user_id ?? null);
+    console.warn('SkillsEngine baseline fetch via Coordinator failed. Reason:', err?.message || err);
+    return { user_id: params?.user_id ?? null, skills: [] };
   }
 }
 

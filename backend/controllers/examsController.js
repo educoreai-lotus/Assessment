@@ -13,6 +13,7 @@
 const { createExamRecord, prepareExamAsync, markAttemptStarted, getPackageByExamId, getPackageByAttemptId, submitAttempt } = require('../services/core/examsService');
 const pool = require('../config/supabaseDB');
 const { ProctoringSession, ExamPackage } = require('../models');
+const { ExamContext } = require('../models');
 const { normalizeToInt } = require("../services/core/idNormalizer");
 const proctoringController = require('./../controllers/proctoringController');
 
@@ -67,6 +68,30 @@ exports.cancelExam = async (req, res, next) => {
         html: `<h2>Exam Canceled</h2> <p>An exam has been automatically terminated due to a proctoring violation.</p> <p><strong>User ID:</strong> ${attemptRow?.user_id ?? 'unknown'}</p> <p><strong>Attempt ID:</strong> ${targetAttempt}</p> <p><strong>Exam Type:</strong> ${attemptRow?.exam_type ?? 'unknown'}</p> <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>`,
       });
     }
+    return res.json({ ok: true });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// POST /api/exams/context - persist exam context snapshot from Directory redirect
+exports.saveExamContext = async (req, res, next) => {
+  try {
+    const examType = String(req.body?.exam_type || '').toLowerCase();
+    const userId = req.body?.user_id;
+    const competencyName = typeof req.body?.competency_name === 'string' ? req.body.competency_name : null;
+    if (examType !== 'baseline') {
+      return res.status(400).json({ error: 'invalid_exam_type' });
+    }
+    if (!userId || typeof userId !== 'string') {
+      return res.status(400).json({ error: 'user_id_required' });
+    }
+    // Upsert by user_id + exam_type
+    await ExamContext.findOneAndUpdate(
+      { user_id: String(userId), exam_type: 'baseline' },
+      { user_id: String(userId), exam_type: 'baseline', competency_name: competencyName || null },
+      { new: true, upsert: true },
+    );
     return res.json({ ok: true });
   } catch (err) {
     return next(err);
@@ -569,6 +594,82 @@ exports.submitExam = async (req, res, next) => {
         }
       } catch {}
     }
+
+    // Fire-and-forget Skills Engine result reporting (baseline and postcourse)
+    try {
+      setImmediate(async () => {
+        try {
+          // Load exam type, user and course_name for envelope
+          const metaRes = await pool.query(
+            `SELECT e.exam_type, e.user_id, e.course_name
+             FROM exams e
+             WHERE e.exam_id = $1`,
+            [Number(examId)],
+          ).catch(() => ({ rows: [] }));
+          const examType = metaRes?.rows?.[0]?.exam_type || null;
+          const userNumeric = metaRes?.rows?.[0]?.user_id || null;
+          const courseName = metaRes?.rows?.[0]?.course_name || null;
+
+          // Attempt to resolve original UUID (for baseline) from ExamContext
+          let userUuid = null;
+          if (examType === 'baseline') {
+            try {
+              const ctx = await ExamContext.findOne({ exam_type: 'baseline', user_id: String(req.body?.user_id || '') }).lean();
+              userUuid = ctx?.user_id || null;
+            } catch {}
+          }
+          const resolvedUserId = userUuid || (userNumeric != null ? String(userNumeric) : null);
+
+          // Build per-skill payload
+          const perSkill = Array.isArray(response?.per_skill) ? response.per_skill : [];
+          const skillsPayload = perSkill.map((s) => ({
+            skill_id: s?.skill_id,
+            skill_name: s?.skill_name || s?.skill_id,
+            score: Number.isFinite(Number(s?.score)) ? Number(s.score) : 0,
+            status: s?.status || (Number(s?.score) >= 70 ? 'acquired' : 'failed'),
+          }));
+
+          const passing = 70;
+          const finalGrade = Number.isFinite(Number(response?.final_grade)) ? Number(response.final_grade) : 0;
+          const passed = finalGrade >= passing;
+
+          const { sendToCoordinator } = require('../services/integrations/envelopeSender');
+          if (examType === 'baseline') {
+            const payload = {
+              action: 'baseline-exam-result',
+              user_id: resolvedUserId,
+              exam_type: 'baseline',
+              exam_id: Number(examId),
+              passing_grade: passing,
+              final_grade: finalGrade,
+              passed,
+              skills: skillsPayload,
+            };
+            sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
+              try { console.warn('[SKILLS_ENGINE][ASYNC_PUSH][BASELINE][ERROR]', e?.message || e); } catch {}
+            });
+          } else if (examType === 'postcourse') {
+            const payload = {
+              action: 'postcourse-exam-result',
+              user_id: resolvedUserId,
+              exam_type: 'postcourse',
+              exam_id: Number(examId),
+              course_name: courseName || null,
+              passing_grade: passing,
+              final_grade: finalGrade,
+              passed,
+              final_status: 'completed',
+              skills: skillsPayload,
+            };
+            sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
+              try { console.warn('[SKILLS_ENGINE][ASYNC_PUSH][POSTCOURSE][ERROR]', e?.message || e); } catch {}
+            });
+          }
+        } catch (err) {
+          try { console.warn('[SKILLS_ENGINE][ASYNC_PUSH][ERROR]', err?.message || err); } catch {}
+        }
+      });
+    } catch {}
 
     return res.json(codingBlock ? { ...response, coding_results: codingBlock } : response);
   } catch (err) {

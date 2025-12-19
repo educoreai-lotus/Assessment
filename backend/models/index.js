@@ -60,6 +60,7 @@ if (isTest) {
     ProctoringSession: require('./proctoringSession.model'),
     ProctoringViolation: require('./proctoringViolation.model'),
     Incident: require('./incident.model'),
+    ExamContext: require('./examContext.model'),
   };
 }
 

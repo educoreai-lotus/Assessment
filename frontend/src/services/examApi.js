@@ -42,6 +42,10 @@ export const examApi = {
     await httpReady;
     return http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
   },
+  async saveContext(payload) {
+    await httpReady;
+    return http.post('/api/exams/context', payload).then(r => r.data);
+  },
 };
 
 

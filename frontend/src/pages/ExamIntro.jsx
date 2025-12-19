@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { examApi } from '../services/examApi';
 
 export default function ExamIntro() {
   const [searchParams] = useSearchParams();
@@ -12,6 +14,7 @@ export default function ExamIntro() {
   const courseName = searchParams.get('courseName') || '';
   const userId = searchParams.get('userId') || '';
   const userName = searchParams.get('userName') || '';
+  const skillName = searchParams.get('skillName') || '';
 
   const [ack, setAck] = useState(false);
 
@@ -19,6 +22,27 @@ export default function ExamIntro() {
     if (examType === 'postcourse') return 'Post-Course Assessment';
     return 'Baseline Assessment';
   }, [examType]);
+
+  // Persist baseline context from Directory URL (userId, skillName) before start
+  useEffect(() => {
+    if (examType !== 'baseline') return;
+    const uid = (userId || '').trim();
+    const compName = (skillName || '').trim();
+    if (!uid || !compName) return;
+    (async () => {
+      try {
+        await examApi.saveContext({
+          exam_type: 'baseline',
+          user_id: uid,
+          competency_name: decodeURIComponent(compName),
+        });
+        // eslint-disable-next-line no-console
+        console.log('[INTRO][CONTEXT_SAVED]', { exam_type: 'baseline', user_id: uid, competency_name: decodeURIComponent(compName) });
+      } catch {
+        // best-effort only
+      }
+    })();
+  }, [examType, userId, skillName]);
 
   function handleStart() {
     // Persist acceptance per attempt

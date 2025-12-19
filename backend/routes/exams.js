@@ -188,6 +188,9 @@ router.post('/:examId/submit', examsController.submitExam);
 // DevLab coding grading ingestion (exam-type agnostic)
 router.post('/submit-coding-grade', examsController.submitCodingGrade);
 
+// Exam context snapshot from Directory redirect (baseline)
+router.post('/context', examsController.saveExamContext);
+
 module.exports = router;
 
 

@@ -17,9 +17,39 @@ function buildSkillsEngineResultPayload({ user, exam, skills, coverage } = {}) {
   };
 }
 
+function buildBaselineExamResultPayload({ user_id, exam_id, final_grade, passed, skills, passing_grade = 70 } = {}) {
+  return {
+    action: 'baseline-exam-result',
+    user_id,
+    exam_type: 'baseline',
+    exam_id,
+    passing_grade: Number(passing_grade),
+    final_grade: Number(final_grade || 0),
+    passed: !!passed,
+    skills: Array.isArray(skills) ? skills : [],
+  };
+}
+
+function buildPostCourseExamResultPayload({ user_id, exam_id, course_name, final_grade, passed, skills, passing_grade = 70 } = {}) {
+  return {
+    action: 'postcourse-exam-result',
+    user_id,
+    exam_type: 'postcourse',
+    exam_id,
+    course_name: course_name || null,
+    passing_grade: Number(passing_grade),
+    final_grade: Number(final_grade || 0),
+    passed: !!passed,
+    final_status: 'completed',
+    skills: Array.isArray(skills) ? skills : [],
+  };
+}
+
 module.exports = {
   buildSkillsEngineFetchBaselinePayload,
   buildSkillsEngineResultPayload,
+  buildBaselineExamResultPayload,
+  buildPostCourseExamResultPayload,
 };
 
 
