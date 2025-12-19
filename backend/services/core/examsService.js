@@ -2126,6 +2126,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           user_id: ctx.user_id,
           competency_name: ctx.competency_name,
         };
+        try { console.log('[BASELINE][SKILLS_ENGINE][FETCH]', { exam_id: examId, attempt_id: attemptId, user_id: ctx.user_id, competency_name: ctx.competency_name }); } catch {}
         const { sendToCoordinator } = require('../integrations/envelopeSender');
         let resp;
         try {

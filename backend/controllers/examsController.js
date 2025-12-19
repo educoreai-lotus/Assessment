@@ -127,22 +127,40 @@ exports.getExam = async (req, res, next) => {
 exports.createExam = async (req, res, next) => {
   try {
     const { user_id, exam_type, course_id, course_name } = req.body || {};
-    if (!user_id || !exam_type) {
+    if (!exam_type) {
       return res.status(400).json({ error: 'user_id_and_exam_type_required' });
     }
-    // Enforce numeric user id to avoid sending "u_123" to Postgres
-    const userStr = String(user_id);
-    const userInt = Number(userStr.replace(/[^0-9]/g, ""));
-    if (!Number.isFinite(userInt)) {
-      try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'invalid_user_id', user_id_original: user_id, user_id_numeric: null }); } catch {}
-      return res.status(400).json({ error: 'invalid_user_id' });
+
+    let userStr = String(user_id || '');
+    let isBaseline = String(exam_type).toLowerCase() === 'baseline';
+
+    if (isBaseline) {
+      // For baseline, ignore client-provided user_id and resolve from ExamContext only
+      let ctx = null;
+      try {
+        const { ExamContext } = require('../models');
+        ctx = await ExamContext.findOne({ exam_type: 'baseline' }).sort({ updated_at: -1 }).lean();
+      } catch {}
+      if (!ctx || !ctx.user_id || !ctx.competency_name) {
+        try { console.error('[BASELINE][CONTEXT][MISSING]', { reason: 'createExam entry', hasCtx: !!ctx }); } catch {}
+        return res.status(400).json({ error: 'baseline_context_incomplete' });
+      }
+      userStr = String(ctx.user_id);
+    } else {
+      // Enforce numeric user id for non-baseline
+      if (!user_id) return res.status(400).json({ error: 'user_id_and_exam_type_required' });
+      const userInt = Number(String(user_id).replace(/[^0-9]/g, ""));
+      if (!Number.isFinite(userInt)) {
+        try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'invalid_user_id', user_id_original: user_id, user_id_numeric: null }); } catch {}
+        return res.status(400).json({ error: 'invalid_user_id' });
+      }
     }
     // [TRACE] create entry
     try {
       // eslint-disable-next-line no-console
       console.log(`[TRACE][${String(exam_type).toUpperCase()}][CREATE]`, {
-        user_id_original: user_id,
-        user_id_numeric: userInt,
+        user_id_original: isBaseline ? userStr : user_id,
+        user_id_numeric: isBaseline ? null : Number(String(user_id).replace(/[^0-9]/g, "")),
         exam_type,
         course_id: course_id ?? null,
         course_name: course_name ?? null,
