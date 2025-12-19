@@ -2077,6 +2077,18 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
     return { error: 'exam_creation_failed' };
   }
 
+  // Persist mapping into ExamContext for baseline: exam_id and attempt_id
+  try {
+    if (String(exam_type) === 'baseline') {
+      const { ExamContext } = require('../../models');
+      await ExamContext.findOneAndUpdate(
+        { user_id: String(user_id), exam_type: 'baseline' },
+        { exam_id: String(examId), attempt_id: String(attemptId) },
+        { new: true, upsert: true },
+      );
+    }
+  } catch {}
+
   lap('created');
   return {
     exam_id: Number(examId),

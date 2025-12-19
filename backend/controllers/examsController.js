@@ -611,17 +611,18 @@ exports.submitExam = async (req, res, next) => {
           const userUuid = metaRes?.rows?.[0]?.user_uuid || null;
           const courseName = metaRes?.rows?.[0]?.course_name || null;
 
-          // Prefer stored user_uuid; fallback to context for baseline; then numeric
-          let resolvedUserId = userUuid || null;
-          if (!resolvedUserId && examType === 'baseline') {
-            try {
-              const ctx = await ExamContext.findOne({ exam_type: 'baseline' }).lean();
-              resolvedUserId = ctx?.user_id || null;
-            } catch {}
-          }
-          if (!resolvedUserId && userNumeric != null) {
-            resolvedUserId = String(userNumeric);
-          }
+          // Resolve user_id from ExamContext by exam_id (preferred) then attempt_id; fallback to exams.user_uuid; then numeric
+          let resolvedUserId = null;
+          try {
+            const ctxByExam = await ExamContext.findOne({ exam_id: String(examId) }).lean();
+            const ctxByAttempt = resolvedUserId ? null : await ExamContext.findOne({ attempt_id: String(attemptIdNum) }).lean();
+            resolvedUserId = ctxByExam?.user_id || ctxByAttempt?.user_id || null;
+            if (!resolvedUserId) {
+              try { console.warn('[WARN][EXAM_CONTEXT][MISSING]', { exam_id: String(examId), attempt_id: String(attemptIdNum) }); } catch {}
+            }
+          } catch {}
+          if (!resolvedUserId) resolvedUserId = userUuid || null;
+          if (!resolvedUserId && userNumeric != null) resolvedUserId = String(userNumeric);
 
           // Build per-skill payload
           const perSkill = Array.isArray(response?.per_skill) ? response.per_skill : [];
@@ -642,7 +643,8 @@ exports.submitExam = async (req, res, next) => {
               action: 'baseline-exam-result',
               user_id: resolvedUserId,
               exam_type: 'baseline',
-              exam_id: Number(examId),
+              exam_id: String(examId),
+              attempt_id: String(attemptIdNum),
               passing_grade: passing,
               final_grade: finalGrade,
               passed,
@@ -656,7 +658,8 @@ exports.submitExam = async (req, res, next) => {
               action: 'postcourse-exam-result',
               user_id: resolvedUserId,
               exam_type: 'postcourse',
-              exam_id: Number(examId),
+              exam_id: String(examId),
+              attempt_id: String(attemptIdNum),
               course_name: courseName || null,
               passing_grade: passing,
               final_grade: finalGrade,
