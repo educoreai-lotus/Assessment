@@ -1988,9 +1988,7 @@ async function setExamStatus(examId, { status, progress, error_message = null, f
 async function createExamRecord({ user_id, exam_type, course_id, course_name, user_name, company_id }) {
   const userStr = String(user_id);
   const userInt = Number(userStr.replace(/[^0-9]/g, ""));
-  if (!Number.isFinite(userInt)) {
-    return { error: "invalid_user_id" };
-  }
+  // Accept non-numeric user identifiers (UUID) moving forward
   const __t0 = Date.now();
   const lap = (label) => { try { console.log('[TRACE][CREATE][FAST]%s %s ms', '', `${label}: ${Date.now() - __t0}`); } catch {} };
 
@@ -2003,13 +2001,18 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
       SELECT e.exam_id, COALESCE(e.status, 'READY') AS status, COALESCE(e.progress, 0) AS progress,
              (SELECT ea.attempt_id FROM exam_attempts ea WHERE ea.exam_id = e.exam_id ORDER BY ea.attempt_no DESC, ea.attempt_id DESC LIMIT 1) AS attempt_id
       FROM exams e
-      WHERE e.user_id = $1 AND e.exam_type = $2
-        ${String(exam_type) === 'postcourse' ? 'AND e.course_id = $3' : ''}
+      WHERE (
+              (e.user_id = $1 AND $1 IS NOT NULL)
+              OR (e.user_uuid = $2::uuid AND $2 IS NOT NULL)
+            )
+        AND e.exam_type = $3
+        ${String(exam_type) === 'postcourse' ? 'AND e.course_id = $4' : ''}
       ORDER BY e.exam_id DESC
       LIMIT 1`;
+    const maybeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userStr) ? userStr : null;
     const params = String(exam_type) === 'postcourse'
-      ? [userInt, exam_type, (Number.isFinite(Number(course_id)) ? Number(course_id) : null)]
-      : [userInt, exam_type];
+      ? [Number.isFinite(userInt) ? userInt : null, maybeUuid, exam_type, (Number.isFinite(Number(course_id)) ? Number(course_id) : null)]
+      : [Number.isFinite(userInt) ? userInt : null, maybeUuid, exam_type];
     const row = await pool.query(sql, params).then(r => r.rows?.[0] || null).catch(()=>null);
     if (row && (row.status === 'PREPARING' || row.status === 'READY')) {
       try { console.log('[TRACE][IDEMPOTENCY] returning existing exam', { exam_id: row.exam_id, attempt_id: row.attempt_id, status: row.status }); } catch {}
@@ -2017,7 +2020,7 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
         exam_id: Number(row.exam_id),
         attempt_id: Number(row.attempt_id || 0),
         exam_type,
-        user_id: userInt,
+        user_id: Number.isFinite(userInt) ? userInt : null,
         course_id: Number.isFinite(Number(course_id)) ? Number(course_id) : null,
         status: row.status,
         progress: Number(row.progress || 0),
@@ -2044,17 +2047,27 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
   }
 
   const courseInt = normalizeToInt(course_id);
+  // Ensure uuid columns exist
+  try {
+    await pool.query(`ALTER TABLE exams ADD COLUMN IF NOT EXISTS user_uuid UUID`);
+    await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS user_uuid UUID`);
+  } catch {}
   let examId;
   try {
     const ins = await pool.query(
-      `INSERT INTO exams (exam_type, user_id, course_id, status, progress, updated_at)
-       VALUES ($1, $2, $3, 'PREPARING', 0, NOW())
+      `INSERT INTO exams (exam_type, user_uuid, course_id, status, progress, updated_at)
+       VALUES ($1, $2::uuid, $3, 'PREPARING', 0, NOW())
        RETURNING exam_id`,
-      [exam_type, userInt, courseInt],
+      [
+        exam_type,
+        (function(v){ return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v||'')) ? String(v) : null; })(userStr),
+        courseInt
+      ],
     );
     examId = ins.rows[0].exam_id;
   } catch (e) {
-    return { error: 'invalid_user_id' };
+    try { console.error('[EXAM][CREATE][INSERT_ERROR]', e?.message || e); } catch {}
+    return { error: 'exam_creation_failed' };
   }
 
   let attemptId;

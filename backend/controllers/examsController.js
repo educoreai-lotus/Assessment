@@ -601,24 +601,27 @@ exports.submitExam = async (req, res, next) => {
         try {
           // Load exam type, user and course_name for envelope
           const metaRes = await pool.query(
-            `SELECT e.exam_type, e.user_id, e.course_name
+            `SELECT e.exam_type, e.user_id, e.user_uuid, e.course_name
              FROM exams e
              WHERE e.exam_id = $1`,
             [Number(examId)],
           ).catch(() => ({ rows: [] }));
           const examType = metaRes?.rows?.[0]?.exam_type || null;
           const userNumeric = metaRes?.rows?.[0]?.user_id || null;
+          const userUuid = metaRes?.rows?.[0]?.user_uuid || null;
           const courseName = metaRes?.rows?.[0]?.course_name || null;
 
-          // Attempt to resolve original UUID (for baseline) from ExamContext
-          let userUuid = null;
-          if (examType === 'baseline') {
+          // Prefer stored user_uuid; fallback to context for baseline; then numeric
+          let resolvedUserId = userUuid || null;
+          if (!resolvedUserId && examType === 'baseline') {
             try {
-              const ctx = await ExamContext.findOne({ exam_type: 'baseline', user_id: String(req.body?.user_id || '') }).lean();
-              userUuid = ctx?.user_id || null;
+              const ctx = await ExamContext.findOne({ exam_type: 'baseline' }).lean();
+              resolvedUserId = ctx?.user_id || null;
             } catch {}
           }
-          const resolvedUserId = userUuid || (userNumeric != null ? String(userNumeric) : null);
+          if (!resolvedUserId && userNumeric != null) {
+            resolvedUserId = String(userNumeric);
+          }
 
           // Build per-skill payload
           const perSkill = Array.isArray(response?.per_skill) ? response.per_skill : [];
