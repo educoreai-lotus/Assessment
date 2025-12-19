@@ -1999,7 +1999,14 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
   try {
     const sql = `
       SELECT e.exam_id, COALESCE(e.status, 'READY') AS status, COALESCE(e.progress, 0) AS progress,
-             (SELECT ea.attempt_id FROM exam_attempts ea WHERE ea.exam_id = e.exam_id ORDER BY ea.attempt_no DESC, ea.attempt_id DESC LIMIT 1) AS attempt_id
+             (
+               SELECT ea.attempt_id
+               FROM exam_attempts ea
+               WHERE ea.exam_id = e.exam_id
+                 AND COALESCE(ea.status, '') NOT IN ('canceled', 'invalidated')
+               ORDER BY ea.attempt_no DESC, ea.attempt_id DESC
+               LIMIT 1
+             ) AS attempt_id
       FROM exams e
       WHERE (
               (e.user_id = $1 AND $1 IS NOT NULL)
@@ -2015,6 +2022,10 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
       : [Number.isFinite(userInt) ? userInt : null, maybeUuid, exam_type];
     const row = await pool.query(sql, params).then(r => r.rows?.[0] || null).catch(()=>null);
     if (row && (row.status === 'PREPARING' || row.status === 'READY')) {
+      // For baseline: only reuse if there is an active (non-canceled, non-invalidated) attempt
+      if (String(exam_type) === 'baseline' && (row.attempt_id == null)) {
+        // Skip reuse to force a NEW exam/attempt
+      } else {
       try { console.log('[TRACE][IDEMPOTENCY] returning existing exam', { exam_id: row.exam_id, attempt_id: row.attempt_id, status: row.status }); } catch {}
       return {
         exam_id: Number(row.exam_id),
@@ -2028,6 +2039,7 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
         started_at: null,
         expires_at: null,
       };
+      }
     }
   } catch {}
 
