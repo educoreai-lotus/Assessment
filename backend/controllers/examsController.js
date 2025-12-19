@@ -79,17 +79,22 @@ exports.saveExamContext = async (req, res, next) => {
   try {
     const examType = String(req.body?.exam_type || '').toLowerCase();
     const userId = req.body?.user_id;
-    const competencyName = typeof req.body?.competency_name === 'string' ? req.body.competency_name : null;
+    const competencyName = typeof req.body?.competency_name === 'string' && req.body.competency_name.trim() !== '' ? req.body.competency_name.trim() : null;
     if (examType !== 'baseline') {
       return res.status(400).json({ error: 'invalid_exam_type' });
     }
-    if (!userId || typeof userId !== 'string') {
-      return res.status(400).json({ error: 'user_id_required' });
+    if (!userId || !competencyName) {
+      return res.status(400).json({ error: 'baseline_context_incomplete' });
     }
     // Upsert by user_id + exam_type
     await ExamContext.findOneAndUpdate(
       { user_id: String(userId), exam_type: 'baseline' },
-      { user_id: String(userId), exam_type: 'baseline', competency_name: competencyName || null },
+      {
+        user_id: String(userId),
+        exam_type: 'baseline',
+        competency_name: competencyName,
+        updated_at: new Date(),
+      },
       { new: true, upsert: true },
     );
     return res.json({ ok: true });

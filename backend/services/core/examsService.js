@@ -338,40 +338,18 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
 
   const isTest = String(process.env.NODE_ENV || '').toLowerCase() === 'test';
   if (exam_type === "baseline") {
-    // Check for already submitted baseline attempt for this user
-    if (!isTest) {
-      const { rows: completedBaseline } = await pool.query(
-        `
-          SELECT ea.attempt_id
-          FROM exam_attempts ea
-          JOIN exams e ON e.exam_id = ea.exam_id
-          WHERE e.user_id = $1
-            AND e.exam_type = 'baseline'
-            AND ea.submitted_at IS NOT NULL
-          LIMIT 1
-        `,
-        [userInt],
-      );
-      if (completedBaseline && completedBaseline.length > 0) {
-        return { error: "baseline_already_completed" };
-      }
-    }
-    // If available, include competency/topic captured from Directory redirect
-    let competencyName = null;
+    // Guard: context must be present before creation
     try {
       const { ExamContext } = require('../../models');
       const ctx = await ExamContext.findOne({ user_id: String(user_id), exam_type: 'baseline' });
-      competencyName = ctx && typeof ctx.competency_name === 'string' ? ctx.competency_name : null;
-      try { console.log('[BASELINE][CONTEXT]', { user_id, competency_name: competencyName || null }); } catch {}
-    } catch {}
-    skillsPayload = await safeFetchBaselineSkills({ user_id, competency_name: competencyName || undefined });
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[TRACE][BASELINE][CREATE][SKILLS]', {
-        count: Array.isArray(skillsPayload?.skills) ? skillsPayload.skills.length : 0,
-      });
-    } catch {}
-    // Baseline: skip Directory policy entirely, use static fallback
+      if (!ctx || !ctx.competency_name) {
+        return { error: 'baseline_context_incomplete' };
+      }
+      try { console.log('[BASELINE][CONTEXT][OK]', { user_id, competency_name: ctx.competency_name }); } catch {}
+    } catch {
+      return { error: 'baseline_context_incomplete' };
+    }
+    // Baseline: skip Directory policy entirely
     policy = { passing_grade: 70 };
     try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
   } else if (exam_type === "postcourse") {

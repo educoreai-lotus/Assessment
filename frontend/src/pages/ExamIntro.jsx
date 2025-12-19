@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useEffect } from 'react';
 import { examApi } from '../services/examApi';
 
 export default function ExamIntro() {
@@ -17,6 +16,8 @@ export default function ExamIntro() {
   const skillName = searchParams.get('skillName') || '';
 
   const [ack, setAck] = useState(false);
+  const [ctxSaved, setCtxSaved] = useState(examType !== 'baseline');
+  const [ctxError, setCtxError] = useState('');
 
   const title = useMemo(() => {
     if (examType === 'postcourse') return 'Post-Course Assessment';
@@ -28,7 +29,11 @@ export default function ExamIntro() {
     if (examType !== 'baseline') return;
     const uid = (userId || '').trim();
     const compName = (skillName || '').trim();
-    if (!uid || !compName) return;
+    if (!uid || !compName) {
+      setCtxError('Missing baseline context from Directory');
+      setCtxSaved(false);
+      return;
+    }
     (async () => {
       try {
         await examApi.saveContext({
@@ -38,13 +43,20 @@ export default function ExamIntro() {
         });
         // eslint-disable-next-line no-console
         console.log('[INTRO][CONTEXT_SAVED]', { exam_type: 'baseline', user_id: uid, competency_name: decodeURIComponent(compName) });
+        setCtxSaved(true);
+        setCtxError('');
       } catch {
-        // best-effort only
+        setCtxSaved(false);
+        setCtxError('Failed to save baseline context. Please refresh.');
       }
     })();
   }, [examType, userId, skillName]);
 
   function handleStart() {
+    if (examType === 'baseline' && !ctxSaved) {
+      // block start until context saved
+      return;
+    }
     // Persist acceptance per attempt
     if (attemptId) {
       try { localStorage.setItem(`introAccepted:${attemptId}`, 'true'); } catch {}
@@ -145,12 +157,16 @@ export default function ExamIntro() {
           <button
             type="button"
             onClick={handleStart}
-            disabled={!ack}
-            className={`px-4 py-2 rounded-md text-white ${ack ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'}`}
+            disabled={!ack || !ctxSaved}
+            className={`px-4 py-2 rounded-md text-white ${(ack && ctxSaved) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'}`}
           >
             Start Exam
           </button>
         </div>
+
+        {examType === 'baseline' && ctxError && (
+          <div className="mt-3 text-sm text-red-400">{ctxError}</div>
+        )}
       </div>
     </div>
   );
