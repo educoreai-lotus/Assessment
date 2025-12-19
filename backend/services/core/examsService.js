@@ -2129,9 +2129,67 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     const isTest = String(process.env.NODE_ENV || '').toLowerCase() === 'test';
   try {
     if (exam_type === 'baseline') {
-        const { safeFetchBaselineSkills } = require("../gateways/skillsEngineGateway");
-        skillsPayload = await safeFetchBaselineSkills({ user_id });
-        // Baseline: skip Directory policy entirely, use static fallback
+        // STRICT: Load context and include competency_name in outbound payload
+        let ctx = null;
+        try {
+          const { ExamContext } = require('../../models');
+          ctx = (await ExamContext.findOne({ exam_id: String(examId) }).lean())
+            || (await ExamContext.findOne({ attempt_id: String(attemptId) }).lean());
+        } catch {}
+        if (!ctx || !ctx.competency_name || !ctx.user_id) {
+          try { console.error('[BASELINE][SKILLS_ENGINE][MISSING_COMPETENCY]', { exam_id: examId, attempt_id: attemptId, ctx: ctx || null }); } catch {}
+          await setExamStatus(examId, { status: 'FAILED', error_message: 'competency_name_missing', failed_step: 'fetch_baseline_skills', progress: 100 });
+          return;
+        }
+        const payload = {
+          action: 'fetch-baseline-skills',
+          user_id: ctx.user_id,
+          competency_name: ctx.competency_name,
+        };
+        const { sendToCoordinator } = require('../integrations/envelopeSender');
+        let resp;
+        try {
+          const ret = await sendToCoordinator({ targetService: 'skills-engine', payload });
+          let respString;
+          if (typeof ret === 'string') respString = ret;
+          else if (ret && typeof ret.data === 'string') respString = ret.data;
+          else respString = JSON.stringify((ret && ret.data) || {});
+          resp = JSON.parse(respString || '{}');
+        } catch (e) {
+          try { console.error('[BASELINE][SKILLS_ENGINE][FETCH_ERROR]', e?.message || e); } catch {}
+          await setExamStatus(examId, { status: 'FAILED', error_message: 'fetch_failed', failed_step: 'fetch_baseline_skills', progress: 100 });
+          return;
+        }
+        // Normalize grouped or array answers into flat skills
+        const responseBlock = resp?.response || {};
+        const grouped = responseBlock?.skills && typeof responseBlock.skills === 'object' ? responseBlock.skills : null;
+        let flattenedSkills = [];
+        if (grouped && !Array.isArray(grouped)) {
+          for (const arr of Object.values(grouped)) {
+            if (Array.isArray(arr)) {
+              for (const s of arr) {
+                const sid = typeof s?.skill_id === 'string' ? s.skill_id : String(s?.skill_id || '');
+                const sname = typeof s?.skill_name === 'string' ? s.skill_name : String(s?.skill_name || sid);
+                if (sid) flattenedSkills.push({ skill_id: sid, skill_name: sname || sid });
+              }
+            }
+          }
+        }
+        if (!Array.isArray(flattenedSkills) || flattenedSkills.length === 0) {
+          const answer = resp?.response?.answer;
+          if (Array.isArray(answer)) {
+            flattenedSkills = answer.map((s) => ({
+              skill_id: typeof s === 'string' ? s : (s?.skill_id || s?.id || ''),
+              skill_name: typeof s === 'string' ? s : (s?.skill_name || s?.name || (s?.skill_id || '')),
+            })).filter((s) => s.skill_id);
+          }
+        }
+        if (!Array.isArray(flattenedSkills) || flattenedSkills.length === 0) {
+          await setExamStatus(examId, { status: 'FAILED', error_message: 'skills_empty', failed_step: 'fetch_baseline_skills', progress: 100 });
+          return;
+        }
+        skillsPayload = { user_id: ctx.user_id, skills: flattenedSkills };
+        // Baseline: static policy
         policy = { passing_grade: 70 };
         try { console.log('[BASELINE][POLICY][STATIC] passing_grade=70 (Directory skipped)'); } catch {}
     } else if (exam_type === 'postcourse') {
