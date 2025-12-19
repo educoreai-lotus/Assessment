@@ -402,11 +402,13 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   const { normalizeAiQuestion, validateTheoreticalQuestions } = require("./theoryService");
   const { normalizeSkills } = require("./skillsUtils");
 
-  // Already converted user_id above; proceed
-  try {
-    // eslint-disable-next-line no-console
-    console.log("[TRACE][EXAM][CREATE][USER_MAP]", { user_id_original: user_id, user_id_numeric: userInt });
-  } catch {}
+  // Log mapping only for non-baseline
+  if (String(exam_type) !== 'baseline') {
+    try {
+      // eslint-disable-next-line no-console
+      console.log("[TRACE][EXAM][CREATE][USER_MAP]", { user_id_original: user_id, user_id_numeric: userInt });
+    } catch {}
+  }
   const courseInt = normalizeToInt(course_id); // can be null for baseline
 
   // Determine attempt behavior based on rules
