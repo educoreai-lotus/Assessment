@@ -35,6 +35,18 @@ export default function Baseline() {
     return null;
   }, [searchParams]);
 
+  // Strict baseline context from Directory URL
+  const userIdFromUrl = useMemo(() => {
+    const raw = searchParams.get('userId');
+    return raw ? decodeURIComponent(raw) : '';
+  }, [searchParams]);
+  const skillNameFromUrl = useMemo(() => {
+    const raw = searchParams.get('skillName');
+    return raw ? decodeURIComponent(raw) : '';
+  }, [searchParams]);
+  const [ctxSaved, setCtxSaved] = useState(false);
+  const [ctxError, setCtxError] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,6 +109,35 @@ export default function Baseline() {
     throw new Error('package_not_ready_timeout');
   }
 
+  // Save baseline context BEFORE creating exam
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!userIdFromUrl || !skillNameFromUrl) {
+        setCtxError('Missing baseline context from Directory (userId or skillName).');
+        setCtxSaved(false);
+        return;
+      }
+      try {
+        await examApi.saveContext({
+          exam_type: 'baseline',
+          user_id: userIdFromUrl,
+          competency_name: skillNameFromUrl,
+        });
+        if (!active) return;
+        // eslint-disable-next-line no-console
+        console.log('[INTRO][CONTEXT_SAVED]', { exam_type: 'baseline', user_id: userIdFromUrl, competency_name: skillNameFromUrl });
+        setCtxSaved(true);
+        setCtxError('');
+      } catch (e) {
+        if (!active) return;
+        setCtxSaved(false);
+        setCtxError('Failed to save baseline context. Please refresh and ensure the link contains userId and skillName.');
+      }
+    })();
+    return () => { active = false; };
+  }, [userIdFromUrl, skillNameFromUrl]);
+
   // Bootstrap: resolve user_id -> exam_id -> attempt_id
   useEffect(() => {
     let mounted = true;
@@ -105,11 +146,13 @@ export default function Baseline() {
         setLoading(true);
         setError('');
 
-        // Resolve demo user id (persist for baseline uniqueness)
-        let userId = localStorage.getItem('demo_user_id');
+        // Strict: require context saved and userId present
+        if (!ctxSaved) {
+          throw new Error('Baseline context not saved yet.');
+        }
+        const userId = userIdFromUrl;
         if (!userId) {
-          userId = 'u_123';
-          localStorage.setItem('demo_user_id', userId);
+          throw new Error('Missing userId from Directory.');
         }
 
         let resolvedExamId = examId;
@@ -142,11 +185,12 @@ export default function Baseline() {
         if (mounted) setLoading(false);
       }
     }
-    bootstrap();
+    // Only run after context saved
+    if (ctxSaved) bootstrap();
     return () => {
       mounted = false;
     };
-  }, []); // initial mount
+  }, [ctxSaved, userIdFromUrl]); // run after context saved
 
   // Persist acceptance token tied to attempt once known
   useEffect(() => {
@@ -423,6 +467,16 @@ export default function Baseline() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Baseline Exam</h2>
         <div className="flex items-center gap-4">
+          {ctxSaved && (
+            <div className="text-xs text-emerald-300">
+              Baseline context saved: {userIdFromUrl} / {skillNameFromUrl}
+            </div>
+          )}
+          {ctxError && (
+            <div className="text-xs text-red-400">
+              {ctxError}
+            </div>
+          )}
           <div className="text-xs text-neutral-400">
             Camera: {cameraReady && cameraOk ? 'active' : (cameraError ? 'error' : 'starting...')}
           </div>
