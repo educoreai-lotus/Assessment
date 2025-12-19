@@ -123,33 +123,10 @@ export default function Baseline() {
             localStorage.setItem('exam_baseline_id', resolvedExamId);
           }
         } catch (err) {
-          const apiErr = err?.response?.data?.error || '';
-          if (apiErr === 'baseline_already_completed') {
-            try {
-              const attemptsResp = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`);
-              const attempts = attemptsResp?.data || [];
-              const baselineAttempt = attempts.find(a => a.exam_type === 'baseline' && a.submitted_at);
-              console.log("Baseline existing attempt:", baselineAttempt);
-              if (!baselineAttempt) {
-                setError('baseline_exists_but_not_found');
-                return;
-              }
-              navigate(`/results/baseline/${encodeURIComponent(baselineAttempt.attempt_id)}`);
-              return;
-            } catch {
-              setError('baseline_exists_but_not_found');
-              return;
-            }
-          } else {
-            throw err;
-          }
+          throw err;
         }
 
-        if (!resolvedAttemptId) {
-          const list = await http.get(`/api/attempts/user/${encodeURIComponent(localStorage.getItem('demo_user_id') || 'u_123')}`).then(r => r.data);
-          const baseline = Array.isArray(list) ? list.find(a => String(a?.exam_id) === String(resolvedExamId)) : null;
-          resolvedAttemptId = baseline?.attempt_id ?? null;
-        }
+        // resolvedAttemptId is expected in create response; no fallback to old attempts
 
         if (!resolvedExamId || !resolvedAttemptId) {
           throw new Error('Unable to resolve exam or attempt. Please try again.');

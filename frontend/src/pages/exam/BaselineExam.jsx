@@ -99,31 +99,10 @@ export default function BaselineExam() {
             localStorage.setItem('exam_baseline_id', resolvedExamId);
           }
         } catch (err) {
-          const apiErr = err?.response?.data?.error || '';
-          // If baseline already exists for this user, redirect to last submitted baseline result
-          if (apiErr === 'baseline_already_completed') {
-            try {
-              const list = await http.get(`/api/attempts/user/${encodeURIComponent(userId)}`).then(r => r.data);
-              const baseline = Array.isArray(list)
-                ? list.find(a => a.exam_type === 'baseline' && a.submitted_at)
-                : null;
-              console.log("Baseline fallback attempt:", baseline);
-              if (baseline && baseline.attempt_id) {
-                navigate(`/results/baseline/${encodeURIComponent(baseline.attempt_id)}`);
-                return;
-              }
-              setError('Baseline attempt exists but could not be loaded.');
-              return;
-            } catch {
-              setError('Baseline attempt exists but could not be loaded.');
-              return;
-            }
-          } else {
-            throw err;
-          }
+          throw err;
         }
 
-        // If attemptId still unknown after create (and not baseline_already_completed fallback), stop and report
+        // If attemptId still unknown after create, stop and report
         if (!resolvedExamId || !attemptId) {
           console.error('Exam creation returned no attempt_id');
           setError('Exam creation failed. Please try again.');

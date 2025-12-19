@@ -15,24 +15,20 @@ const { ExamPackage } = require('../../models');
 const { normalizeToInt } = require('./idNormalizer');
 
 async function getAttemptsForUser(userId) {
-  // PostgreSQL uses numeric IDs; API may send strings like "u_123"
+  // Accept both numeric and UUID identifiers
   const userStr = String(userId);
   const userInt = Number(userStr.replace(/[^0-9]/g, ""));
-  if (!Number.isFinite(userInt)) return [];
-  try {
-    // eslint-disable-next-line no-console
-    console.log('[TRACE][USER_ID][MAPPED]', { original: userId, numeric: userInt });
-  } catch {}
+  const maybeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userStr) ? userStr : null;
   const { rows } = await pool.query(
     `
       SELECT ea.attempt_id, ea.attempt_no, ea.final_grade, ea.passed, ea.submitted_at,
              e.exam_id, e.exam_type, e.course_id
       FROM exam_attempts ea
       JOIN exams e ON e.exam_id = ea.exam_id
-      WHERE e.user_id = $1
-      ORDER BY ea.attempt_id DESC
+      WHERE (e.user_id = $1 OR e.user_uuid = $2::uuid)
+      ORDER BY ea.created_at DESC NULLS LAST, ea.attempt_id DESC
     `,
-    [userInt]
+    [Number.isFinite(userInt) ? userInt : null, maybeUuid]
   );
   return rows.map((r) => ({
     exam_id: r.exam_id,

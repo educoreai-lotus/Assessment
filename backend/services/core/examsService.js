@@ -2021,11 +2021,7 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
       ? [Number.isFinite(userInt) ? userInt : null, maybeUuid, exam_type, (Number.isFinite(Number(course_id)) ? Number(course_id) : null)]
       : [Number.isFinite(userInt) ? userInt : null, maybeUuid, exam_type];
     const row = await pool.query(sql, params).then(r => r.rows?.[0] || null).catch(()=>null);
-    if (row && (row.status === 'PREPARING' || row.status === 'READY')) {
-      // For baseline: only reuse if there is an active (non-canceled, non-invalidated) attempt
-      if (String(exam_type) === 'baseline' && (row.attempt_id == null)) {
-        // Skip reuse to force a NEW exam/attempt
-      } else {
+    if (String(exam_type) !== 'baseline' && row && (row.status === 'PREPARING' || row.status === 'READY')) {
       try { console.log('[TRACE][IDEMPOTENCY] returning existing exam', { exam_id: row.exam_id, attempt_id: row.attempt_id, status: row.status }); } catch {}
       return {
         exam_id: Number(row.exam_id),
@@ -2039,24 +2035,10 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
         started_at: null,
         expires_at: null,
       };
-      }
     }
   } catch {}
 
-  // Baseline: block if already submitted
-  if (String(exam_type) === 'baseline') {
-    const { rows: completedBaseline } = await pool.query(
-      `SELECT ea.attempt_id
-       FROM exam_attempts ea
-       JOIN exams e ON e.exam_id = ea.exam_id
-       WHERE e.user_id = $1 AND e.exam_type = 'baseline' AND ea.submitted_at IS NOT NULL
-       LIMIT 1`,
-      [userInt],
-    );
-    if (completedBaseline && completedBaseline.length > 0) {
-      return { error: 'baseline_already_completed' };
-    }
-  }
+  // Baseline: do NOT block on existing attempts; always create new
 
   const courseInt = normalizeToInt(course_id);
   // Ensure uuid columns exist

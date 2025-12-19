@@ -12,6 +12,7 @@ export default function BaselineResults() {
   const initialAttemptId = useMemo(() => {
     return params.attemptId || searchParams.get('attemptId') || null;
   }, [params, searchParams]);
+  const userIdFromUrl = useMemo(() => searchParams.get('userId') || localStorage.getItem('demo_user_id') || '', [searchParams]);
 
   const [attemptId, setAttemptId] = useState(initialAttemptId);
   const [result, setResult] = useState(location?.state?.result || null);
@@ -22,11 +23,23 @@ export default function BaselineResults() {
     let mounted = true;
     async function fetchIfNeeded() {
       if (result) return;
-      if (!attemptId) {
-        setError('Missing attemptId');
-        setLoading(false);
-        return;
+      // Always prefer latest baseline attempt if no attemptId provided
+      if (!attemptId && userIdFromUrl) {
+        try {
+          const list = await examApi.attemptsByUser(userIdFromUrl);
+          const latestBaseline = Array.isArray(list)
+            ? list.filter(a => a.exam_type === 'baseline').sort((a, b) => {
+                const ad = a.submitted_at ? new Date(a.submitted_at).getTime() : 0;
+                const bd = b.submitted_at ? new Date(b.submitted_at).getTime() : 0;
+                return bd - ad;
+              })[0]
+            : null;
+          if (latestBaseline?.attempt_id) {
+            setAttemptId(latestBaseline.attempt_id);
+          }
+        } catch {}
       }
+      if (!attemptId) return;
       try {
         setLoading(true);
         let data = await examApi.attempt(attemptId);
@@ -53,7 +66,7 @@ export default function BaselineResults() {
     return () => {
       mounted = false;
     };
-  }, [attemptId, result]);
+  }, [attemptId, result, userIdFromUrl]);
 
   const grade = Number(result?.final_grade || 0);
   const passingGrade = Number(result?.passing_grade || 70);
