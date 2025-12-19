@@ -2061,11 +2061,22 @@ async function createExamRecord({ user_id, exam_type, course_id, course_name, us
   try {
     if (String(exam_type) === 'baseline') {
       const { ExamContext } = require('../../models');
-      await ExamContext.findOneAndUpdate(
-        { user_id: String(user_id), exam_type: 'baseline' },
-        { exam_id: String(examId), attempt_id: String(attemptId) },
+      const filter = {
+        user_id: String(user_id),
+        exam_type: 'baseline',
+        competency_name: { $ne: null },
+      };
+      const update = {
+        exam_id: String(examId),
+        attempt_id: String(attemptId),
+        updated_at: new Date(),
+      };
+      const linked = await ExamContext.findOneAndUpdate(
+        filter,
+        update,
         { new: true, upsert: true },
       );
+      try { console.log('[BASELINE][CTX][LINKED]', { exam_id: String(examId), attempt_id: String(attemptId), ok: !!linked }); } catch {}
     }
   } catch {}
 
@@ -2113,14 +2124,16 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         let ctx = null;
         try {
           const { ExamContext } = require('../../models');
-          ctx = (await ExamContext.findOne({ exam_id: String(examId) }).lean())
-            || (await ExamContext.findOne({ attempt_id: String(attemptId) }).lean());
+          // STRICT resolution: attempt_id first, fallback to exam_id
+          ctx = await ExamContext.findOne({ attempt_id: String(attemptId) }).lean();
+          if (!ctx) ctx = await ExamContext.findOne({ exam_id: String(examId) }).lean();
         } catch {}
         if (!ctx || !ctx.competency_name || !ctx.user_id) {
-          try { console.error('[BASELINE][SKILLS_ENGINE][MISSING_COMPETENCY]', { exam_id: examId, attempt_id: attemptId, ctx: ctx || null }); } catch {}
+          try { console.error('[BASELINE][CTX][MISSING]', { exam_id: examId, attempt_id: attemptId, hasCtx: !!ctx, competency: ctx?.competency_name || null }); } catch {}
           await setExamStatus(examId, { status: 'FAILED', error_message: 'competency_name_missing', failed_step: 'fetch_baseline_skills', progress: 100 });
           return;
         }
+        try { console.log('[BASELINE][CTX][RESOLVED]', { exam_id: examId, attempt_id: attemptId, competency_name: ctx.competency_name }); } catch {}
         const payload = {
           action: 'fetch-baseline-skills',
           user_id: ctx.user_id,
