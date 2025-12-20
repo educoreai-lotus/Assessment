@@ -118,10 +118,11 @@ exports.getExam = async (req, res, next) => {
   try {
     console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });
   } catch {}
-  const responsePayload = {
-      package_ready: true,
-      ...pkg,
-  };
+  // Guard: after completion, grading must be present
+  if (String(pkg?.final_status || '').toLowerCase() === 'completed' && (!pkg?.grading || !Array.isArray(pkg?.grading?.per_skill))) {
+    return res.status(500).json({ error: 'grading_missing', message: 'Grading not available for completed exam' });
+  }
+  const responsePayload = { package_ready: true, ...pkg };
   try {
     const perSkill = Array.isArray(pkg?.grading?.per_skill) ? pkg.grading.per_skill : (Array.isArray(pkg?.metadata?.skills) ? pkg.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
     const finalGrade = pkg?.grading?.final_grade != null ? Number(pkg.grading.final_grade) : null;

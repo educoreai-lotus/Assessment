@@ -1432,17 +1432,27 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
     return "unassigned";
   }
 
-  // 5) Theoretical grading (internal) - skip unknown questions
-  const knownTheoreticalAnswers = theoreticalAnswers.filter((ans) => {
+  // 5) Theoretical grading (internal) - STRICT mapping: fail if any answer cannot be resolved
+  function resolveQuestionForAnswer(ans) {
     const answerQuestionId = String(ans?.question_id ?? ans?.id ?? "");
-    const hasById = qById.has(answerQuestionId);
-    const hasByIndex = Number.isFinite(Number(ans?.index)) && pkgQuestions[Number(ans.index)];
-    const known = hasById || hasByIndex;
-    if (!known) {
-      try { console.log("[WARN][SUBMIT] Question not found in package", { question_id: answerQuestionId }); } catch {}
+    if (answerQuestionId && qById.has(answerQuestionId)) {
+      return qById.get(answerQuestionId);
     }
-    return known;
-  });
+    if (Number.isFinite(Number(ans?.index))) {
+      const idx = Number(ans.index);
+      if (idx >= 0 && idx < pkgQuestions.length) return pkgQuestions[idx];
+    }
+    return null;
+  }
+  const itemsToGrade = [];
+  for (const ans of theoreticalAnswers) {
+    const q = resolveQuestionForAnswer(ans);
+    if (!q) {
+      try { console.error('[GRADE][UNRESOLVED_ANSWER]', { attempt_id: attemptIdNum, question_id: ans?.question_id ?? ans?.id ?? null, index: ans?.index ?? null }); } catch {}
+      throw new Error('unresolved_answer');
+    }
+    itemsToGrade.push(ans);
+  }
   async function gradeTheoreticalAnswers(pkg, items) {
     try { console.log('[GRADE][THEORY][START]', { attempt_id: attemptIdNum }); } catch {}
     const graded = [];
@@ -1493,8 +1503,25 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
         const correct = q && q.prompt && q.prompt.correct_answer != null
           ? String(q.prompt.correct_answer)
           : "";
-        const norm = (s) => String(s || '').trim().toLowerCase();
-        const ok = norm(rawAnswer) === norm(correct);
+        const norm = (s) => String(s || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+        // Extract candidate answers (support scalar, array, or object with value/label/text)
+        const candidates = (() => {
+          const a = ans?.answer;
+          const out = [];
+          if (Array.isArray(a)) {
+            for (const v of a) out.push(norm(v));
+          } else if (a && typeof a === 'object') {
+            if ('value' in a) out.push(norm(a.value));
+            if ('label' in a) out.push(norm(a.label));
+            if ('text' in a) out.push(norm(a.text));
+          } else {
+            out.push(norm(a));
+          }
+          return Array.from(new Set(out.filter(Boolean)));
+        })();
+        const correctNorm = norm(correct);
+        const optionsNorm = Array.isArray(q?.prompt?.options) ? q.prompt.options.map(norm) : [];
+        const ok = candidates.some((cand) => cand === correctNorm || (optionsNorm.includes(cand) && cand === correctNorm));
         const pushObj = {
           question_id: qidOut,
           skill_id: skillId,
@@ -1570,10 +1597,10 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
           }
         }
 
-        // Deterministic keyword-based fallback
+        // Deterministic keyword-based fallback (guaranteed non-zero for meaningful answers)
         let score = 0;
         let status = "not_acquired";
-        if (trimmed.length >= 10) {
+        {
           const stopwords = new Set([
             "the","is","are","a","an","and","or","of","for","to","in","on","at","by","with","as","this","that","these","those","be","been","being"
           ]);
@@ -1585,7 +1612,9 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
           const words = tokenize(trimmed);
           const matched = kw.filter(k => words.includes(k)).length;
           const ratio = kw.length > 0 ? matched / kw.length : 0;
-          if (ratio > 0.7) {
+          if (!trimmed) {
+            score = 0;
+          } else if (ratio > 0.7) {
             score = 100;
           } else if (ratio >= 0.3) {
             const pct = Math.round(ratio * 100);
@@ -1601,9 +1630,6 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
           if (score > 100) score = 100;
           if (score < 0) score = 0;
           status = score >= 70 ? "acquired" : "not_acquired";
-        } else {
-          score = 0;
-          status = "not_acquired";
         }
 
         const pushObj = {
@@ -1641,7 +1667,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
     return graded;
   }
 
-  const theoreticalGraded = await gradeTheoreticalAnswers(examPackage, knownTheoreticalAnswers);
+  const theoreticalGraded = await gradeTheoreticalAnswers(examPackage, itemsToGrade);
 
   // 6) Coding grading (DevLab via unified envelope)
   const { gradingResults, aggregated } =
@@ -1748,7 +1774,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
   // 7) Merge grades (theory + computed coding + ingested coding skills)
   const gradedItems = [...theoreticalGraded, ...codingGraded, ...codingSkillsMerged];
 
-  // 8) Per-skill aggregation
+  // 8) Per-skill aggregation (mark missing skills as error and exclude from final grade)
   const bySkill = new Map();
   for (const item of gradedItems) {
     let sid = String(item.skill_id || "").trim();
@@ -1765,7 +1791,15 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
   );
   try { console.log('[SUBMIT][SKILLS_SOURCE]', { skills_count: skillsMeta.length }); } catch {}
   const perSkill = [];
-  for (const [sid, items] of bySkill.entries()) {
+  for (const meta of skillsMeta) {
+    const sid = String(meta.skill_id || meta.id || '').trim();
+    const name = meta.skill_name || meta.name || sid;
+    const items = bySkill.get(sid) || [];
+    if (items.length === 0) {
+      try { console.error('[GRADE][SKILL_WITHOUT_GRADED_ITEMS]', { attempt_id: attemptIdNum, skill_id: sid }); } catch {}
+      perSkill.push({ skill_id: sid, skill_name: name, score: 0, status: 'error' });
+      continue;
+    }
     const numericScores = items
       .map((i) => (Number.isFinite(Number(i.score)) ? Number(i.score) : null))
       .filter((v) => v != null);
@@ -1773,23 +1807,21 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       numericScores.length > 0
         ? numericScores.reduce((a, b) => a + b, 0) / numericScores.length
         : 0;
-    // Default status by policy threshold; will be overridden for coding-ingest below
     let status = avg >= passing ? "acquired" : "failed";
-    let name =
-      skillIdToName.get(sid) ||
-      (qById.get(String(items[0]?.question_id))?.prompt?.skill_name || sid);
-    if (!name || String(name).trim() === "") name = sid;
     const out = {
       skill_id: sid,
-      skill_name: name || sid,
+      skill_name: name,
       score: Number(avg),
       status,
     };
-    // If ingestion provided explicit coding feedback/score, override
+    // If ingestion provided explicit coding feedback/score, do not overwrite a higher theoretical score with 0
     const override = codingSkillsMerged.find((i) => String(i.skill_id) === String(sid));
     if (override) {
-      out.score = Number(override.score || 0);
-      out.status = Number(override.score || 0) > 0 ? "acquired" : "failed";
+      const overrideScore = Number(override.score || 0);
+      if (overrideScore > out.score) {
+        out.score = overrideScore;
+        out.status = overrideScore > 0 ? "acquired" : "failed";
+      }
       if (override.feedback) out.feedback = override.feedback;
     }
     perSkill.push(out);
@@ -1804,7 +1836,9 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
     }
     return String(a?.answer || "").trim().length > 0;
   }).length;
-  let perSkillScores = perSkill.map((s) => Number(s.score || 0));
+  // Compute final grade from only valid (non-error) skills
+  const validSkills = perSkill.filter((s) => String(s.status) !== 'error');
+  let perSkillScores = validSkills.map((s) => Number(s.score || 0));
   let finalGrade =
     perSkillScores.length > 0
       ? Math.round(perSkillScores.reduce((a, b) => a + b, 0) / perSkillScores.length)
@@ -1960,7 +1994,15 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       try { console.error('[SUBMIT][CTX_MISSING]', { attempt_id: String(attemptIdNum) }); } catch {}
     } else {
       const examIdRuntime = Number.isFinite(Number(exam_id)) ? Number(exam_id) : Number(attempt.exam_id);
-      const skillsPayload = (perSkill || []).map((s) => ({
+      // Build payload skills from persisted ExamPackage.grading.per_skill to ensure consistency
+      let persistedPerSkill = perSkill;
+      try {
+        const pkgAfter = await ExamPackage.findOne({ attempt_id: String(attemptIdNum) }).lean();
+        if (pkgAfter && pkgAfter.grading && Array.isArray(pkgAfter.grading.per_skill)) {
+          persistedPerSkill = pkgAfter.grading.per_skill;
+        }
+      } catch {}
+      const skillsPayload = (persistedPerSkill || []).map((s) => ({
         skill_id: s.skill_id,
         skill_name: s.skill_name,
         score: s.score,
