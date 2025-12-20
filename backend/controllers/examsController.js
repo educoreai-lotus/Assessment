@@ -666,7 +666,19 @@ exports.submitExam = async (req, res, next) => {
               passed,
               skills: skillsPayload,
             };
-            try { console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT]', { attempt_id: String(attemptIdNum), exam_id: String(examId), skills_count: skillsPayload.length }); } catch {}
+            // HARD INVARIANT: never send null identifiers
+            if (!payload.user_id || !payload.exam_id || !payload.attempt_id) {
+              try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', payload); } catch {}
+              return;
+            }
+            try {
+              console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT_PAYLOAD]', {
+                user_id: payload.user_id,
+                exam_id: payload.exam_id,
+                attempt_id: payload.attempt_id,
+                skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
+              });
+            } catch {}
             sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
               try { console.warn('[SKILLS_ENGINE][SUBMIT][FAILED]', { attempt_id: String(attemptIdNum), error: e?.message || String(e) }); } catch {}
             });
@@ -684,7 +696,19 @@ exports.submitExam = async (req, res, next) => {
               final_status: 'completed',
               skills: skillsPayload,
             };
-            try { console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT]', { attempt_id: String(attemptIdNum), exam_id: String(examId), skills_count: skillsPayload.length }); } catch {}
+            // HARD INVARIANT: never send null identifiers
+            if (!payload.user_id || !payload.exam_id || !payload.attempt_id) {
+              try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', payload); } catch {}
+              return;
+            }
+            try {
+              console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT_PAYLOAD]', {
+                user_id: payload.user_id,
+                exam_id: payload.exam_id,
+                attempt_id: payload.attempt_id,
+                skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
+              });
+            } catch {}
             sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
               try { console.warn('[SKILLS_ENGINE][SUBMIT][FAILED]', { attempt_id: String(attemptIdNum), error: e?.message || String(e) }); } catch {}
             });
