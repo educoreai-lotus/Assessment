@@ -2424,15 +2424,21 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     let questions = [];
     try {
       const uniqueSkills = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
+      const skillIdToNameMap = new Map((Array.isArray(skillsArray) ? skillsArray : []).map(s => [String(s.skill_id), String(s.skill_name || '')]));
       const items = [];
       if (exam_type === 'postcourse') {
-        for (const sid of uniqueSkills) { items.push({ skill_id: sid, type: 'mcq', difficulty: 'medium', humanLanguage: 'en' }); items.push({ skill_id: sid, type: 'open', difficulty: 'medium', humanLanguage: 'en' }); }
+        for (const sid of uniqueSkills) {
+          const sname = skillIdToNameMap.get(sid) || '';
+          items.push({ skill_id: sid, skill_name: sname, type: 'mcq', difficulty: 'medium', humanLanguage: 'en' });
+          items.push({ skill_id: sid, skill_name: sname, type: 'open', difficulty: 'medium', humanLanguage: 'en' });
+        }
       } else {
         for (let i = 0; i < questionCount; i += 1) {
           const sid = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
           if (!sid) continue;
           const type = i % 2 === 0 ? 'mcq' : 'open';
-          items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type });
+          const sname = skillIdToNameMap.get(sid) || '';
+          items.push({ skill_id: sid, skill_name: sname, difficulty: 'medium', humanLanguage: 'en', type });
         }
       }
       let generated = [];
@@ -2452,6 +2458,30 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         validated.push(normalizeAiQuestion({ ...q, hint: hints }));
       }
       questions = validateTheoreticalQuestions(validated);
+
+      // Strict per-skill enforcement: keep only questions that clearly match requested skill
+      try {
+        if (exam_type === 'baseline') {
+          const allowed = new Set(uniqueSkills);
+          const before = Array.isArray(questions) ? questions.length : 0;
+          const strictlyMatched = (Array.isArray(questions) ? questions : []).filter((q) => {
+            const sid = String(q?.skill_id || '').trim();
+            if (!allowed.has(sid)) return false;
+            const stem = String(q?.stem || q?.prompt?.question || '').toLowerCase();
+            const name = String(skillIdToNameMap.get(sid) || '').toLowerCase();
+            if (!name) return true; // if no name, rely on sid match
+            // Require mention of skill name token (e.g., "useEffect", "JOIN")
+            return stem.includes(name);
+          });
+          const after = strictlyMatched.length;
+          if (after === 0) {
+            console.log('[BASELINE][AI][STRICT_FILTER]', { removed: before, kept: 0, reason: 'no_strict_matches' });
+          } else if (after !== before) {
+            console.log('[BASELINE][AI][STRICT_FILTER]', { removed: before - after, kept: after });
+          }
+          if (after > 0) questions = strictlyMatched;
+        }
+      } catch {}
 
       // Emit per-skill question counts for baseline
       try {

@@ -46,6 +46,14 @@ Rules:
 - Focus on scenarios, trade-offs, decision-making, and consequences.
 - Do NOT include any HTML or markdown.
 
+Per-skill enforcement (CRITICAL):
+- For EACH input item, generate exactly ONE question that targets ONLY that item's skill.
+- If item.skill_name is present, the question MUST explicitly involve that named concept (e.g., "React useEffect", "SQL JOINs").
+- The question MUST be technical and concrete; NO managerial, business, or generic scenarios.
+- The question MUST be impossible to answer without knowing the target skill.
+- The output question MUST set "skill_id" equal to the item's "skill_id" verbatim.
+- If type is "mcq", produce 4 plausible options with exactly one correct answer.
+
 Output STRICT JSON only:
 {
   "questions": [
@@ -72,6 +80,9 @@ Hints:
     policy: {
       difficulty_policy: 'always medium for exams',
       type_mix: 'mcq or open as specified; if unspecified, choose reasonably',
+      per_skill: 'one question per item; strictly focused on the item.skill_id/skill_name',
+      forbid_generic: true,
+      forbid_business_nontechnical: true
     },
     items,
     seed,
