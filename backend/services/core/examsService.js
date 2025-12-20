@@ -1661,6 +1661,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
   const skillIdToName = new Map(
     skillsMeta.map((s) => [String(s.skill_id || s.id || ""), s.skill_name || s.name || ""]),
   );
+  try { console.log('[SUBMIT][SKILLS_SOURCE]', { skills_count: skillsMeta.length }); } catch {}
   const perSkill = [];
   for (const [sid, items] of bySkill.entries()) {
     const numericScores = items
@@ -2236,24 +2237,21 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         let fallbackUsed = false;
 
         // Fallback to competency_name-derived minimal skill if none returned
-        let effectiveSkills = skillsFromSe;
+        const effectiveSkills = Array.isArray(skillsFromSe) ? skillsFromSe : [];
         if (effectiveSkills.length === 0) {
-          const slug = String(ctx.competency_name || 'baseline').toLowerCase()
-            .replace(/[^a-z0-9]+/g, '_')
-            .replace(/^_+|_+$/g, '');
-          effectiveSkills = [{ skill_id: slug || 'baseline', skill_name: ctx.competency_name }];
-          fallbackUsed = true;
+          await setExamStatus(examId, { status: 'FAILED', error_message: 'baseline_requires_skills', failed_step: 'fetch_baseline_skills', progress: 100 });
+          try { console.error('[BASELINE][BUILD][ERROR]', { reason: 'Baseline build requires skills[]', exam_id: examId, attempt_id: attemptId }); } catch {}
+          return;
         }
         try {
-          if (fallbackUsed) {
-            console.log('[BASELINE][SKILLS_ENGINE][FALLBACK_USED]', { reason: 'no_skills_returned_after_retries' });
-          }
+          const first = effectiveSkills?.[0] || {};
           console.log('[BASELINE][SKILLS_ENGINE][FETCH][SUCCESS]', { skills_count: effectiveSkills.length });
-          console.log('[BASELINE][SKILLS_ENGINE][NORMALIZED]', { exam_id: examId, attempt_id: attemptId, skills_count: effectiveSkills.length, fallback_used: fallbackUsed });
+          console.log('[BASELINE][SKILLS_ENGINE][NORMALIZED]', { exam_id: examId, attempt_id: attemptId, skills_count: effectiveSkills.length });
+          console.log('[BASELINE][BUILD][SKILLS_RECEIVED]', { skills_count: effectiveSkills.length, first_skill_name: first?.skill_name || null });
         } catch {}
 
-        // Use Skills Engine skills as source of truth for baseline build
-        skillsPayload = { skills: Array.isArray(effectiveSkills) ? effectiveSkills : [] };
+        // Use Skills Engine skills as canonical for baseline build
+        skillsPayload = { skills: effectiveSkills };
         try {
           const first = effectiveSkills?.[0] || {};
           console.log('[BASELINE][BUILD][SKILLS_SOURCE]', {
