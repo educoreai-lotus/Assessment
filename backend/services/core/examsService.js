@@ -670,34 +670,26 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
 
   // Build ExamPackage in Mongo
   // Phase 08.2 – Build coding questions via DevLab envelope (MANDATORY)
+  // Build DevLab skills array (id + name), de-duplicated by id
   const skillsForCoding = (() => {
-    const entries = [];
-    const push = (sid, sname) => {
+    const out = [];
+    const seen = new Set();
+    const add = (sid, sname) => {
       const idStr = String(sid || '').trim();
-      if (!idStr) return;
+      if (!idStr || seen.has(idStr)) return;
+      seen.add(idStr);
       const nameStr = typeof sname === 'string' && sname.trim() !== '' ? sname : undefined;
-      entries.push({
-        // backward compatibility keys
-        id: idStr,
-        name: nameStr,
-        // explicit keys for modern DevLab prompts
-        skill_id: idStr,
-        skill_name: nameStr,
-      });
+      // Backward-compatible keys (id/name) + explicit keys (skill_id/skill_name)
+      out.push({ id: idStr, name: nameStr, skill_id: idStr, skill_name: nameStr });
     };
     if (Array.isArray(skillsArray) && skillsArray.length > 0) {
-      for (const s of skillsArray) push(s.skill_id, s.skill_name);
+      for (const s of skillsArray) add(s?.skill_id, s?.skill_name);
     } else if (Array.isArray(coverageMap) && coverageMap.length > 0) {
       for (const item of coverageMap) {
-        for (const s of (item.skills || [])) push(s.skill_id, s.skill_name);
+        for (const s of (item?.skills || [])) add(s?.skill_id, s?.skill_name);
       }
     }
-    // de-duplicate by id
-    const uniq = new Map();
-    for (const e of entries) {
-      if (!uniq.has(e.id)) uniq.set(e.id, e);
-    }
-    return Array.from(uniq.values());
+    return out;
   })();
   // eslint-disable-next-line no-console
   console.debug("Coding generation skills:", skillsForCoding);
@@ -2895,5 +2887,6 @@ module.exports = {
   submitAttempt,
   recomputeFinalResults,
 };
+
 
 
