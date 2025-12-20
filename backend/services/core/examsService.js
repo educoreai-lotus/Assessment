@@ -1411,11 +1411,17 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
   } catch {}
 
   // Helper: map question by id
-  const qById = new Map(
-    (Array.isArray(examPackage?.questions) ? examPackage.questions : []).map(
-      (q) => [String(q.question_id || ""), q],
-    ),
-  );
+  const pkgQuestions = Array.isArray(examPackage?.questions) ? examPackage.questions : [];
+  const qById = new Map(pkgQuestions.map((q) => [String(q.question_id || ""), q]));
+  try {
+    console.log('[GRADE][PACKAGE_INDEX]', {
+      exam_id: attempt.exam_id,
+      attempt_id: attemptIdNum,
+      package_questions_count: pkgQuestions.length,
+      sample_question_ids: pkgQuestions.slice(0, 5).map((x) => x.id ?? x.question_id ?? null),
+      sample_skill_ids: pkgQuestions.slice(0, 5).map((x) => x.skill_id ?? null),
+    });
+  } catch {}
   function normalizeSkillIdFrom(answerItem, questionItem) {
     const a = String(answerItem?.skill_id || "").trim();
     if (a) return a;
@@ -1428,10 +1434,12 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
 
   // 5) Theoretical grading (internal) - skip unknown questions
   const knownTheoreticalAnswers = theoreticalAnswers.filter((ans) => {
-    const qid = String(ans?.question_id || "");
-    const known = qById.has(qid);
+    const answerQuestionId = String(ans?.question_id ?? ans?.id ?? "");
+    const hasById = qById.has(answerQuestionId);
+    const hasByIndex = Number.isFinite(Number(ans?.index)) && pkgQuestions[Number(ans.index)];
+    const known = hasById || hasByIndex;
     if (!known) {
-      try { console.log("[WARN][SUBMIT] Question not found in package", { question_id: qid }); } catch {}
+      try { console.log("[WARN][SUBMIT] Question not found in package", { question_id: answerQuestionId }); } catch {}
     }
     return known;
   });
@@ -1449,11 +1457,32 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       }
     }
     for (const ans of items) {
-      const qid = String(ans.question_id || "");
-      const q = qById.get(qid);
+      const answerQuestionId = String(ans?.question_id ?? ans?.id ?? "");
+      let q = qById.get(answerQuestionId);
+      if (!q && Number.isFinite(Number(ans?.index))) {
+        const idx = Number(ans.index);
+        if (idx >= 0 && idx < pkgQuestions.length) {
+          q = pkgQuestions[idx];
+        }
+      }
+      const resolvedQuestionId = q ? (q.id ?? q.question_id ?? null) : null;
       const type = String(ans.type || "").toLowerCase();
       const rawAnswer = ans.answer != null ? String(ans.answer) : "";
       const skillId = normalizeSkillIdFrom(ans, q);
+      try {
+        console.log('[GRADE][MAP]', {
+          exam_id: attempt.exam_id,
+          attempt_id: attemptIdNum,
+          answer_question_id: ans?.question_id ?? ans?.id ?? null,
+          answer_skill_id: ans?.skill_id ?? null,
+          has_answer_text: !!(ans?.answer && String(ans.answer).trim()),
+          resolved_question_found: !!q,
+          resolved_question_id: resolvedQuestionId,
+          resolved_question_skill_id: q?.skill_id ?? null,
+          used_skill_id: skillId,
+        });
+      } catch {}
+      const qidOut = String(resolvedQuestionId || answerQuestionId || "");
       // accumulator for per-skill logging
       // computed later as well, but we track running sums for audit
       try {
@@ -1464,9 +1493,10 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
         const correct = q && q.prompt && q.prompt.correct_answer != null
           ? String(q.prompt.correct_answer)
           : "";
-        const ok = rawAnswer === correct;
+        const norm = (s) => String(s || '').trim().toLowerCase();
+        const ok = norm(rawAnswer) === norm(correct);
         const pushObj = {
-          question_id: qid,
+          question_id: qidOut,
           skill_id: skillId,
           type: "mcq",
           raw_answer: rawAnswer,
@@ -1477,7 +1507,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
         graded.push(pushObj);
         try {
           console.log('[GRADE][THEORY][ANSWER]', {
-            question_id: qid,
+            question_id: qidOut,
             skill_id: skillId,
             user_answer: rawAnswer,
             correct_answer: correct,
@@ -1515,7 +1545,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
             const finalScore = Number.isFinite(aiScore) ? Math.max(0, Math.min(100, aiScore)) : 0;
             const status = finalScore >= passing ? "acquired" : "not_acquired";
             const pushObj = {
-              question_id: qid,
+              question_id: qidOut,
               skill_id: skillId,
               type: "open",
               raw_answer: rawAnswer,
@@ -1526,7 +1556,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
             graded.push(pushObj);
             try {
               console.log('[GRADE][THEORY][ANSWER]', {
-                question_id: qid,
+                question_id: qidOut,
                 skill_id: skillId,
                 user_answer: rawAnswer,
                 correct_answer: correctAnswer,
@@ -1572,7 +1602,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
         }
 
         const pushObj = {
-          question_id: qid,
+          question_id: qidOut,
           skill_id: skillId,
           type: "open",
           raw_answer: rawAnswer,
@@ -1583,7 +1613,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
         graded.push(pushObj);
         try {
           console.log('[GRADE][THEORY][ANSWER]', {
-            question_id: qid,
+            question_id: qidOut,
             skill_id: skillId,
             user_answer: rawAnswer,
             correct_answer: correctAnswer,
