@@ -585,6 +585,7 @@ exports.submitExam = async (req, res, next) => {
 
     const response = await submitAttempt({
       attempt_id: attemptIdNum,
+      exam_id: Number(examId),
       answers,
       devlab: {
         answers: Array.isArray(devlabBlock?.answers) ? devlabBlock.answers : undefined,
@@ -618,13 +619,12 @@ exports.submitExam = async (req, res, next) => {
       } catch {}
     }
 
-    // Fire-and-forget Skills Engine result reporting (baseline and postcourse)
+    // Fire-and-forget Skills Engine result reporting (postcourse only; baseline handled in service)
     try {
       setImmediate(async () => {
         try {
-          // Load exam type and course_name for envelope
           const metaRes = await pool.query(
-            `SELECT e.exam_type, e.user_id, e.user_uuid, e.course_name
+            `SELECT e.exam_type, e.course_name
              FROM exams e
              WHERE e.exam_id = $1`,
             [Number(examId)],
@@ -632,69 +632,24 @@ exports.submitExam = async (req, res, next) => {
           const examType = metaRes?.rows?.[0]?.exam_type || null;
           const courseName = metaRes?.rows?.[0]?.course_name || null;
 
-          // Resolve user_id strictly by attempt_id (baseline and postcourse)
-          const ctx = await ExamContext.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
-          if (!ctx || !ctx.user_id) {
-            try { console.error('[SUBMIT][CTX_MISSING]', { attempt_id: String(attemptIdNum) }); } catch {}
-            return; // do NOT send anything to skills-engine
-          }
-          try { console.log('[SUBMIT][CTX_RESOLVED]', { attempt_id: String(attemptIdNum), user_id: ctx.user_id }); } catch {}
-
-          // Build per-skill payload
-          const perSkill = Array.isArray(response?.per_skill) ? response.per_skill : [];
-          const skillsPayload = perSkill.map((s) => ({
-            skill_id: s?.skill_id,
-            skill_name: s?.skill_name || s?.skill_id,
-            score: Number.isFinite(Number(s?.score)) ? Number(s.score) : 0,
-            status: s?.status || (Number(s?.score) >= 70 ? 'acquired' : 'failed'),
-          }));
-
-          const passing = 70;
-          const finalGrade = Number.isFinite(Number(response?.final_grade)) ? Number(response.final_grade) : 0;
-          const passed = finalGrade >= passing;
-
-          const { sendToCoordinator } = require('../services/integrations/envelopeSender');
-          if (examType === 'baseline') {
-            // Build baseline payload with the required shape; then populate identifiers from ExamContext
-            const payload = {
-              action: 'baseline-exam-result',
-              user_id: undefined,      // will populate from ctx below
-              exam_type: 'baseline',
-              exam_id: undefined,      // will populate from runtime below
-              passing_grade: passing,
-              final_grade: finalGrade,
-              passed,
-              skills: skillsPayload,
-            };
-            // Populate identifiers from context + runtime (do not change shape)
-            payload.user_id = ctx.user_id;
-            payload.exam_id = String(examId);
-
-            // HARD INVARIANT: never send null identifiers (baseline: only user_id, exam_id are required)
-            if (!payload.user_id || !payload.exam_id) {
-              try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', payload); } catch {}
+          if (examType === 'postcourse') {
+            // Resolve user_id strictly by attempt_id
+            const ctx = await ExamContext.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
+            if (!ctx || !ctx.user_id) {
+              try { console.error('[SUBMIT][CTX_MISSING]', { attempt_id: String(attemptIdNum) }); } catch {}
               return;
             }
-            try {
-              console.log('[SUBMIT][SE_PAYLOAD_READY]', {
-                user_id: payload.user_id,
-                exam_id: payload.exam_id,
-                exam_type: payload.exam_type,
-                skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
-              });
-            } catch {}
-            try {
-              console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT_PAYLOAD]', {
-                user_id: payload.user_id,
-                exam_id: payload.exam_id,
-                attempt_id: String(attemptIdNum),
-                skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0
-              });
-            } catch {}
-            sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
-              try { console.warn('[SKILLS_ENGINE][SUBMIT][FAILED]', { attempt_id: String(attemptIdNum), error: e?.message || String(e) }); } catch {}
-            });
-          } else if (examType === 'postcourse') {
+            const perSkill = Array.isArray(response?.per_skill) ? response.per_skill : [];
+            const skillsPayload = perSkill.map((s) => ({
+              skill_id: s?.skill_id,
+              skill_name: s?.skill_name || s?.skill_id,
+              score: Number.isFinite(Number(s?.score)) ? Number(s.score) : 0,
+              status: s?.status || (Number(s?.score) >= 70 ? 'acquired' : 'failed'),
+            }));
+            const passing = 70;
+            const finalGrade = Number.isFinite(Number(response?.final_grade)) ? Number(response.final_grade) : 0;
+            const passed = finalGrade >= passing;
+            const { sendToCoordinator } = require('../services/integrations/envelopeSender');
             const payload = {
               action: 'postcourse-exam-result',
               user_id: ctx.user_id,
@@ -713,14 +668,8 @@ exports.submitExam = async (req, res, next) => {
               try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', payload); } catch {}
               return;
             }
-            try {
-              console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT_PAYLOAD]', {
-                user_id: payload.user_id,
-                exam_id: payload.exam_id,
-                attempt_id: payload.attempt_id,
-                skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
-              });
-            } catch {}
+            try { console.log('[SUBMIT][SE_PAYLOAD_READY]', { user_id: payload.user_id, exam_id: payload.exam_id, exam_type: payload.exam_type, skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0 }); } catch {}
+            try { console.log('[OUTBOUND][SKILLS_ENGINE][SEND]', { user_id: payload.user_id, exam_id: payload.exam_id, skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0 }); } catch {}
             sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
               try { console.warn('[SKILLS_ENGINE][SUBMIT][FAILED]', { attempt_id: String(attemptIdNum), error: e?.message || String(e) }); } catch {}
             });
