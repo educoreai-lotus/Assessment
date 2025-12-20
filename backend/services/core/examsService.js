@@ -601,7 +601,7 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   if (isTest && (!Number.isFinite(questionCount) || questionCount < 2)) {
     questionCount = 2;
   }
-  const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
+  const durationMinutes = Math.max(15, Number.isFinite(questionCount) ? questionCount * 4 : 0);
   // Expires-at is now set on start, not on creation
   const expiresAtIso = null;
 
@@ -2361,7 +2361,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       questionCount = uniqueSkillIds.length * 2;
     }
     if (isTest && (!Number.isFinite(questionCount) || questionCount < 2)) questionCount = 2;
-    const durationMinutes = Number.isFinite(questionCount) ? questionCount * 4 : 0;
+    const durationMinutes = Math.max(15, Number.isFinite(questionCount) ? questionCount * 4 : 0);
     try { await pool.query(`UPDATE exam_attempts SET policy_snapshot = $1::jsonb, duration_minutes = $2 WHERE attempt_id = $3`, [JSON.stringify(policy || {}), durationMinutes || null, attemptId]); } catch {}
     await setExamStatus(examId, { status: 'PREPARING', progress: 40 });
 
