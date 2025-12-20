@@ -2142,10 +2142,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         try { console.log('[BASELINE][SKILLS_ENGINE][FETCH]', { exam_id: examId, attempt_id: attemptId, user_id: ctx.user_id, competency_name: ctx.competency_name }); } catch {}
         const { sendToCoordinator } = require('../integrations/envelopeSender');
         const { normalizeSkillsEngineResponse } = require('../gateways/skillsEngineGateway');
-        let resp;
-        try {
-          // Enforce 10s timeout for baseline skills fetch
-          const timeoutMs = 10000;
+        const timeoutMs = 120000;
+        async function fetchWithTimeout() {
           const coreCall = sendToCoordinator({ targetService: 'skills-engine', payload });
           const timeoutCall = new Promise((_, reject) => setTimeout(() => reject(new Error('SkillsEngineTimeout')), timeoutMs));
           const ret = await Promise.race([coreCall, timeoutCall]);
@@ -2153,20 +2151,44 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           if (typeof ret === 'string') respString = ret;
           else if (ret && typeof ret.data === 'string') respString = ret.data;
           else respString = JSON.stringify((ret && ret.data) || {});
-          resp = JSON.parse(respString || '{}');
+          return JSON.parse(respString || '{}');
+        }
+
+        let skillsFromSe = [];
+        let attemptIndex = 1;
+        try { console.log('[BASELINE][SKILLS_ENGINE][FETCH][ATTEMPT_1]', { exam_id: examId, attempt_id: attemptId, timeout_ms: timeoutMs }); } catch {}
+        try {
+          const resp1 = await fetchWithTimeout();
+          const normalized1 = normalizeSkillsEngineResponse(resp1 || {});
+          skillsFromSe = Array.isArray(normalized1?.skills) ? normalized1.skills : [];
         } catch (e) {
           if (String(e?.message || '') === 'SkillsEngineTimeout') {
-            try { console.warn('[BASELINE][SKILLS_ENGINE][TIMEOUT]', { exam_id: examId, attempt_id: attemptId }); } catch {}
-            resp = {}; // proceed with fallback below
+            try { console.warn('[BASELINE][SKILLS_ENGINE][FETCH][TIMEOUT_1]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+            attemptIndex = 2;
           } else {
             try { console.error('[BASELINE][SKILLS_ENGINE][FETCH_ERROR]', e?.message || e); } catch {}
             await setExamStatus(examId, { status: 'FAILED', error_message: 'fetch_failed', failed_step: 'fetch_baseline_skills', progress: 100 });
             return;
           }
         }
-        // Normalize Skills Engine response (supports multiple shapes)
-        const normalized = normalizeSkillsEngineResponse(resp || {});
-        const skillsFromSe = Array.isArray(normalized?.skills) ? normalized.skills : [];
+
+        if ((skillsFromSe || []).length === 0 && attemptIndex === 2) {
+          try { console.log('[BASELINE][SKILLS_ENGINE][FETCH][ATTEMPT_2]', { exam_id: examId, attempt_id: attemptId, timeout_ms: timeoutMs }); } catch {}
+          try {
+            const resp2 = await fetchWithTimeout();
+            const normalized2 = normalizeSkillsEngineResponse(resp2 || {});
+            skillsFromSe = Array.isArray(normalized2?.skills) ? normalized2.skills : [];
+          } catch (e2) {
+            if (String(e2?.message || '') === 'SkillsEngineTimeout') {
+              try { console.warn('[BASELINE][SKILLS_ENGINE][FETCH][TIMEOUT_2]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+            } else {
+              try { console.error('[BASELINE][SKILLS_ENGINE][FETCH_ERROR]', e2?.message || e2); } catch {}
+              await setExamStatus(examId, { status: 'FAILED', error_message: 'fetch_failed', failed_step: 'fetch_baseline_skills', progress: 100 });
+              return;
+            }
+          }
+        }
+
         let fallbackUsed = false;
 
         // Fallback to competency_name-derived minimal skill if none returned
@@ -2178,7 +2200,13 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           effectiveSkills = [{ skill_id: slug || 'baseline', skill_name: ctx.competency_name }];
           fallbackUsed = true;
         }
-        try { console.log('[BASELINE][SKILLS_ENGINE][NORMALIZED]', { exam_id: examId, attempt_id: attemptId, skills_count: effectiveSkills.length, fallback_used: fallbackUsed }); } catch {}
+        try {
+          if (fallbackUsed) {
+            console.log('[BASELINE][SKILLS_ENGINE][FALLBACK_USED]', { reason: 'no_skills_returned_after_retries' });
+          }
+          console.log('[BASELINE][SKILLS_ENGINE][FETCH][SUCCESS]', { skills_count: effectiveSkills.length });
+          console.log('[BASELINE][SKILLS_ENGINE][NORMALIZED]', { exam_id: examId, attempt_id: attemptId, skills_count: effectiveSkills.length, fallback_used: fallbackUsed });
+        } catch {}
 
         skillsPayload = { user_id: ctx.user_id, skills: effectiveSkills };
         // Baseline: static policy

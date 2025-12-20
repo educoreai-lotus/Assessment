@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { examApi } from '../services/examApi';
+import { useRef } from 'react';
 
 export default function ExamIntro() {
   const [searchParams] = useSearchParams();
@@ -18,6 +19,7 @@ export default function ExamIntro() {
   const [ack, setAck] = useState(false);
   const [ctxSaved, setCtxSaved] = useState(examType !== 'baseline');
   const [ctxError, setCtxError] = useState('');
+  const didPostContext = useRef(false);
 
   const title = useMemo(() => {
     if (examType === 'postcourse') return 'Post-Course Assessment';
@@ -34,6 +36,8 @@ export default function ExamIntro() {
       setCtxSaved(false);
       return;
     }
+    if (didPostContext.current) return;
+    didPostContext.current = true;
     (async () => {
       try {
         await examApi.saveContext({
@@ -43,6 +47,8 @@ export default function ExamIntro() {
         });
         // eslint-disable-next-line no-console
         console.log('[INTRO][CONTEXT_SAVED]', { exam_type: 'baseline', user_id: uid, competency_name: decodeURIComponent(compName) });
+        // eslint-disable-next-line no-console
+        console.log('[FE][CONTEXT][POSTED_ONCE]', { userId: uid, skillName: decodeURIComponent(compName) });
         setCtxSaved(true);
         setCtxError('');
       } catch {
