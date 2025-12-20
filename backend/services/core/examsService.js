@@ -1244,7 +1244,7 @@ async function getPackageByAttemptId(attempt_id) {
   return doc;
 }
 
-async function submitAttempt({ attempt_id, answers, devlab }) {
+async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
   // 1) Load attempt + exam
   const attemptIdNum = normalizeToInt(attempt_id);
   if (attemptIdNum == null) {
@@ -1837,37 +1837,81 @@ async function submitAttempt({ attempt_id, answers, devlab }) {
   // 3.1) Directory – disabled for postcourse by design (Course Builder is the only sink)
 
   // 3.2) Skills Engine
-  // Use original user_id from ExamPackage (string/UUID) if available; fallback to numeric
-  const originalUserId =
-    (examPackage && examPackage.user && typeof examPackage.user.user_id === 'string')
-      ? examPackage.user.user_id
-      : null;
-  const payloadSkills = {
-    user_id: originalUserId != null ? originalUserId : (attempt.user_id != null ? Number(attempt.user_id) : null),
-    exam_type: examType,
-    passing_grade: Number(passing),
-    final_grade: Number(finalGrade),
-    passed,
-    skills: (perSkill || []).map((s) => ({
-      skill_id: s.skill_id,
-      skill_name: s.skill_name,
-      score: s.score,
-      status: s.status,
-    })),
-  };
-  if (examType === "postcourse") {
-    payloadSkills.course_id = attempt.course_id != null ? Number(attempt.course_id) : null;
-    payloadSkills.course_name = examPackage?.metadata?.course_name || null;
-    payloadSkills.coverage_map = examPackage?.coverage_map || [];
-    payloadSkills.final_status = "completed";
-  }
-  if (examType !== "postcourse") {
-    await pool.query(
-      `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-      ["skills_engine_results", JSON.stringify(payloadSkills), "skills_engine"],
-    );
-    safePushSkillsResults(payloadSkills).catch(() => {});
-  }
+  try {
+    const { ExamContext } = require('../../models');
+    const ctx = await ExamContext.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
+    if (!ctx || !ctx.user_id) {
+      try { console.error('[SUBMIT][CTX_MISSING]', { attempt_id: String(attemptIdNum) }); } catch {}
+    } else {
+      const examIdRuntime = Number.isFinite(Number(exam_id)) ? Number(exam_id) : Number(attempt.exam_id);
+      const skillsPayload = (perSkill || []).map((s) => ({
+        skill_id: s.skill_id,
+        skill_name: s.skill_name,
+        score: s.score,
+        status: s.status,
+      }));
+      const payload =
+        examType === 'postcourse'
+          ? {
+              action: 'postcourse-exam-result',
+              user_id: ctx.user_id,
+              exam_type: 'postcourse',
+              exam_id: String(examIdRuntime),
+              passing_grade: Number(passing),
+              final_grade: Number(finalGrade),
+              passed,
+              final_status: 'completed',
+              course_name: examPackage?.metadata?.course_name || null,
+              skills: skillsPayload,
+            }
+          : {
+              action: 'baseline-exam-result',
+              user_id: ctx.user_id,
+              exam_type: 'baseline',
+              exam_id: String(examIdRuntime),
+              passing_grade: Number(passing),
+              final_grade: Number(finalGrade),
+              passed,
+              skills: skillsPayload,
+            };
+
+      // Guard
+      if (!payload.user_id || !payload.exam_id) {
+        try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', { user_id: payload.user_id, exam_id: payload.exam_id, attempt_id: String(attemptIdNum) }); } catch {}
+      } else {
+        try { console.log('[SUBMIT][CTX_RESOLVED]', { attempt_id: String(attemptIdNum), user_id: ctx.user_id }); } catch {}
+        try {
+          console.log('[SUBMIT][SE_PAYLOAD_READY]', {
+            user_id: payload.user_id,
+            exam_id: payload.exam_id,
+            exam_type: payload.exam_type,
+            skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
+            final_grade: Number(finalGrade),
+            passed,
+          });
+        } catch {}
+        try { console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][SEND]', { user_id: payload.user_id, exam_id: payload.exam_id, exam_type: payload.exam_type, skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0 }); } catch {}
+
+        // Optional outbox write for observability
+        try {
+          await pool.query(
+            `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
+            ["skills_engine_results", JSON.stringify(payload), "skills_engine"],
+          );
+        } catch {}
+
+        // Fire-and-forget send via Coordinator
+        try {
+          const { sendToCoordinator } = require('../integrations/envelopeSender');
+          sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
+            try { console.warn('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][FAILED]', { exam_id: payload.exam_id, error: e?.message || String(e) }); } catch {}
+          });
+        } catch (e) {
+          try { console.warn('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][FAILED]', { exam_id: payload.exam_id, error: e?.message || String(e) }); } catch {}
+        }
+      }
+    }
+  } catch {}
 
   // 3.3) Course Builder (postcourse only)
   if (examType === "postcourse") {
@@ -2208,6 +2252,17 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           console.log('[BASELINE][SKILLS_ENGINE][NORMALIZED]', { exam_id: examId, attempt_id: attemptId, skills_count: effectiveSkills.length, fallback_used: fallbackUsed });
         } catch {}
 
+        // Use Skills Engine skills as source of truth for baseline build
+        skillsPayload = { skills: Array.isArray(effectiveSkills) ? effectiveSkills : [] };
+        try {
+          const first = effectiveSkills?.[0] || {};
+          console.log('[BASELINE][BUILD][SKILLS_SOURCE]', {
+            skills_count: Array.isArray(effectiveSkills) ? effectiveSkills.length : 0,
+            first_skill_id: first?.skill_id || null,
+            first_skill_name: first?.skill_name || null,
+          });
+        } catch {}
+
         skillsPayload = { user_id: ctx.user_id, skills: effectiveSkills };
         // Baseline: static policy
         policy = { passing_grade: 70 };
@@ -2353,6 +2408,21 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         validated.push(normalizeAiQuestion({ ...q, hint: hints }));
       }
       questions = validateTheoreticalQuestions(validated);
+
+      // Emit per-skill question counts for baseline
+      try {
+        if (exam_type === 'baseline') {
+          const perSkillCounts = new Map();
+          for (const q of questions) {
+            const sid = String(q?.skill_id || '').trim();
+            if (!sid) continue;
+            perSkillCounts.set(sid, (perSkillCounts.get(sid) || 0) + 1);
+          }
+          for (const [sid, cnt] of perSkillCounts.entries()) {
+            console.log('[BASELINE][BUILD][QUESTIONS_PER_SKILL]', { skill_id: sid, questions_count: cnt });
+          }
+        }
+      } catch {}
     } catch (e) {
       try {
         const { buildMockQuestions } = require("../mocks/theoryMock");
@@ -2412,6 +2482,9 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         expires_at_iso: null,
         devlab_ui: devlabUi,
       });
+      try {
+        console.log('[BASELINE][BUILD][PACKAGE_WRITE]', { exam_id: examId, attempt_id: attemptId, skills_count: Array.isArray(skillsArray) ? skillsArray.length : 0 });
+      } catch {}
       try { console.log('[PACKAGE][WRITE][AFTER]', { exam_id: examId, attempt_id: attemptId, package_id: String(pkg?._id || '') }); } catch {}
       await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
       try {
