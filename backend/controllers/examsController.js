@@ -115,10 +115,24 @@ exports.getExam = async (req, res, next) => {
     if (!pkg) {
       return res.status(202).json({ package_ready: false });
     }
-    return res.status(200).json({
+  try {
+    console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });
+  } catch {}
+  const responsePayload = {
       package_ready: true,
       ...pkg,
+  };
+  try {
+    const perSkill = Array.isArray(pkg?.grading?.per_skill) ? pkg.grading.per_skill : (Array.isArray(pkg?.metadata?.skills) ? pkg.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
+    const finalGrade = pkg?.grading?.final_grade != null ? Number(pkg.grading.final_grade) : null;
+    const passed = pkg?.grading?.passed != null ? !!pkg.grading.passed : null;
+    console.log('[RESULTS][API][RESPONSE]', {
+      per_skill: perSkill.map(s => ({ skill_id: s.skill_id, score: s.score ?? null, status: s.status ?? null })),
+      final_grade: finalGrade,
+      passed,
     });
+  } catch {}
+  return res.status(200).json(responsePayload);
   } catch (err) {
     return next(err);
   }

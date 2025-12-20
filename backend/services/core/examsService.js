@@ -1436,6 +1436,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
     return known;
   });
   async function gradeTheoreticalAnswers(pkg, items) {
+    try { console.log('[GRADE][THEORY][START]', { attempt_id: attemptIdNum }); } catch {}
     const graded = [];
     const openAnswerGradingMode = String(policy?.open_answer_grading || process.env.OPEN_ANSWER_GRADING || 'keywords').toLowerCase();
     const useAiGrading = openAnswerGradingMode === 'ai';
@@ -1453,13 +1454,18 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       const type = String(ans.type || "").toLowerCase();
       const rawAnswer = ans.answer != null ? String(ans.answer) : "";
       const skillId = normalizeSkillIdFrom(ans, q);
+      // accumulator for per-skill logging
+      // computed later as well, but we track running sums for audit
+      try {
+        // no-op init, we accumulate on push below
+      } catch {}
       if (type === "mcq") {
         // Compare only against prompt.correct_answer
         const correct = q && q.prompt && q.prompt.correct_answer != null
           ? String(q.prompt.correct_answer)
           : "";
         const ok = rawAnswer === correct;
-        graded.push({
+        const pushObj = {
           question_id: qid,
           skill_id: skillId,
           type: "mcq",
@@ -1467,7 +1473,18 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
           score: ok ? 100 : 0,
           status: ok ? "acquired" : "not_acquired",
           source: "theoretical",
-        });
+        };
+        graded.push(pushObj);
+        try {
+          console.log('[GRADE][THEORY][ANSWER]', {
+            question_id: qid,
+            skill_id: skillId,
+            user_answer: rawAnswer,
+            correct_answer: correct,
+            is_correct: ok,
+            score_assigned: pushObj.score,
+          });
+        } catch {}
       } else {
         // OPEN-TEXT
         const trimmed = rawAnswer.trim();
@@ -1497,7 +1514,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
             const aiScore = Number(aiParsed?.score);
             const finalScore = Number.isFinite(aiScore) ? Math.max(0, Math.min(100, aiScore)) : 0;
             const status = finalScore >= passing ? "acquired" : "not_acquired";
-            graded.push({
+            const pushObj = {
               question_id: qid,
               skill_id: skillId,
               type: "open",
@@ -1505,7 +1522,18 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
               score: finalScore,
               status,
               source: "theoretical",
-            });
+            };
+            graded.push(pushObj);
+            try {
+              console.log('[GRADE][THEORY][ANSWER]', {
+                question_id: qid,
+                skill_id: skillId,
+                user_answer: rawAnswer,
+                correct_answer: correctAnswer,
+                is_correct: finalScore >= 70,
+                score_assigned: pushObj.score,
+              });
+            } catch {}
             continue;
           } catch {
             // fall through to keyword-based fallback
@@ -1543,7 +1571,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
           status = "not_acquired";
         }
 
-        graded.push({
+        const pushObj = {
           question_id: qid,
           skill_id: skillId,
           type: "open",
@@ -1551,9 +1579,30 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
           score,
           status,
           source: "theoretical",
-        });
+        };
+        graded.push(pushObj);
+        try {
+          console.log('[GRADE][THEORY][ANSWER]', {
+            question_id: qid,
+            skill_id: skillId,
+            user_answer: rawAnswer,
+            correct_answer: correctAnswer,
+            is_correct: score >= 70,
+            score_assigned: pushObj.score,
+          });
+        } catch {}
       }
     }
+    // Emit running per-skill accumulation for audit
+    try {
+      const accum = new Map();
+      for (const g of graded) {
+        const sid = String(g.skill_id || '').trim();
+        if (!sid) continue;
+        accum.set(sid, (accum.get(sid) || 0) + Number(g.score || 0));
+        console.log('[GRADE][THEORY][PER_SKILL_ACCUM]', { skill_id: sid, accumulated_score: accum.get(sid) });
+      }
+    } catch {}
     return graded;
   }
 
@@ -1568,6 +1617,15 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       codingAnswers,
       attempt: { attempt_id: attemptIdNum },
     });
+  try {
+    const skillIds = (Array.isArray(gradingResults) ? gradingResults : []).map(r => String(r.skill_id || '')).filter(Boolean);
+    console.log('[GRADE][DEVLAB][RECEIVED]', {
+      attempt_id: attemptIdNum,
+      exam_id: attempt.exam_id,
+      devlab_score: aggregated && typeof aggregated.score_total !== 'undefined' ? aggregated.score_total : null,
+      devlab_skills_if_any: Array.from(new Set(skillIds)),
+    });
+  } catch {}
   const codingGraded = (Array.isArray(gradingResults) ? gradingResults : []).map((r) => {
     const s = typeof r.score === "number" ? r.score : 0;
     const m = typeof r.max_score === "number" ? r.max_score : 1;
@@ -1639,6 +1697,15 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
             ? Number(aggregated.max_total)
             : 0;
         await examPackageDoc.save();
+        try {
+          console.log('[GRADE][DEVLAB][PERSIST]', {
+            destination: 'mongo',
+            answers_count: Array.isArray(codingAnswers) ? codingAnswers.length : 0,
+            grading_count: Array.isArray(gradingResults) ? gradingResults.length : 0,
+            score_total: Number(examPackageDoc.coding_score_total || 0),
+            score_max: Number(examPackageDoc.coding_score_max || 0),
+          });
+        } catch {}
       }
     } catch {}
   }
@@ -1829,6 +1896,12 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
         },
         { upsert: false },
       );
+      try {
+        console.log('[GRADE][FINAL][PER_SKILL_RESULTS]', {
+          attempt_id: attemptIdNum,
+          per_skill: perSkill.map((s) => ({ skill_id: s.skill_id, score: s.score, status: s.status })),
+        });
+      } catch {}
     } catch {}
   }
 
@@ -2642,3 +2715,4 @@ module.exports = {
   submitAttempt,
   recomputeFinalResults,
 };
+
