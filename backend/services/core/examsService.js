@@ -2204,8 +2204,31 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         try { console.log('[BASELINE][SKILLS_ENGINE][FETCH][ATTEMPT_1]', { exam_id: examId, attempt_id: attemptId, timeout_ms: timeoutMs }); } catch {}
         try {
           const resp1 = await fetchWithTimeout();
-          const normalized1 = normalizeSkillsEngineResponse(resp1 || {});
-          skillsFromSe = Array.isArray(normalized1?.skills) ? normalized1.skills : [];
+          // Robust extraction across shapes
+          let extracted = [];
+          let pathUsed = null;
+          try {
+            if (resp1 && resp1.response && resp1.response.answer && Array.isArray(resp1.response.answer.skills)) {
+              extracted = resp1.response.answer.skills;
+              pathUsed = 'response.answer.skills';
+            } else if (resp1 && resp1.answer && Array.isArray(resp1.answer.skills)) {
+              extracted = resp1.answer.skills;
+              pathUsed = 'answer.skills';
+            } else if (resp1 && Array.isArray(resp1.skills)) {
+              extracted = resp1.skills;
+              pathUsed = 'skills';
+            } else if (resp1 && resp1.response && Array.isArray(resp1.response.skills)) {
+              extracted = resp1.response.skills;
+              pathUsed = 'response.skills';
+            }
+          } catch {}
+          if (!Array.isArray(extracted) || extracted.length === 0) {
+            const normalized1 = normalizeSkillsEngineResponse(resp1 || {});
+            extracted = Array.isArray(normalized1?.skills) ? normalized1.skills : [];
+            if (!pathUsed) pathUsed = 'normalized';
+          }
+          try { console.log('[BASELINE][SKILLS_ENGINE][EXTRACT]', { path_used: pathUsed, skills_count: Array.isArray(extracted) ? extracted.length : 0 }); } catch {}
+          skillsFromSe = Array.isArray(extracted) ? extracted : [];
         } catch (e) {
           if (String(e?.message || '') === 'SkillsEngineTimeout') {
             try { console.warn('[BASELINE][SKILLS_ENGINE][FETCH][TIMEOUT_1]', { exam_id: examId, attempt_id: attemptId }); } catch {}
@@ -2221,8 +2244,31 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           try { console.log('[BASELINE][SKILLS_ENGINE][FETCH][ATTEMPT_2]', { exam_id: examId, attempt_id: attemptId, timeout_ms: timeoutMs }); } catch {}
           try {
             const resp2 = await fetchWithTimeout();
-            const normalized2 = normalizeSkillsEngineResponse(resp2 || {});
-            skillsFromSe = Array.isArray(normalized2?.skills) ? normalized2.skills : [];
+            // Robust extraction attempt 2
+            let extracted2 = [];
+            let pathUsed2 = null;
+            try {
+              if (resp2 && resp2.response && resp2.response.answer && Array.isArray(resp2.response.answer.skills)) {
+                extracted2 = resp2.response.answer.skills;
+                pathUsed2 = 'response.answer.skills';
+              } else if (resp2 && resp2.answer && Array.isArray(resp2.answer.skills)) {
+                extracted2 = resp2.answer.skills;
+                pathUsed2 = 'answer.skills';
+              } else if (resp2 && Array.isArray(resp2.skills)) {
+                extracted2 = resp2.skills;
+                pathUsed2 = 'skills';
+              } else if (resp2 && resp2.response && Array.isArray(resp2.response.skills)) {
+                extracted2 = resp2.response.skills;
+                pathUsed2 = 'response.skills';
+              }
+            } catch {}
+            if (!Array.isArray(extracted2) || extracted2.length === 0) {
+              const normalized2 = normalizeSkillsEngineResponse(resp2 || {});
+              extracted2 = Array.isArray(normalized2?.skills) ? normalized2.skills : [];
+              if (!pathUsed2) pathUsed2 = 'normalized';
+            }
+            try { console.log('[BASELINE][SKILLS_ENGINE][EXTRACT]', { path_used: pathUsed2, skills_count: Array.isArray(extracted2) ? extracted2.length : 0 }); } catch {}
+            skillsFromSe = Array.isArray(extracted2) ? extracted2 : [];
           } catch (e2) {
             if (String(e2?.message || '') === 'SkillsEngineTimeout') {
               try { console.warn('[BASELINE][SKILLS_ENGINE][FETCH][TIMEOUT_2]', { exam_id: examId, attempt_id: attemptId }); } catch {}
