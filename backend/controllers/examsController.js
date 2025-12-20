@@ -796,6 +796,7 @@ exports.submitCodingGrade = async (req, res, next) => {
          WHERE attempt_id = $2`,
         [score, attemptIdNum],
       );
+      try { console.log('[CODING][STATUS][SET_COMPLETED]', { attempt_id: attemptIdNum }); } catch {}
     } catch {}
 
     // [DEVLAB][GRADE][PERSIST][OK]

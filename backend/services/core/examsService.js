@@ -1892,6 +1892,23 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
   );
   try { console.log('[SUBMIT][SKILLS_SOURCE]', { skills_count: skillsMeta.length }); } catch {}
   const perSkill = [];
+  let overriddenByCoding = 0;
+  const codingByName = {};
+  try {
+    const skillMap2 = examPackage && examPackage.coding_results && typeof examPackage.coding_results.skills === 'object'
+      ? examPackage.coding_results.skills
+      : null;
+    if (skillMap2) {
+      for (const [nm, v] of Object.entries(skillMap2)) {
+        const name = String(nm || '').trim();
+        if (!name) continue;
+        codingByName[name] = {
+          score: Number.isFinite(Number(v?.score)) ? Number(v?.score) : 0,
+          feedback: typeof v?.feedback === 'string' ? v.feedback : undefined,
+        };
+      }
+    }
+  } catch {}
   for (const meta of skillsMeta) {
     const sid = String(meta.skill_id || meta.id || '').trim();
     const name = meta.skill_name || meta.name || sid;
@@ -1915,18 +1932,36 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       score: Number(avg),
       status,
     };
-    // If ingestion provided explicit coding feedback/score, do not overwrite a higher theoretical score with 0
-    const override = codingSkillsMerged.find((i) => String(i.skill_id) === String(sid));
-    if (override) {
-      const overrideScore = Number(override.score || 0);
-      if (overrideScore > out.score) {
-        out.score = overrideScore;
-        out.status = overrideScore > 0 ? "acquired" : "failed";
+    // Merge DevLab per-skill by name (do not overwrite higher theory score with lower)
+    const codeN = codingByName[name];
+    if (codeN) {
+      const cScore = Number(codeN.score || 0);
+      if (cScore > out.score) {
+        out.score = cScore;
+        out.status = cScore > 0 ? 'acquired' : 'failed';
+        overriddenByCoding += 1;
       }
-      if (override.feedback) out.feedback = override.feedback;
+      if (codeN.feedback && !out.feedback) out.feedback = codeN.feedback;
     }
     perSkill.push(out);
   }
+  // Append coding-only skills not present in theory
+  let appendedCoding = 0;
+  for (const [nm, v] of Object.entries(codingByName)) {
+    const exists = perSkill.some((ps) => String(ps.skill_name) === nm);
+    if (exists) continue;
+    const sid = nameToId.get(nm) || nm;
+    perSkill.push({
+      skill_id: String(sid),
+      skill_name: nm,
+      score: Number(v.score || 0),
+      status: Number(v.score || 0) > 0 ? 'acquired' : 'failed',
+      feedback: v.feedback,
+      source: 'coding',
+    });
+    appendedCoding += 1;
+  }
+  try { console.log('[RESULTS][MERGE][CODING]', { overridden_count: overriddenByCoding, appended_count: appendedCoding, coding_skills: Object.keys(codingByName).length }); } catch {}
 
   // 9) Final grade
   const totalAnswersCount = allAnswers.length;
