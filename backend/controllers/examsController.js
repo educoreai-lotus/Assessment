@@ -655,28 +655,40 @@ exports.submitExam = async (req, res, next) => {
 
           const { sendToCoordinator } = require('../services/integrations/envelopeSender');
           if (examType === 'baseline') {
+            // Build baseline payload with the required shape; then populate identifiers from ExamContext
             const payload = {
               action: 'baseline-exam-result',
-              user_id: ctx.user_id,
+              user_id: undefined,      // will populate from ctx below
               exam_type: 'baseline',
-              exam_id: String(examId),
-              attempt_id: String(attemptIdNum),
+              exam_id: undefined,      // will populate from runtime below
               passing_grade: passing,
               final_grade: finalGrade,
               passed,
               skills: skillsPayload,
             };
-            // HARD INVARIANT: never send null identifiers
-            if (!payload.user_id || !payload.exam_id || !payload.attempt_id) {
+            // Populate identifiers from context + runtime (do not change shape)
+            payload.user_id = ctx.user_id;
+            payload.exam_id = String(examId);
+
+            // HARD INVARIANT: never send null identifiers (baseline: only user_id, exam_id are required)
+            if (!payload.user_id || !payload.exam_id) {
               try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', payload); } catch {}
               return;
             }
             try {
+              console.log('[SUBMIT][SE_PAYLOAD_READY]', {
+                user_id: payload.user_id,
+                exam_id: payload.exam_id,
+                exam_type: payload.exam_type,
+                skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
+              });
+            } catch {}
+            try {
               console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT_PAYLOAD]', {
                 user_id: payload.user_id,
                 exam_id: payload.exam_id,
-                attempt_id: payload.attempt_id,
-                skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
+                attempt_id: String(attemptIdNum),
+                skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0
               });
             } catch {}
             sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
