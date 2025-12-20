@@ -2394,6 +2394,17 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
   let watchdogTimer = null;
   async function runPrep() {
     try { console.log('[ARCH][BOUNDARY] learning_analytics is external pull-only and never participates in exam build or DevLab flows'); } catch {}
+    // Deployment/version trace to verify active runtime on Railway/host
+    try {
+      let pkgVersion = null;
+      try { pkgVersion = require('../../package.json')?.version || null; } catch {}
+      console.log('[DEPLOY][VERSION]', {
+        service: 'assessment-backend',
+        pkg_version: pkgVersion,
+        commit_sha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || process.env.COMMIT_SHA || null,
+        node: process.version,
+      });
+    } catch {}
     const userStr = String(user_id);
     const userInt = Number(userStr.replace(/[^0-9]/g, ""));
     const courseInt = normalizeToInt(course_id);
