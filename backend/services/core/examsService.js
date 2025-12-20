@@ -2621,6 +2621,18 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     try {
       try { console.log('[DEVLAB][GEN][ENTERED]'); } catch {}
       const ids = Array.from(new Set((Array.isArray(skillsArray) ? skillsArray : []).map((s)=>String(s.skill_id)).filter(Boolean)));
+      // Explicit DevLab skills payload derived from normalized baseline skills
+      const skillsForCoding = (Array.isArray(skillsArray) ? skillsArray : [])
+        .map((s) => ({
+          skill_id: String(s?.skill_id || '').trim(),
+          skill_name: typeof s?.skill_name === 'string' ? s.skill_name : undefined,
+        }))
+        .filter((o) => o.skill_id);
+      if (skillsForCoding.length === 0) {
+        await setExamStatus(examId, { status: 'FAILED', error_message: 'no_skills_for_devlab', failed_step: 'devlab_generate', progress: 100 });
+        try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: 'no_skills_for_devlab' }); } catch {}
+        return;
+      }
       const __tDev = Date.now();
       try { console.log('[DEVLAB][GEN][START]', { exam_id: examId, attempt_id: attemptId }); } catch {}
       const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
