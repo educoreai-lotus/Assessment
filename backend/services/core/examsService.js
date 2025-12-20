@@ -2167,7 +2167,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         // Normalize Skills Engine response (supports multiple shapes)
         const normalized = normalizeSkillsEngineResponse(resp || {});
         const skillsFromSe = Array.isArray(normalized?.skills) ? normalized.skills : [];
-        try { console.log('[BASELINE][SKILLS_ENGINE][RESPONSE_NORMALIZED]', { exam_id: examId, attempt_id: attemptId, skills_count: skillsFromSe.length }); } catch {}
+        let fallbackUsed = false;
 
         // Fallback to competency_name-derived minimal skill if none returned
         let effectiveSkills = skillsFromSe;
@@ -2176,7 +2176,9 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
             .replace(/[^a-z0-9]+/g, '_')
             .replace(/^_+|_+$/g, '');
           effectiveSkills = [{ skill_id: slug || 'baseline', skill_name: ctx.competency_name }];
+          fallbackUsed = true;
         }
+        try { console.log('[BASELINE][SKILLS_ENGINE][NORMALIZED]', { exam_id: examId, attempt_id: attemptId, skills_count: effectiveSkills.length, fallback_used: fallbackUsed }); } catch {}
 
         skillsPayload = { user_id: ctx.user_id, skills: effectiveSkills };
         // Baseline: static policy
