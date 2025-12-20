@@ -1591,7 +1591,12 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
             const pct = Math.round(ratio * 100);
             score = pct; // direct percentage in 30–70 range
           } else {
-            score = 0;
+            // If at least one key concept appears, ensure partial credit (>=50)
+            if (matched >= 1) {
+              score = 50;
+            } else {
+              score = 0;
+            }
           }
           if (score > 100) score = 100;
           if (score < 0) score = 0;
@@ -1815,6 +1820,13 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
     finalGrade = 0;
     passed = false;
   }
+  // Final guard to detect mapping/scoring anomalies
+  try {
+    const allScoresZero = perSkillScores.length > 0 && perSkillScores.every((v) => Number(v || 0) === 0);
+    if (nonBlankAnswersCount > 0 && allScoresZero) {
+      console.error('[GRADE][INVALID_ZERO_SCORES]', { attempt_id: attemptIdNum, nonBlankAnswersCount, per_skill_len: perSkill.length });
+    }
+  } catch {}
   try {
     // eslint-disable-next-line no-console
     console.log('[TRACE][EXAM][SUBMIT][RESULT]', {
