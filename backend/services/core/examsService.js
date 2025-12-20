@@ -671,15 +671,33 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   // Build ExamPackage in Mongo
   // Phase 08.2 – Build coding questions via DevLab envelope (MANDATORY)
   const skillsForCoding = (() => {
-    const ids = [];
+    const entries = [];
+    const push = (sid, sname) => {
+      const idStr = String(sid || '').trim();
+      if (!idStr) return;
+      const nameStr = typeof sname === 'string' && sname.trim() !== '' ? sname : undefined;
+      entries.push({
+        // backward compatibility keys
+        id: idStr,
+        name: nameStr,
+        // explicit keys for modern DevLab prompts
+        skill_id: idStr,
+        skill_name: nameStr,
+      });
+    };
     if (Array.isArray(skillsArray) && skillsArray.length > 0) {
-      for (const s of skillsArray) ids.push(String(s.skill_id));
+      for (const s of skillsArray) push(s.skill_id, s.skill_name);
     } else if (Array.isArray(coverageMap) && coverageMap.length > 0) {
       for (const item of coverageMap) {
-        for (const s of (item.skills || [])) ids.push(String(s.skill_id));
+        for (const s of (item.skills || [])) push(s.skill_id, s.skill_name);
       }
     }
-    return Array.from(new Set(ids.filter(Boolean)));
+    // de-duplicate by id
+    const uniq = new Map();
+    for (const e of entries) {
+      if (!uniq.has(e.id)) uniq.set(e.id, e);
+    }
+    return Array.from(uniq.values());
   })();
   // eslint-disable-next-line no-console
   console.debug("Coding generation skills:", skillsForCoding);
@@ -2614,7 +2632,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         devlabPayload = await Promise.race([
           requestCodingWidgetHtml({
             attempt_id: attemptId,
-            skills: ids,
+            skills: skillsForCoding,
             difficulty: 'medium',
             amount: 2,
             humanLanguage: 'en',
@@ -2866,4 +2884,5 @@ module.exports = {
   submitAttempt,
   recomputeFinalResults,
 };
+
 
