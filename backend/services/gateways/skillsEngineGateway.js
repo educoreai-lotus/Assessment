@@ -115,44 +115,32 @@ async function safeFetchBaselineSkills(params) {
 
 async function safePushAssessmentResults(payload) {
   try {
-    const shaped = buildSkillsEngineResultPayload(payload || {});
+    const p = payload || {};
+    const uid = p.user_id || null;
+    const eid = p.exam_id || null;
+    const aid = p.attempt_id || null;
+    if (!uid || !eid || !aid) {
+      try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', { user_id: uid, exam_id: eid, attempt_id: aid }); } catch {}
+      return null; // never send invalid
+    }
     try {
-      const reqStr = (() => { try { return JSON.stringify(envelope.payload); } catch { return String(envelope.payload); } })();
-      const reqSnap = reqStr && reqStr.length > 1500 ? (reqStr.slice(0, 1500) + '…[truncated]') : reqStr;
       // eslint-disable-next-line no-console
-      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][REQUEST_PAYLOAD]', reqSnap);
+      console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT_PAYLOAD]', {
+        user_id: uid, exam_id: String(eid), attempt_id: String(aid),
+        skills_count: Array.isArray(p.skills) ? p.skills.length : 0,
+      });
     } catch {}
-    const ret = await sendToCoordinator({ targetService: 'skills-engine', payload: shaped }).catch(() => ({}));
+
+    const ret = await sendToCoordinator({ targetService: 'skills-engine', payload: p }).catch(() => ({}));
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;
     else respString = JSON.stringify((ret && ret.data) || {});
     const resp = JSON.parse(respString || '{}');
-    const answer = resp?.response?.answer;
-    const isEmptyObject = answer && typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0;
-    const isEmptyArray = Array.isArray(answer) && answer.length === 0;
-    if (!answer || isEmptyObject || isEmptyArray) {
-      try { console.log('[MOCK-FALLBACK][SkillsEngine][push-results]', { hasPayload: !!payload }); } catch {}
-      return mockPushAssessmentResults(payload);
-    }
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][SUCCESS]', {
-        request_summary: {
-          user_id: payload?.user_id ?? null,
-          exam_type: payload?.exam_type ?? null,
-          skills: Array.isArray(payload?.skills) ? payload.skills.length : 0,
-        },
-        answer_type: answer && typeof answer,
-      });
-      const bodyStr = (() => { try { return JSON.stringify(answer); } catch { return String(answer); } })();
-      const snapshot = bodyStr && bodyStr.length > 1500 ? (bodyStr.slice(0, 1500) + '…[truncated]') : bodyStr;
-      console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][RESPONSE_BODY]', snapshot);
-    } catch {}
-    return answer;
+    return resp?.response?.answer ?? null;
   } catch (err) {
-    console.warn('SkillsEngine push results via Coordinator failed, using mock. Reason:', err?.message || err);
-    return mockPushAssessmentResults(payload);
+    console.warn('SkillsEngine push results via Coordinator failed. Reason:', err?.message || err);
+    return null;
   }
 }
 
