@@ -1499,29 +1499,96 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
         // no-op init, we accumulate on push below
       } catch {}
       if (type === "mcq") {
-        // Compare only against prompt.correct_answer
-        const correct = q && q.prompt && q.prompt.correct_answer != null
-          ? String(q.prompt.correct_answer)
-          : "";
-        const norm = (s) => String(s || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
-        // Extract candidate answers (support scalar, array, or object with value/label/text)
+        // Resolve MCQ correctness by option identity, not by comparing strings to prompt.correct_answer
+        const norm = (s) => String(s ?? '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+
+        // Strict question resolution for MCQ: no index fallback beyond earlier mapping; if not found, skip
+        const answerQuestionIdStrict = String(ans?.question_id ?? ans?.id ?? "");
+        const qStrict = answerQuestionIdStrict ? qById.get(answerQuestionIdStrict) : null;
+        if (!qStrict) {
+          // Skip grading this answer if strict question_id mapping fails (do not grade wrong question)
+          continue;
+        }
+        const qUse = qStrict;
+
+        // Collect options (can be strings or objects)
+        const optionsArr = Array.isArray(qUse?.prompt?.options)
+          ? qUse.prompt.options
+          : (Array.isArray(qUse?.options) ? qUse.options : []);
+
+        // Build identity tokens for each option
+        const optionIdentities = optionsArr.map((opt, idx) => {
+          const ids = new Set();
+          const pushId = (v) => { const n = norm(v); if (n) ids.add(n); };
+          if (typeof opt === 'string') {
+            pushId(opt);
+          } else if (opt && typeof opt === 'object') {
+            if ('id' in opt) pushId(opt.id);
+            if ('value' in opt) pushId(opt.value);
+            if ('label' in opt) pushId(opt.label);
+            if ('text' in opt) pushId(opt.text);
+            if ('name' in opt) pushId(opt.name);
+          }
+          // Also consider index as identity when correct_index is used
+          pushId(String(idx));
+          return { idx, identities: ids, raw: opt };
+        });
+
+        // Determine correct option index
+        let correctIdx = -1;
+        // a) options carry is_correct
+        for (const oi of optionIdentities) {
+          const raw = oi.raw;
+          if (raw && typeof raw === 'object' && (raw.is_correct === true || String(raw?.isCorrect).toLowerCase() === 'true')) {
+            correctIdx = oi.idx; break;
+          }
+        }
+        // b) explicit correct index/id in prompt or question
+        if (correctIdx < 0) {
+          const ci = (qUse?.prompt?.correct_index ?? qUse?.correct_index);
+          if (Number.isFinite(Number(ci))) {
+            const idxNum = Number(ci);
+            if (idxNum >= 0 && idxNum < optionIdentities.length) correctIdx = idxNum;
+          }
+        }
+        if (correctIdx < 0) {
+          const cid = (qUse?.prompt?.correct_option_id ?? qUse?.correct_option_id ?? qUse?.prompt?.correct_answer ?? qUse?.correct_answer);
+          if (cid != null) {
+            const cidNorm = norm(cid);
+            for (const oi of optionIdentities) {
+              if (oi.identities.has(cidNorm)) { correctIdx = oi.idx; break; }
+            }
+          }
+        }
+
+        // Extract user selection candidates (support scalar, array, object with value/label/text)
         const candidates = (() => {
           const a = ans?.answer;
           const out = [];
           if (Array.isArray(a)) {
             for (const v of a) out.push(norm(v));
           } else if (a && typeof a === 'object') {
+            if ('id' in a) out.push(norm(a.id));
             if ('value' in a) out.push(norm(a.value));
             if ('label' in a) out.push(norm(a.label));
             if ('text' in a) out.push(norm(a.text));
+            if ('name' in a) out.push(norm(a.name));
           } else {
             out.push(norm(a));
           }
           return Array.from(new Set(out.filter(Boolean)));
         })();
-        const correctNorm = norm(correct);
-        const optionsNorm = Array.isArray(q?.prompt?.options) ? q.prompt.options.map(norm) : [];
-        const ok = candidates.some((cand) => cand === correctNorm || (optionsNorm.includes(cand) && cand === correctNorm));
+
+        // Resolve selected option index by identity tokens
+        let selectedIdx = -1;
+        for (const oi of optionIdentities) {
+          for (const c of candidates) {
+            if (oi.identities.has(c)) { selectedIdx = oi.idx; break; }
+          }
+          if (selectedIdx >= 0) break;
+        }
+
+        const ok = selectedIdx >= 0 && correctIdx >= 0 && selectedIdx === correctIdx;
         const pushObj = {
           question_id: qidOut,
           skill_id: skillId,
