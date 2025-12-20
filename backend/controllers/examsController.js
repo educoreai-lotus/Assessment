@@ -622,7 +622,7 @@ exports.submitExam = async (req, res, next) => {
     try {
       setImmediate(async () => {
         try {
-          // Load exam type, user and course_name for envelope
+          // Load exam type and course_name for envelope
           const metaRes = await pool.query(
             `SELECT e.exam_type, e.user_id, e.user_uuid, e.course_name
              FROM exams e
@@ -630,22 +630,15 @@ exports.submitExam = async (req, res, next) => {
             [Number(examId)],
           ).catch(() => ({ rows: [] }));
           const examType = metaRes?.rows?.[0]?.exam_type || null;
-          const userNumeric = metaRes?.rows?.[0]?.user_id || null;
-          const userUuid = metaRes?.rows?.[0]?.user_uuid || null;
           const courseName = metaRes?.rows?.[0]?.course_name || null;
 
-          // Resolve user_id from ExamContext by exam_id (preferred) then attempt_id; fallback to exams.user_uuid; then numeric
-          let resolvedUserId = null;
-          try {
-            const ctxByExam = await ExamContext.findOne({ exam_id: String(examId) }).lean();
-            const ctxByAttempt = resolvedUserId ? null : await ExamContext.findOne({ attempt_id: String(attemptIdNum) }).lean();
-            resolvedUserId = ctxByExam?.user_id || ctxByAttempt?.user_id || null;
-            if (!resolvedUserId) {
-              try { console.warn('[WARN][EXAM_CONTEXT][MISSING]', { exam_id: String(examId), attempt_id: String(attemptIdNum) }); } catch {}
-            }
-          } catch {}
-          if (!resolvedUserId) resolvedUserId = userUuid || null;
-          if (!resolvedUserId && userNumeric != null) resolvedUserId = String(userNumeric);
+          // Resolve user_id strictly by attempt_id (baseline and postcourse)
+          const ctx = await ExamContext.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
+          if (!ctx || !ctx.user_id) {
+            try { console.error('[SUBMIT][CTX_MISSING]', { attempt_id: String(attemptIdNum) }); } catch {}
+            return; // do NOT send anything to skills-engine
+          }
+          try { console.log('[SUBMIT][CTX_RESOLVED]', { attempt_id: String(attemptIdNum), user_id: ctx.user_id }); } catch {}
 
           // Build per-skill payload
           const perSkill = Array.isArray(response?.per_skill) ? response.per_skill : [];
@@ -664,7 +657,7 @@ exports.submitExam = async (req, res, next) => {
           if (examType === 'baseline') {
             const payload = {
               action: 'baseline-exam-result',
-              user_id: resolvedUserId,
+              user_id: ctx.user_id,
               exam_type: 'baseline',
               exam_id: String(examId),
               attempt_id: String(attemptIdNum),
@@ -673,13 +666,14 @@ exports.submitExam = async (req, res, next) => {
               passed,
               skills: skillsPayload,
             };
+            try { console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT]', { attempt_id: String(attemptIdNum), exam_id: String(examId), skills_count: skillsPayload.length }); } catch {}
             sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
-              try { console.warn('[SKILLS_ENGINE][ASYNC_PUSH][BASELINE][ERROR]', e?.message || e); } catch {}
+              try { console.warn('[SKILLS_ENGINE][SUBMIT][FAILED]', { attempt_id: String(attemptIdNum), error: e?.message || String(e) }); } catch {}
             });
           } else if (examType === 'postcourse') {
             const payload = {
               action: 'postcourse-exam-result',
-              user_id: resolvedUserId,
+              user_id: ctx.user_id,
               exam_type: 'postcourse',
               exam_id: String(examId),
               attempt_id: String(attemptIdNum),
@@ -690,8 +684,9 @@ exports.submitExam = async (req, res, next) => {
               final_status: 'completed',
               skills: skillsPayload,
             };
+            try { console.log('[OUTBOUND][SKILLS_ENGINE][SUBMIT]', { attempt_id: String(attemptIdNum), exam_id: String(examId), skills_count: skillsPayload.length }); } catch {}
             sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
-              try { console.warn('[SKILLS_ENGINE][ASYNC_PUSH][POSTCOURSE][ERROR]', e?.message || e); } catch {}
+              try { console.warn('[SKILLS_ENGINE][SUBMIT][FAILED]', { attempt_id: String(attemptIdNum), error: e?.message || String(e) }); } catch {}
             });
           }
         } catch (err) {
