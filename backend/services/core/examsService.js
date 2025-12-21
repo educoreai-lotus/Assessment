@@ -710,7 +710,37 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
     try { console.log('[DEVLAB][GEN][BEFORE_SEND]', { exam_id: examId, attempt_id: attemptId }); } catch {}
     const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
     // Validate invariants
+    try {
+      console.log('[DEVLAB][PAYLOAD][CHECK][CREATE_EXAM]', {
+        exam_id: examId,
+        attempt_id: attemptId,
+        competencyNameForDevLab,
+        skillsCount: Array.isArray(skillNamesForDevLab) ? skillNamesForDevLab.length : null,
+        hasSkillsArray: Array.isArray(skillNamesForDevLab),
+        would_send: {
+          action: 'coding',
+          attempt_id: attemptId,
+          programming_language: competencyNameForDevLab,
+          skills: Array.isArray(skillNamesForDevLab) ? skillNamesForDevLab : null,
+          difficulty: 'medium',
+          amount: Array.isArray(skillNamesForDevLab) ? (skillNamesForDevLab.length || 2) : null,
+          humanLanguage: 'en',
+          route: { destination: 'devlab', strict: true },
+          content: { type: 'coding' },
+        },
+      });
+    } catch {}
     if (!competencyNameForDevLab || !Array.isArray(skillNamesForDevLab) || skillNamesForDevLab.length === 0) {
+      try {
+        console.log('[DEVLAB][PAYLOAD][INVALID][CREATE_EXAM]', {
+          reason: !competencyNameForDevLab ? 'missing_competency_name' : (!Array.isArray(skillNamesForDevLab) ? 'skills_not_array' : 'skills_empty'),
+          competencyNameForDevLab,
+          skillsMeta: {
+            isArray: Array.isArray(skillNamesForDevLab),
+            length: Array.isArray(skillNamesForDevLab) ? skillNamesForDevLab.length : null,
+          },
+        });
+      } catch {}
       throw new Error('devlab_payload_invalid');
     }
     try {
@@ -2689,7 +2719,37 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         const ctx3 = await ExamContext.findOne({ attempt_id: String(attemptId) }).lean().catch(()=>null);
         competencyNameForDevLab2 = ctx3?.competency_name || null;
       } catch {}
-      if (!competencyNameForDevLab2 || skillNamesForDevLab2.length === 0) {
+      try {
+        console.log('[DEVLAB][PAYLOAD][CHECK][PREPARE_POSTCOURSE]', {
+          exam_id: examId,
+          attempt_id: attemptId,
+          competencyNameForDevLab2,
+          skillsCount: Array.isArray(skillNamesForDevLab2) ? skillNamesForDevLab2.length : null,
+          hasSkillsArray: Array.isArray(skillNamesForDevLab2),
+          would_send: {
+            action: 'coding',
+            attempt_id: attemptId,
+            programming_language: 'python',
+            skills: Array.isArray(skillNamesForDevLab2) ? skillNamesForDevLab2 : null,
+            difficulty: 'medium',
+            amount: Array.isArray(skillNamesForDevLab2) ? (skillNamesForDevLab2.length || 2) : null,
+            humanLanguage: 'en',
+            route: { destination: 'devlab', strict: true },
+            content: { type: 'coding' },
+          },
+        });
+      } catch {}
+      if (skillNamesForDevLab2.length === 0) {
+        try {
+          console.log('[DEVLAB][PAYLOAD][INVALID][PREPARE_POSTCOURSE]', {
+            reason: 'skills_empty',
+            competencyNameForDevLab2,
+            skillsMeta: {
+              isArray: Array.isArray(skillNamesForDevLab2),
+              length: Array.isArray(skillNamesForDevLab2) ? skillNamesForDevLab2.length : null,
+            },
+          });
+        } catch {}
         await setExamStatus(examId, { status: 'FAILED', error_message: 'devlab_payload_invalid', failed_step: 'devlab_generate', progress: 100 });
         try { console.log('[EXAM][STATUS][FAILED]', { exam_id: examId, attempt_id: attemptId, failed_step: 'devlab_generate', message: 'devlab_payload_invalid' }); } catch {}
         return;
@@ -2700,7 +2760,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         if (exam_type === 'postcourse') {
           console.log('[POSTCOURSE][DEVLAB][REQUEST]', {
             attempt_id: attemptId,
-            programming_language: competencyNameForDevLab2,
+            programming_language: 'python',
             skills_count: skillNamesForDevLab2.length,
           });
         }
@@ -2717,7 +2777,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         devlabPayload = await Promise.race([
           requestCodingWidgetHtml({
             attempt_id: attemptId,
-            programming_language: competencyNameForDevLab2,
+            programming_language: 'python',
             skills: skillNamesForDevLab2,
             difficulty: 'medium',
             amount: skillNamesForDevLab2.length || 2,
@@ -2731,7 +2791,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         try { if (timeoutHandle) clearTimeout(timeoutHandle); } catch {}
       }
       try {
-        console.log('[DEVLAB][PAYLOAD][FINAL]', { programming_language: competencyNameForDevLab2, skills_count: skillNamesForDevLab2.length, skills: skillNamesForDevLab2 });
+        console.log('[DEVLAB][PAYLOAD][FINAL]', { programming_language: 'python', skills_count: skillNamesForDevLab2.length, skills: skillNamesForDevLab2 });
         if (exam_type === 'postcourse') {
           console.log('[POSTCOURSE][DEVLAB][RESPONSE]', {
             attempt_id: attemptId,
