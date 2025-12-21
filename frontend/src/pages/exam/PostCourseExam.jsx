@@ -85,6 +85,7 @@ export default function PostCourseExam() {
   const [examId, setExamId] = useState(initialExamId);
   const [attemptId, setAttemptId] = useState(searchParams.get('attemptId') || null);
   const [bootstrapReady, setBootstrapReady] = useState(false);
+  const [examReady, setExamReady] = useState(false);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraOk, setCameraOk] = useState(false);
@@ -150,7 +151,10 @@ export default function PostCourseExam() {
         setExamId(String(eid));
         setAttemptId(String(aid));
         // Optionally wait until package is ready to reduce start errors
-        try { await waitForPackage(String(eid)); } catch {}
+        try {
+          const pkg = await waitForPackage(String(eid));
+          if (pkg?.package_ready) setExamReady(true);
+        } catch {}
         if (!mounted) return;
         // Reset any local UI artifacts
         proctoringStartedRef.current = false;
@@ -189,11 +193,17 @@ export default function PostCourseExam() {
     console.log('[POSTCOURSE][CAMERA][READY_STATE]', { cameraReady });
   }, [cameraReady]);
 
+  // Debug: log exam readiness changes
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('[POSTCOURSE][EXAM][READY_STATE]', { examReady });
+  }, [examReady]);
+
   useEffect(() => {
     let cancelled = false;
     async function startIfReady() {
       if (!examId || !attemptId) return;
-      if (!cameraReady || !cameraOk) return;
+      if (!examReady || !cameraOk) return;
       try {
         setQuestionsLoading(true);
         // eslint-disable-next-line no-console
@@ -248,7 +258,14 @@ export default function PostCourseExam() {
           setRemainingSec(Number(data.duration_seconds));
         }
       } catch (e) {
+        const statusCode = e?.response?.status;
         const apiErr = e?.response?.data?.message || e?.response?.data?.error || e?.message || '';
+        if (statusCode === 409 || apiErr === 'exam_not_ready') {
+          // Not fatal: allow polling to continue and retry
+          // eslint-disable-next-line no-console
+          console.log('[POSTCOURSE][EXAM][START][NOT_READY]', { statusCode, apiErr });
+          return;
+        }
         if (apiErr === 'max_attempts_reached') {
           // Try to redirect to the most recent attempt results for this user/course
           try {
