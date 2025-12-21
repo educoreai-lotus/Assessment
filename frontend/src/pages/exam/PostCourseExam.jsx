@@ -213,18 +213,15 @@ export default function PostCourseExam() {
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         hasStartedRef.current = true;
-        setStage('theory');
-        try {
-          const html =
-            data?.devlab_ui?.componentHtml ||
-            data?.devlabUi?.componentHtml ||
-            data?.devlab_ui_html ||
-            null;
-          const htmlStr = typeof html === 'string' && html.trim() !== '' ? html : null;
-          setDevlabHtml(htmlStr);
-          // eslint-disable-next-line no-console
-          console.log('[EXAM][PACKAGE][DEVLAB_UI]', !!html, typeof html === 'string' ? html.length : 0);
-        } catch {}
+        const html =
+          data?.devlab_ui?.componentHtml ||
+          data?.devlabUi?.componentHtml ||
+          data?.devlab_ui_html ||
+          null;
+        const htmlStr = typeof html === 'string' && html.trim() !== '' ? html : null;
+        setDevlabHtml(htmlStr);
+        // eslint-disable-next-line no-console
+        try { console.log('[EXAM][PACKAGE][DEVLAB_UI]', !!html, typeof html === 'string' ? html.length : 0); } catch {}
         const normalized = Array.isArray(data?.questions)
           ? data.questions.map((p, idx) => {
               const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
@@ -249,6 +246,17 @@ export default function PostCourseExam() {
         setQuestions(normalized);
         setCurrentIdx(0);
         setAnswers({});
+        // Entry decision based on questions, not devlab_ui:
+        const hasTheory = Array.isArray(normalized) && normalized.length > 0;
+        const hasDevLab = !!htmlStr;
+        if (hasTheory) {
+          setStage('theory');
+        } else if (hasDevLab) {
+          setStage('coding');
+        } else {
+          // No theory and no devlab yet: remain in 'theory' so loader shows until content arrives
+          setStage('theory');
+        }
         try { localStorage.setItem("postcourse_answers", JSON.stringify({})); } catch {}
         // Timer fields
         if (data?.expires_at) {
