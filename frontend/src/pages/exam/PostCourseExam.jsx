@@ -287,7 +287,7 @@ export default function PostCourseExam() {
     }
     startIfReady();
     return () => { cancelled = false; };
-  }, [examId, attemptId, cameraReady, cameraOk, navigate]);
+  }, [examId, attemptId, cameraReady, cameraOk, examReady, navigate]);
 
   // DevLab answers bridge removed; DevLab graded asynchronously server-side
 
