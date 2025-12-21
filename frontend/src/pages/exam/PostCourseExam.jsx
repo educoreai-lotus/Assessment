@@ -201,10 +201,6 @@ export default function PostCourseExam() {
             null;
           const htmlStr = typeof html === 'string' && html.trim() !== '' ? html : null;
           setDevlabHtml(htmlStr);
-          // If DevLab UI is present, render coding immediately without requiring theoretical questions
-          if (htmlStr) {
-            setStage('coding');
-          }
           // eslint-disable-next-line no-console
           console.log('[EXAM][PACKAGE][DEVLAB_UI]', !!html, typeof html === 'string' ? html.length : 0);
         } catch {}
