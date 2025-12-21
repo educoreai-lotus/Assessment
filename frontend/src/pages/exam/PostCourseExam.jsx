@@ -199,7 +199,12 @@ export default function PostCourseExam() {
             data?.devlabUi?.componentHtml ||
             data?.devlab_ui_html ||
             null;
-          setDevlabHtml(typeof html === 'string' && html.trim() !== '' ? html : null);
+          const htmlStr = typeof html === 'string' && html.trim() !== '' ? html : null;
+          setDevlabHtml(htmlStr);
+          // If DevLab UI is present, render coding immediately without requiring theoretical questions
+          if (htmlStr) {
+            setStage('coding');
+          }
           // eslint-disable-next-line no-console
           console.log('[EXAM][PACKAGE][DEVLAB_UI]', !!html, typeof html === 'string' ? html.length : 0);
         } catch {}
@@ -537,7 +542,7 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {!examCanceled && questions.length === 0 && (cameraError ? (
+      {!examCanceled && questions.length === 0 && stage !== 'coding' && (cameraError ? (
         <div className="text-sm text-neutral-400">
           Camera access is required to start the exam. Please allow camera access and refresh.
         </div>
