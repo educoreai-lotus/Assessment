@@ -7,6 +7,7 @@ import CameraPreview from '../../components/CameraPreview';
 
 import { examApi } from '../../services/examApi';
 import { http } from '../../services/http';
+import { normalizeExamPackage } from '../../utils/examPackage';
 
 // Mount guard + instrumentation
 // Ensures createExam is called only once per mount
@@ -213,50 +214,36 @@ export default function PostCourseExam() {
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         hasStartedRef.current = true;
-        const html =
-          data?.devlab_ui?.componentHtml ||
-          data?.devlabUi?.componentHtml ||
-          data?.devlab_ui_html ||
-          null;
-        const htmlStr = typeof html === 'string' && html.trim() !== '' ? html : null;
-        setDevlabHtml(htmlStr);
-        // eslint-disable-next-line no-console
-        try { console.log('[EXAM][PACKAGE][DEVLAB_UI]', !!html, typeof html === 'string' ? html.length : 0); } catch {}
-        const normalized = Array.isArray(data?.questions)
-          ? data.questions.map((p, idx) => {
-              const qTypeRaw = (p?.metadata?.type || p?.type || 'mcq');
-              const uiType = qTypeRaw === 'open' ? 'text' : qTypeRaw;
-              const text =
-                typeof p?.prompt === 'string'
-                  ? p.prompt
-                  : (p?.prompt?.question || p?.prompt?.stem || '');
-              const optsRaw = Array.isArray(p?.options) ? p.options : (Array.isArray(p?.prompt?.choices) ? p.prompt.choices : []);
-              const opts = Array.isArray(optsRaw) ? optsRaw.map((o) => (typeof o === 'string' ? o : JSON.stringify(o))) : [];
-              return {
-                id: p?.question_id || p?.qid || p?.id || String(idx + 1),
-                originalId: p?.question_id || p?.qid || p?.id || String(idx + 1),
-                type: uiType,
-                prompt: text,
-                options: opts,
-                skill: p?.prompt?.skill_name || p?.skill_name || p?.skill || p?.skill_id || 'General',
-                skill_id: p?.skill_id || null,
-              };
-            })
-          : [];
-        setQuestions(normalized);
+        const pkg = normalizeExamPackage(data || {});
+        // TEMP: debug parity logs (baseline-style)
+        try {
+          console.log('[POSTCOURSE][PKG][NORMALIZED]', {
+            questions: Array.isArray(pkg.questions) ? pkg.questions.length : 0,
+            coding_questions: Array.isArray(pkg.coding_questions) ? pkg.coding_questions.length : 0,
+            has_html: !!pkg.devlab_ui?.componentHtml,
+          });
+        } catch {}
+        setQuestions(Array.isArray(pkg.questions) ? pkg.questions : []);
+        if (pkg.devlab_ui?.componentHtml && typeof pkg.devlab_ui.componentHtml === 'string') {
+          setDevlabHtml(pkg.devlab_ui.componentHtml);
+        }
         setCurrentIdx(0);
         setAnswers({});
         // Entry decision based on questions, not devlab_ui:
-        const hasTheory = Array.isArray(normalized) && normalized.length > 0;
-        const hasDevLab = !!htmlStr;
-        if (hasTheory) {
-          setStage('theory');
-        } else if (hasDevLab) {
-          setStage('coding');
-        } else {
-          // No theory and no devlab yet: remain in 'theory' so loader shows until content arrives
-          setStage('theory');
-        }
+        try {
+          const hasTheory = Array.isArray(pkg.questions) && pkg.questions.length > 0;
+          const hasCoding = Array.isArray(pkg.coding_questions) && pkg.coding_questions.length > 0;
+          if (hasTheory) {
+            setStage('theory');
+            console.log('[POSTCOURSE][STAGE][SET]', 'theory');
+          } else if (hasCoding) {
+            setStage('coding');
+            console.log('[POSTCOURSE][STAGE][SET]', 'coding');
+          } else {
+            setStage('theory'); // safe fallback
+            console.log('[POSTCOURSE][STAGE][SET]', 'theory');
+          }
+        } catch {}
         try { localStorage.setItem("postcourse_answers", JSON.stringify({})); } catch {}
         // Timer fields
         if (data?.expires_at) {
