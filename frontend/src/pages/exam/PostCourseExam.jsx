@@ -205,7 +205,8 @@ export default function PostCourseExam() {
     let cancelled = false;
     async function startIfReady() {
       if (!examId || !attemptId) return;
-      if (!examReady || !cameraOk) return;
+      // HARD-DECOUPLE phone detection: start is gated ONLY by READY + cameraReady
+      if (!examReady || !cameraReady) return;
       if (hasStartedRef.current) return;
       try {
         setQuestionsLoading(true);
@@ -259,7 +260,7 @@ export default function PostCourseExam() {
         const statusCode = e?.response?.status;
         const apiErr = e?.response?.data?.message || e?.response?.data?.error || e?.message || '';
         if (statusCode === 409 || apiErr === 'exam_not_ready') {
-          // Not fatal: allow polling to continue and retry
+          // Not fatal: allow polling to continue and retry automatically when READY
           // eslint-disable-next-line no-console
           console.log('[POSTCOURSE][EXAM][START][NOT_READY]', { statusCode, apiErr });
           return;
@@ -285,7 +286,7 @@ export default function PostCourseExam() {
     }
     startIfReady();
     return () => { cancelled = false; };
-  }, [examId, attemptId, cameraReady, cameraOk, examReady, navigate]);
+  }, [examId, attemptId, cameraReady, examReady, navigate]);
 
   // DevLab answers bridge removed; DevLab graded asynchronously server-side
 
@@ -448,18 +449,18 @@ export default function PostCourseExam() {
     setCameraOk(false);
   }, []);
   const handlePhoneDetected = useCallback(() => {
-    setExamCanceled(true);
-    setCancelMessage('Exam canceled due to phone detection');
+    // Report incident only; NEVER gate /start or control navigation/stage
     try {
-      setTimeout(() => {
-        if (attemptId) {
-          navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { replace: true, state: { message: 'Exam canceled due to phone detection' } });
-        } else {
-          navigate('/exam/cancelled', { replace: true, state: { message: 'Exam canceled due to phone detection' } });
-        }
-      }, 1500);
+      if (attemptId) {
+        http.post(`/api/proctoring/${encodeURIComponent(attemptId)}/incident`, {
+          type: 'phone-detected',
+          timestamp: new Date().toISOString(),
+        }).catch(() => {});
+      }
+      // eslint-disable-next-line no-console
+      console.log('[POSTCOURSE][PHONE][DETECTED][REPORTED]', { attemptId });
     } catch {}
-  }, [attemptId, navigate]);
+  }, [attemptId]);
 
   // Start proctoring once when all prerequisites are ready
   useEffect(() => {
