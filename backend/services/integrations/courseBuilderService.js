@@ -62,73 +62,43 @@ exports.handleInbound = async (payload) => {
   // New: create_assessment – Course Builder creates Post-Course exam and supplies coverage_map
   if (action === 'create_assessment') {
     const learner_id = payload?.learner_id;
+    const learner_name = payload?.learner_name || null;
     const course_id = payload?.course_id;
-    const course_name = payload?.course_name;
-    const coverage_map = Array.isArray(payload?.coverage_map) ? payload.coverage_map : null;
+    const course_name = payload?.course_name || null;
 
-    const missing = [];
-    if (!learner_id) missing.push('learner_id');
-    if (!course_id) missing.push('course_id');
-    if (!course_name) missing.push('course_name');
-    if (!Array.isArray(coverage_map)) missing.push('coverage_map');
-    if (missing.length > 0) {
-      return { error: 'invalid_payload', missing };
-    }
-
-    // Create exam/attempt in PREPARING (fast path)
-    const created = await examsService.createExamRecord({
-      user_id: String(learner_id),
-      exam_type: 'postcourse',
-      course_id: String(course_id),
-      course_name: String(course_name),
-      user_name: null,
-      company_id: null,
-    });
-
-    // Persist coverage snapshot on attempt for later prepareExamAsync
+    // Phase 1 ingestion: Persist context only; never create exam/attempt here
     try {
-      if (created?.attempt_id) {
-        await pool.query(
-          `ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS coverage_snapshot JSONB`,
-        ).catch(() => {});
-        await pool.query(
-          `UPDATE exam_attempts SET coverage_snapshot = $1::jsonb WHERE attempt_id = $2`,
-          [JSON.stringify({ coverage_map }), Number(created.attempt_id)],
-        );
-        try { console.log('[INBOUND][COURSE_BUILDER][create_assessment][COVERAGE_SNAPSHOT_SAVED]', { attempt_id: created.attempt_id, items: coverage_map.length }); } catch {}
-      }
-    } catch (e) {
-      try { console.log('[INBOUND][COURSE_BUILDER][create_assessment][COVERAGE_SNAPSHOT_ERROR]', { message: e?.message }); } catch {}
-      // continue; prep will fail with clear error if snapshot missing
-    }
-
-    // Kick off preparation with injected coverage_map (skip external coverage fetch)
-    try {
-      const examId = created?.exam_id;
-      const attemptId = created?.attempt_id;
-      if (examId && attemptId) {
-        setImmediate(() => {
-          examsService.prepareExamAsync(examId, attemptId, {
-            user_id: String(learner_id),
-            exam_type: 'postcourse',
-            course_id: String(course_id),
-            course_name: String(course_name),
-            coverage_map, // injection for prepare flow
-          }).catch((e) => {
-            try { console.log('[TRACE][INTEGRATION][COURSE_BUILDER][create_assessment][PREP_ERROR]', { message: e?.message }); } catch {}
-          });
-        });
-      }
+      console.log('[POSTCOURSE][INBOUND][COURSE_BUILDER_CONTEXT]', {
+        learner_id: learner_id || null,
+        learner_name: learner_name || null,
+        course_id: course_id || null,
+        course_name: course_name || null,
+      });
     } catch {}
 
-    return {
-      success: true,
-      exam_id: created?.exam_id ?? null,
-      attempt_id: created?.attempt_id ?? null,
-      status: 'PREPARING',
-      start_url: created?.exam_id ? `/api/exams/${encodeURIComponent(created.exam_id)}/start` : undefined,
-      readiness: { poll: `/api/exams/${encodeURIComponent(created?.exam_id ?? '')}` },
-    };
+    if (!learner_id || !course_id) {
+      return { status: 'ignored', reason: 'missing_required_ids' };
+    }
+
+    try {
+      await ExamContext.findOneAndUpdate(
+        { user_id: String(learner_id), exam_type: 'postcourse' },
+        {
+          user_id: String(learner_id),
+          exam_type: 'postcourse',
+          metadata: {
+            learner_name: learner_name || null,
+            course_id: String(course_id),
+            course_name: course_name || null,
+          },
+          updated_at: new Date(),
+        },
+        { new: true, upsert: true },
+      );
+    } catch {}
+
+    // No exam build, no DevLab, no coverage required at this stage
+    return { status: 'context_ingested' };
   }
 
   return { error: 'unsupported_action' };

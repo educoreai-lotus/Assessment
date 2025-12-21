@@ -1,6 +1,6 @@
 function buildCourseBuilderCoveragePayload(params = {}) {
   return {
-    action: 'fetch-coverage-map',
+    action: 'coverage_map',
     ...params,
   };
 }

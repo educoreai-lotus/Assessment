@@ -132,13 +132,12 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
     // Fetch coverage map from Course Builder (via Coordinator with safe mock fallback)
     const coverageResp = await safeFetchCoverage({
       learner_id: learnerId,
-      learner_name: learnerName || undefined,
       course_id: courseId,
     }).catch(() => ({}));
 
     const normalized = coverageResp && typeof coverageResp === 'object' ? coverageResp : {};
     const coverageMap = Array.isArray(normalized.coverage_map) ? normalized.coverage_map : [];
-    const effectiveCourseName = normalized.course_name || courseName || null;
+    const effectiveCourseName = courseName || null;
 
     try {
       console.log('[POSTCOURSE][RESPONSE][COVERAGE_MAP]', {
@@ -147,6 +146,11 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
         course_name: effectiveCourseName || null,
       });
     } catch {}
+
+    // Validate non-empty per protocol
+    if (!Array.isArray(coverageMap) || coverageMap.length === 0) {
+      return res.status(400).json({ error: 'coverage_map_empty' });
+    }
 
     // Create exam and initial attempt (do not prepare yet until snapshot persisted)
     const created = await createExamRecord({

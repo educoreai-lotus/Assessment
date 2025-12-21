@@ -18,15 +18,14 @@ async function safeFetchCoverage(params) {
     else if (ret && typeof ret.data === 'string') respString = ret.data;
     else respString = JSON.stringify((ret && ret.data) || {});
     const resp = JSON.parse(respString || '{}');
-    const answer = resp?.response?.answer;
-    const isEmptyObject = answer && typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0;
-    const isEmptyArray = Array.isArray(answer) && answer.length === 0;
-    const hasCoverage = !!(answer && Array.isArray(answer.coverage_map) && answer.coverage_map.length > 0);
-    if (!answer || isEmptyObject || isEmptyArray || !hasCoverage) {
+    const coverage = resp?.response?.coverage_map;
+    const isEmptyArray = Array.isArray(coverage) && coverage.length === 0;
+    const hasCoverage = Array.isArray(coverage) && coverage.length > 0;
+    if (!hasCoverage || isEmptyArray) {
       try { console.log('[MOCK-FALLBACK][CourseBuilder][coverage]', { hasParams: !!params }); } catch {}
       return mockFetchCoverage(params || {});
     }
-    return answer;
+    return { coverage_map: coverage };
   } catch (err) {
     console.warn('CourseBuilder coverage fetch via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockFetchCoverage(params || {});
