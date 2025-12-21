@@ -2695,7 +2695,16 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         return;
       }
       const __tDev = Date.now();
-      try { console.log('[DEVLAB][GEN][START]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+      try {
+        console.log('[DEVLAB][GEN][START]', { exam_id: examId, attempt_id: attemptId });
+        if (exam_type === 'postcourse') {
+          console.log('[POSTCOURSE][DEVLAB][REQUEST]', {
+            attempt_id: attemptId,
+            programming_language: competencyNameForDevLab2,
+            skills_count: skillNamesForDevLab2.length,
+          });
+        }
+      } catch {}
       const { requestCodingWidgetHtml } = require("../gateways/devlabGateway");
       let timeoutHandle = null;
       const timeoutPromise = new Promise((_, reject) => {
@@ -2721,7 +2730,16 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       } finally {
         try { if (timeoutHandle) clearTimeout(timeoutHandle); } catch {}
       }
-      try { console.log('[DEVLAB][PAYLOAD][FINAL]', { programming_language: competencyNameForDevLab2, skills_count: skillNamesForDevLab2.length, skills: skillNamesForDevLab2 }); } catch {}
+      try {
+        console.log('[DEVLAB][PAYLOAD][FINAL]', { programming_language: competencyNameForDevLab2, skills_count: skillNamesForDevLab2.length, skills: skillNamesForDevLab2 });
+        if (exam_type === 'postcourse') {
+          console.log('[POSTCOURSE][DEVLAB][RESPONSE]', {
+            attempt_id: attemptId,
+            has_html: !!(devlabPayload && typeof devlabPayload.html === 'string' && devlabPayload.html.trim() !== ''),
+            questions_count: Array.isArray(devlabPayload?.questions) ? devlabPayload.questions.length : 0,
+          });
+        }
+      } catch {}
       try { console.log('[DEVLAB][GEN][AFTER_RESPONSE]', { keys: Object.keys(devlabPayload || {}), elapsed_ms: Date.now() - __tDev }); } catch {}
       const qArr = Array.isArray(devlabPayload?.questions) ? devlabPayload.questions : [];
       const htmlStr = typeof devlabPayload?.html === 'string' ? devlabPayload.html : null;

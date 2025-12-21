@@ -63,10 +63,27 @@ export default function ExamIntro() {
       // block start until context saved
       return;
     }
-    // Persist acceptance per attempt
-    if (attemptId) {
-      try { localStorage.setItem(`introAccepted:${attemptId}`, 'true'); } catch {}
+    if (examType === 'postcourse') {
+      (async () => {
+        try {
+          // Frontend has no context; request backend to fetch coverage_map and create exam
+          const resp = await examApi.postcourseCoverage();
+          const eid = resp?.exam_id || '';
+          const aid = resp?.attempt_id || '';
+          if (!eid || !aid) throw new Error('failed_to_create_postcourse_exam');
+          try { localStorage.setItem(`introAccepted:${aid}`, 'true'); } catch {}
+          const qp = new URLSearchParams();
+          qp.set('examId', String(eid));
+          qp.set('attemptId', String(aid));
+          qp.set('introAccepted', 'true');
+          navigate(`/exam/postcourse?${qp.toString()}`);
+        } catch (e) {
+          setCtxError('Failed to start post-course exam. Please try again.');
+        }
+      })();
+      return;
     }
+    // Baseline: pass-through with known params
     const params = new URLSearchParams();
     if (examId) params.set('examId', examId);
     if (attemptId) params.set('attemptId', attemptId);
@@ -76,12 +93,7 @@ export default function ExamIntro() {
     if (userName) params.set('userName', userName);
     if (skillName) params.set('skillName', skillName);
     params.set('introAccepted', 'true');
-    const qs = params.toString();
-    if (examType === 'postcourse') {
-      navigate(`/exam/postcourse?${qs}`);
-    } else {
-      navigate(`/exam/baseline?${qs}`);
-    }
+    navigate(`/exam/baseline?${params.toString()}`);
   }
 
   return (

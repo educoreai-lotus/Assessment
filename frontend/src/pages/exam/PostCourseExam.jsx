@@ -75,18 +75,7 @@ export default function PostCourseExam() {
     return null;
   }, [searchParams]);
 
-  const initialCourseId = useMemo(() => {
-    const qp = searchParams.get('courseId') || searchParams.get('course_id');
-    if (qp) {
-      localStorage.setItem('postcourse_course_id', qp);
-      return qp;
-    }
-    const stored = localStorage.getItem('postcourse_course_id');
-    if (stored) return stored;
-    const fallback = 'c_555';
-    localStorage.setItem('postcourse_course_id', fallback);
-    return fallback;
-  }, [searchParams]);
+  // No course context for postcourse; strictly use IDs from URL
 
   const [loading, setLoading] = useState(true);
   const [questionsLoading, setQuestionsLoading] = useState(false);
@@ -94,8 +83,7 @@ export default function PostCourseExam() {
   const [error, setError] = useState('');
 
   const [examId, setExamId] = useState(initialExamId);
-  const [attemptId, setAttemptId] = useState(null);
-  const [courseId, setCourseId] = useState(initialCourseId);
+  const [attemptId, setAttemptId] = useState(searchParams.get('attemptId') || null);
   const [bootstrapReady, setBootstrapReady] = useState(false);
 
   const [cameraReady, setCameraReady] = useState(false);
@@ -150,162 +138,31 @@ export default function PostCourseExam() {
     let mounted = true;
     async function bootstrap() {
       mountCountRef.current += 1;
-      console.log("🔥 mount #", mountCountRef.current);
       try {
         setLoading(true);
         setError('');
-
-        if (!courseId) {
-          throw new Error('course_id is required for post-course exam');
-        }
-
-        // Clear previous attempt only once (fresh entry)
-        if (!clearedOnceRef.current) {
-          try {
-            localStorage.removeItem('postcourse_attempt_id');
-            localStorage.removeItem('postcourse_attempt_no');
-          } catch {}
-          clearedOnceRef.current = true;
-        }
-
-        // Guard: ensure we call createExam only once
-        if (creationStarted.current) {
-          console.log('🔥 createExam skipped (already started)');
+        const eid = searchParams.get('examId') || null;
+        const aid = searchParams.get('attemptId') || null;
+        if (!eid || !aid) {
+          navigate('/exam-intro?examType=postcourse', { replace: true });
           return;
         }
-        creationStarted.current = true;
-
-        // Resolve demo user id (persist across sessions)
-        let userId = localStorage.getItem('demo_user_id');
-        if (!userId) {
-          userId = 'u_123';
-          localStorage.setItem('demo_user_id', userId);
-        }
-
-        let resolvedExamId = null;
-        let resolvedAttemptId = null;
-
-        // If any stale stored attempt exists, verify and clear if expired
-        try {
-          const storedExamId = localStorage.getItem('exam_postcourse_id');
-          const storedAttemptId = localStorage.getItem('postcourse_attempt_id');
-          if (storedExamId && storedAttemptId) {
-            try {
-              const status = await examApi.resolve(storedExamId);
-              const expired = status?.status === 'expired' || (status?.expires_at && new Date(status.expires_at) < new Date());
-              if (expired) {
-                console.log('🔥 Clearing expired stored postcourse attempt', storedAttemptId, storedExamId);
-                localStorage.removeItem('postcourse_attempt_id');
-                localStorage.removeItem('postcourse_attempt_no');
-              }
-            } catch {
-              // If resolve fails, clear stale cache to be safe
-              localStorage.removeItem('postcourse_attempt_id');
-              localStorage.removeItem('postcourse_attempt_no');
-            }
-          }
-        } catch {}
-
-        // Always request a fresh attempt from backend
-        try {
-          console.log("🔥 createExam called");
-          const created = await examApi.create({
-            user_id: userId,
-            exam_type: 'postcourse',
-            course_id: courseId,
-          });
-          const { exam_id, attempt_id } = created;
-          // store separately for navigation
-          try {
-            localStorage.setItem("postcourse_exam_id", String(exam_id || ''));
-            localStorage.setItem("postcourse_attempt_id", String(attempt_id || ''));
-          } catch {}
-          setAttemptId(attempt_id);
-          setExamId(exam_id);
-          console.log("⏳ Waiting for exam package to be ready...");
-          await waitForPackage(exam_id);
-          console.log("✅ Exam package ready");
-          // Always override with fresh IDs from backend
-          resolvedExamId = String(created?.exam_id ?? '');
-          resolvedAttemptId = created?.attempt_id ?? null;
-          console.log('🔥 NEW POSTCOURSE ATTEMPT', resolvedAttemptId, resolvedExamId);
-          // Clear any cached/baseline artifacts and reset local exam/proctoring state
-          try {
-            localStorage.removeItem('exam_baseline_id');
-            // Do NOT persist any attempt_id in storage; only exam id for convenience
-            if (resolvedExamId) localStorage.setItem('exam_postcourse_id', resolvedExamId);
-            if (resolvedAttemptId) localStorage.setItem('postcourse_attempt_id', String(resolvedAttemptId));
-            if (created?.attempt_no != null) localStorage.setItem('postcourse_attempt_no', String(created.attempt_no));
-          } catch {}
-          // Reset UI and gating state to avoid reusing stale attempt info
-          proctoringStartedRef.current = false;
-          setCameraReady(false);
-          setCameraOk(false);
-          setCameraError('');
-          setQuestions([]);
-          setAnswers({});
-          setCurrentIdx(0);
-          setExpiresAtIso(null);
-          setRemainingSec(null);
-          setStrikes(0);
-          if (!resolvedAttemptId) {
-            throw new Error('Create response missing attempt_id');
-          }
-        } catch (err) {
-          const apiErr = err?.response?.data?.error || '';
-          const statusCode = err?.response?.status;
-          if (apiErr === 'already_passed') {
-            // Redirect to latest submitted attempt
-            try {
-              const list = await examApi.attemptsByUser(userId);
-              const submitted = Array.isArray(list) ? list.filter(a => !!a.submitted_at && a.exam_type === 'postcourse') : [];
-              const latest = submitted[0] || list[0];
-              if (latest?.attempt_id) {
-                navigate(`/results/postcourse/${encodeURIComponent(latest.attempt_id)}`, { state: { notice: 'You already passed' } });
-                return;
-              }
-            } catch {}
-            throw err;
-          }
-          if (apiErr === 'max_attempts_reached') {
-            // Redirect to last submitted attempt with notice
-            try {
-              const list = await examApi.attemptsByUser(userId);
-              const submitted = Array.isArray(list) ? list.filter(a => !!a.submitted_at && a.exam_type === 'postcourse') : [];
-              const latest = submitted[0] || list[0];
-              if (latest?.attempt_id) {
-                navigate(`/results/postcourse/${encodeURIComponent(latest.attempt_id)}`, { state: { notice: 'You have used all attempts' } });
-                return;
-              }
-            } catch {}
-            throw err;
-          }
-          if (statusCode === 403 || apiErr === 'exam_time_expired' || apiErr === 'proctoring_not_started') {
-            // Clear stale attempt if any 403 at creation
-            try {
-              localStorage.removeItem('postcourse_attempt_id');
-              localStorage.removeItem('postcourse_attempt_no');
-            } catch {}
-          }
-          // Fallback to most recent attempt when policy prevents new attempt
-          if (apiErr === 'baseline_already_completed') {
-            const list = await examApi.attemptsByUser(userId);
-            const candidates = Array.isArray(list) ? list.filter(a => a.exam_type === 'postcourse') : [];
-            const latest = candidates.find(a => String(a?.exam_id) === String(resolvedExamId)) || candidates[0];
-            resolvedExamId = String(latest?.exam_id || resolvedExamId || '');
-            resolvedAttemptId = latest?.attempt_id ?? null;
-          } else {
-            throw err;
-          }
-        }
-
-        if (!resolvedExamId || !resolvedAttemptId) {
-          throw new Error('Unable to resolve post-course exam or attempt.');
-        }
-
+        setExamId(String(eid));
+        setAttemptId(String(aid));
+        // Optionally wait until package is ready to reduce start errors
+        try { await waitForPackage(String(eid)); } catch {}
         if (!mounted) return;
-        setExamId(resolvedExamId);
-        setAttemptId(resolvedAttemptId);
+        // Reset any local UI artifacts
+        proctoringStartedRef.current = false;
+        setCameraReady(false);
+        setCameraOk(false);
+        setCameraError('');
+        setQuestions([]);
+        setAnswers({});
+        setCurrentIdx(0);
+        setExpiresAtIso(null);
+        setRemainingSec(null);
+        setStrikes(0);
         setBootstrapReady(true);
       } catch (e) {
         if (!mounted) return;
@@ -315,10 +172,8 @@ export default function PostCourseExam() {
       }
     }
     bootstrap();
-    return () => {
-      mounted = false;
-    };
-  }, [courseId]);
+    return () => { mounted = false; };
+  }, [navigate, searchParams]);
 
   // Persist acceptance token tied to attempt once known
   useEffect(() => {

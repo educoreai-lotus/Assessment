@@ -2,6 +2,7 @@
 const { sendCourseBuilderExamResults } = require('../gateways/courseBuilderGateway');
 const pool = require('../../config/supabaseDB');
 const examsService = require('../core/examsService');
+const { ExamContext } = require('../../models');
 
 exports.sendExamResultsToCourseBuilder = async (payloadObj) => {
   return await sendCourseBuilderExamResults(payloadObj || {});
@@ -19,26 +20,42 @@ exports.handleInbound = async (payload) => {
     const course_id = payload?.course_id;
     const course_name = payload?.course_name;
 
-    // Extract skills from coverage_map (for completeness; not required here)
-    const coverage_map = Array.isArray(payload?.coverage_map) ? payload.coverage_map : [];
-    const skills = coverage_map.flatMap((item) => Array.isArray(item?.skills) ? item.skills : []);
-    void skills;
+    // [POSTCOURSE][INBOUND] Persist context only; do NOT create exam here
+    try {
+      console.log('[POSTCOURSE][INBOUND][COURSE_BUILDER_CONTEXT]', {
+        learner_id: user_id || null,
+        learner_name: user_name || null,
+        course_id: course_id || null,
+        course_name: course_name || null,
+      });
+    } catch {}
+    try {
+      if (!user_id || !course_id) {
+        return { error: 'invalid_payload', missing: ['learner_id', 'course_id'].filter((k)=>!((k==='learner_id'&&user_id)||(k==='course_id'&&course_id))) };
+      }
+      await ExamContext.findOneAndUpdate(
+        { user_id: String(user_id), exam_type: 'postcourse' },
+        {
+          user_id: String(user_id),
+          exam_type: 'postcourse',
+          metadata: {
+            learner_name: user_name || null,
+            course_id: String(course_id),
+            course_name: course_name || null,
+          },
+          updated_at: new Date(),
+        },
+        { new: true, upsert: true },
+      );
+    } catch {}
 
-    const created = await examsService.createExam({
-      user_id,
-      user_name,
-      exam_type: 'postcourse',
-      course_id,
-      course_name,
-    });
-
+    // Acknowledge receipt; exam is NOT created at this stage
     return {
-      status: 'postcourse-created',
-      exam_id: created?.exam_id ?? null,
+      status: 'postcourse-context-received',
       exam_type: 'postcourse',
       course_id: course_id ?? null,
       user_id: user_id ?? null,
-      redirect_to: '/app/courses',
+      next_step: 'frontend_start_exam_requests_coverage_map',
     };
   }
 

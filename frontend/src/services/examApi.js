@@ -46,6 +46,13 @@ export const examApi = {
     await httpReady;
     return http.post('/api/exams/context', payload).then(r => r.data);
   },
+  async postcourseCoverage() {
+    await httpReady;
+    return http.post('/api/exams/postcourse/coverage', {
+      requester_service: 'assessment-service',
+      payload: { action: 'coverage_map' },
+    }).then(r => r.data);
+  },
 };
 
 

@@ -16,6 +16,7 @@ const { ProctoringSession, ExamPackage } = require('../models');
 const { ExamContext } = require('../models');
 const { normalizeToInt } = require("../services/core/idNormalizer");
 const proctoringController = require('./../controllers/proctoringController');
+const { safeFetchCoverage } = require('../services/gateways/courseBuilderGateway');
 
 // POST /api/exams/:examId/cancel - cancel current active attempt
 exports.cancelExam = async (req, res, next) => {
@@ -98,6 +99,109 @@ exports.saveExamContext = async (req, res, next) => {
       { new: true, upsert: true },
     );
     return res.json({ ok: true });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// POST /api/exams/postcourse/coverage - build postcourse exam after fetching coverage_map
+exports.requestPostcourseCoverage = async (req, res, next) => {
+  try {
+    // Frontend has no learner/course context; resolve the most recent stored context
+    let ctx = null;
+    try {
+      ctx = await ExamContext.findOne({ exam_type: 'postcourse' }).sort({ updated_at: -1 }).lean();
+    } catch {}
+    const learnerId = ctx?.user_id || null;
+    const learnerName = ctx?.metadata?.learner_name || null;
+    const courseId = ctx?.metadata?.course_id || null;
+    const courseName = ctx?.metadata?.course_name || null;
+    if (!learnerId || !courseId) {
+      return res.status(400).json({ error: 'postcourse_context_missing' });
+    }
+
+    try {
+      console.log('[POSTCOURSE][REQUEST][COVERAGE_MAP]', {
+        learner_id: learnerId,
+        learner_name: learnerName || null,
+        course_id: courseId,
+        course_name: courseName || null,
+      });
+    } catch {}
+
+    // Fetch coverage map from Course Builder (via Coordinator with safe mock fallback)
+    const coverageResp = await safeFetchCoverage({
+      learner_id: learnerId,
+      learner_name: learnerName || undefined,
+      course_id: courseId,
+    }).catch(() => ({}));
+
+    const normalized = coverageResp && typeof coverageResp === 'object' ? coverageResp : {};
+    const coverageMap = Array.isArray(normalized.coverage_map) ? normalized.coverage_map : [];
+    const effectiveCourseName = normalized.course_name || courseName || null;
+
+    try {
+      console.log('[POSTCOURSE][RESPONSE][COVERAGE_MAP]', {
+        items: Array.isArray(coverageMap) ? coverageMap.length : 0,
+        course_id: courseId,
+        course_name: effectiveCourseName || null,
+      });
+    } catch {}
+
+    // Create exam and initial attempt (do not prepare yet until snapshot persisted)
+    const created = await createExamRecord({
+      user_id: String(learnerId),
+      exam_type: 'postcourse',
+      course_id: String(courseId),
+      course_name: effectiveCourseName || undefined,
+      user_name: learnerName || null,
+      company_id: null,
+    });
+    if (!created || !created.exam_id || !created.attempt_id) {
+      return res.status(500).json({ error: 'exam_creation_failed' });
+    }
+
+    // Persist coverage snapshot onto attempt for prepare step
+    try {
+      await pool.query(
+        `ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS coverage_snapshot JSONB`,
+      ).catch(() => {});
+      await pool.query(
+        `UPDATE exam_attempts SET coverage_snapshot = $1::jsonb WHERE attempt_id = $2`,
+        [JSON.stringify({ coverage_map: coverageMap }), Number(created.attempt_id)],
+      );
+    } catch {}
+
+    try {
+      console.log('[POSTCOURSE][EXAM][CREATED]', {
+        exam_id: created.exam_id,
+        attempt_id: created.attempt_id,
+        user_id: learnerId,
+        course_id: courseId,
+      });
+    } catch {}
+
+    // Kick off async preparation (theoretical + DevLab via injected coverage snapshot)
+    try {
+      setImmediate(() => {
+        try {
+          prepareExamAsync(created.exam_id, created.attempt_id, {
+            user_id: String(learnerId),
+            exam_type: 'postcourse',
+            course_id: String(courseId),
+            course_name: effectiveCourseName || undefined,
+            coverage_map: coverageMap,
+          }).catch((e) => {
+            try { console.log('[TRACE][POSTCOURSE][PREP_ERROR]', { message: e?.message }); } catch {}
+          });
+        } catch {}
+      });
+    } catch {}
+
+    return res.json({
+      exam_id: created.exam_id,
+      attempt_id: created.attempt_id,
+    });
   } catch (err) {
     return next(err);
   }
