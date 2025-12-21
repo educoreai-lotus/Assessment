@@ -1,6 +1,7 @@
 function buildCourseBuilderCoveragePayload(params = {}) {
   return {
     action: 'coverage_map',
+    route: { destination: 'course-builder-service', strict: true },
     ...params,
   };
 }
