@@ -104,6 +104,7 @@ export default function PostCourseExam() {
   // DevLab iframe runs self-contained via srcDoc; no JS bridge
   const [stage, setStage] = useState('theory'); // 'theory' | 'coding' | 'submit'
   const [devlabHtml, setDevlabHtml] = useState(null);
+  const hasStartedRef = useRef(false);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
   [answers]);
@@ -204,12 +205,14 @@ export default function PostCourseExam() {
     async function startIfReady() {
       if (!examId || !attemptId) return;
       if (!examReady || !cameraOk) return;
+      if (hasStartedRef.current) return;
       try {
         setQuestionsLoading(true);
         // eslint-disable-next-line no-console
         console.log('[POSTCOURSE][EXAM][START][CALLING]', { examId, attemptId });
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
+        hasStartedRef.current = true;
         setStage('theory');
         try {
           const html =
