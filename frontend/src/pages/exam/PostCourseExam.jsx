@@ -183,6 +183,12 @@ export default function PostCourseExam() {
     }
   }, [attemptId, searchParams]);
 
+  // Debug: log camera readiness changes
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('[POSTCOURSE][CAMERA][READY_STATE]', { cameraReady });
+  }, [cameraReady]);
+
   useEffect(() => {
     let cancelled = false;
     async function startIfReady() {
@@ -190,6 +196,8 @@ export default function PostCourseExam() {
       if (!cameraReady || !cameraOk) return;
       try {
         setQuestionsLoading(true);
+        // eslint-disable-next-line no-console
+        console.log('[POSTCOURSE][EXAM][START][CALLING]', { examId, attemptId });
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         setStage('theory');
@@ -442,23 +450,28 @@ export default function PostCourseExam() {
   useEffect(() => {
     if (!attemptId) return;
     if (!cameraReady) return;
-    if (!bootstrapReady) return;
     if (proctoringStartedRef.current) return;
     let canceled = false;
     (async () => {
       try {
+        // eslint-disable-next-line no-console
+        console.log('[POSTCOURSE][PROCTORING][START][CALLING]', { examId, attemptId, cameraReady });
         await examApi.proctoringStartForExam(examId, { attempt_id: attemptId });
         if (canceled) return;
         proctoringStartedRef.current = true;
         setCameraOk(true);
+        // eslint-disable-next-line no-console
+        console.log('[POSTCOURSE][PROCTORING][START][OK]', { examId, attemptId });
       } catch (e) {
         if (canceled) return;
         setCameraOk(false);
         setCameraError(e?.response?.data?.error || e?.message || 'Failed to activate proctoring');
+        // eslint-disable-next-line no-console
+        console.log('[POSTCOURSE][PROCTORING][START][ERROR]', e?.response?.data?.error || e?.message || e);
       }
     })();
     return () => { canceled = true; };
-  }, [attemptId, examId, cameraReady, bootstrapReady]);
+  }, [attemptId, examId, cameraReady]);
 
   useEffect(() => {
     console.log("🔥 FRONTEND attemptId =", attemptId);
