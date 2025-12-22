@@ -19,6 +19,7 @@ export default function ExamIntro() {
   const [ack, setAck] = useState(false);
   const [ctxSaved, setCtxSaved] = useState(examType !== 'baseline');
   const [ctxError, setCtxError] = useState('');
+  const [startingExam, setStartingExam] = useState(false);
   const didPostContext = useRef(false);
 
   const title = useMemo(() => {
@@ -58,42 +59,49 @@ export default function ExamIntro() {
     })();
   }, [examType, userId, skillName]);
 
-  function handleStart() {
+  async function handleStart() {
+    if (startingExam) return;
     if (examType === 'baseline' && !ctxSaved) {
       // block start until context saved
       return;
     }
-    if (examType === 'postcourse') {
-      (async () => {
-        try {
-          // Frontend has no context; request backend to fetch coverage_map and create exam
-          const resp = await examApi.postcourseCoverage();
-          const eid = resp?.exam_id || '';
-          const aid = resp?.attempt_id || '';
-          if (!eid || !aid) throw new Error('failed_to_create_postcourse_exam');
-          try { localStorage.setItem(`introAccepted:${aid}`, 'true'); } catch {}
-          const qp = new URLSearchParams();
-          qp.set('examId', String(eid));
-          qp.set('attemptId', String(aid));
-          qp.set('introAccepted', 'true');
-          navigate(`/exam/postcourse?${qp.toString()}`);
-        } catch (e) {
-          setCtxError('Failed to start post-course exam. Please try again.');
-        }
-      })();
-      return;
+    setStartingExam(true);
+    // eslint-disable-next-line no-console
+    console.log('[POSTCOURSE][START][CLICK]');
+    try {
+      if (examType === 'postcourse') {
+        // Frontend has no context; request backend to fetch coverage_map and create exam
+        const resp = await examApi.postcourseCoverage();
+        const eid = resp?.exam_id || '';
+        const aid = resp?.attempt_id || '';
+        if (!eid || !aid) throw new Error('failed_to_create_postcourse_exam');
+        try { localStorage.setItem(`introAccepted:${aid}`, 'true'); } catch {}
+        const qp = new URLSearchParams();
+        qp.set('examId', String(eid));
+        qp.set('attemptId', String(aid));
+        qp.set('introAccepted', 'true');
+        navigate(`/exam/postcourse?${qp.toString()}`);
+        return;
+      }
+      // Baseline: pass-through with known params
+      const params = new URLSearchParams();
+      if (examId) params.set('examId', examId);
+      if (attemptId) params.set('attemptId', attemptId);
+      if (courseId) params.set('courseId', courseId);
+      if (courseName) params.set('courseName', courseName);
+      if (userId) params.set('userId', userId);
+      if (userName) params.set('userName', userName);
+      if (skillName) params.set('skillName', skillName);
+      params.set('introAccepted', 'true');
+      navigate(`/exam/baseline?${params.toString()}`);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[POSTCOURSE][START][FAILED]', err);
+      if (examType === 'postcourse') {
+        setCtxError('Failed to start post-course exam. Please try again.');
+      }
+      setStartingExam(false); // allow retry on failure
     }
-    // Baseline: pass-through with known params
-    const params = new URLSearchParams();
-    if (examId) params.set('examId', examId);
-    if (attemptId) params.set('attemptId', attemptId);
-    if (courseId) params.set('courseId', courseId);
-    if (courseName) params.set('courseName', courseName);
-    if (userId) params.set('userId', userId);
-    if (userName) params.set('userName', userName);
-    if (skillName) params.set('skillName', skillName);
-    params.set('introAccepted', 'true');
-    navigate(`/exam/baseline?${params.toString()}`);
   }
 
   return (
@@ -176,10 +184,10 @@ export default function ExamIntro() {
           <button
             type="button"
             onClick={handleStart}
-            disabled={!ack || !ctxSaved}
-            className={`px-4 py-2 rounded-md text-white ${(ack && ctxSaved) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'}`}
+            disabled={!ack || !ctxSaved || startingExam}
+            className={`px-4 py-2 rounded-md text-white ${(ack && ctxSaved && !startingExam) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'}`}
           >
-            Start Exam
+            {startingExam ? 'Starting exam…' : 'Start Exam'}
           </button>
         </div>
 
