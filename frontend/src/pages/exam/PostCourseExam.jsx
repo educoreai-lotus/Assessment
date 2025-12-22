@@ -111,6 +111,7 @@ export default function PostCourseExam() {
   const devlabCompletedRef = useRef(false);
   const [devlabCompleted, setDevlabCompleted] = useState(false);
   const [hasCoding, setHasCoding] = useState(false);
+  const isSubmittingRef = useRef(false);
   const hasStartedRef = useRef(false);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
@@ -409,13 +410,14 @@ export default function PostCourseExam() {
     try {
       // eslint-disable-next-line no-console
       console.log('[POSTCOURSE][SUBMIT][CLICK]');
-      if (isSubmitting) {
+      if (isSubmittingRef.current) {
         // eslint-disable-next-line no-console
-        console.log('[POSTCOURSE][SUBMIT][IGNORED_IS_SUBMITTING]', { isSubmitting });
+        console.log('[POSTCOURSE][SUBMIT][IGNORED_IS_SUBMITTING]', { isSubmitting: true });
         return;
       }
       // Immediate submit loading UI (Baseline parity)
       setIsSubmitting(true);
+      isSubmittingRef.current = true;
       const payloadAnswers = questions.map((q) => ({
         question_id: q.originalId,
         type: q.type === 'text' ? 'open' : q.type,
@@ -458,6 +460,7 @@ export default function PostCourseExam() {
       setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   }
 
