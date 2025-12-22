@@ -17,6 +17,7 @@ export default function PostCourseResults() {
   const [result, setResult] = useState(location?.state?.result || null);
   const [loading, setLoading] = useState(!location?.state?.result);
   const [error, setError] = useState('');
+  const [pkgMeta, setPkgMeta] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -53,6 +54,25 @@ export default function PostCourseResults() {
       mounted = false;
     };
   }, [attemptId, result]);
+
+  // Fallback: resolve package metadata for course linkage if missing
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const needsCourseId = result && (result.course_id == null || String(result.course_id).trim() === '' || String(result.course_id) === '0');
+        const needsCourseName = result && (!result.course_name || String(result.course_name).trim() === '' || result.course_name === '—');
+        if (!result || (!needsCourseId && !needsCourseName)) return;
+        if (!result.exam_id) return;
+        const resp = await examApi.resolve(result.exam_id).catch(() => null);
+        if (cancelled) return;
+        if (resp && resp.package_ready && resp.metadata) {
+          setPkgMeta({ course_id: resp.metadata.course_id || null, course_name: resp.metadata.course_name || null });
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [result]);
 
   const grade = Number(result?.final_grade || 0);
   const passingGrade = Number(result?.passing_grade || 70);
@@ -136,11 +156,18 @@ export default function PostCourseResults() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="card p-5">
           <div className="text-sm text-neutral-400">Course ID</div>
-          <div className="text-base">{result?.course_id != null ? String(result.course_id) : '—'}</div>
+          <div className="text-base">
+            {(() => {
+              const cid = (pkgMeta?.course_id != null && String(pkgMeta.course_id).trim() !== '') ? String(pkgMeta.course_id) : (result?.course_id != null ? String(result.course_id) : '');
+              return cid && cid !== '0' ? cid : '—';
+            })()}
+          </div>
         </div>
         <div className="card p-5">
           <div className="text-sm text-neutral-400">Course Name</div>
-          <div className="text-base">{result?.course_name || '—'}</div>
+          <div className="text-base">
+            {pkgMeta?.course_name || result?.course_name || '—'}
+          </div>
         </div>
         <div className="card p-5">
           <div className="text-sm text-neutral-400">Attempt No</div>
