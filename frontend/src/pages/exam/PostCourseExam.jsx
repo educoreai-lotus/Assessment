@@ -117,6 +117,11 @@ export default function PostCourseExam() {
     Object.values(answers).filter(v => v !== '' && v != null).length,
   [answers]);
   const totalCount = questions.length;
+  const canSubmit = useMemo(() => {
+    const proctoringOk = !!cameraOk;
+    const codingOk = !hasCoding || !!devlabCompleted;
+    return proctoringOk && codingOk;
+  }, [cameraOk, hasCoding, devlabCompleted]);
 
   // DevLab grading ingestion (iframe-safe postMessage)
   useEffect(() => {
@@ -534,6 +539,22 @@ export default function PostCourseExam() {
     console.log('[POSTCOURSE][CAMERA][EFFECTIVE_READY]', { hasStream, permissionGranted, proctoringStarted });
   }, [cameraReady, permissionDenied, cameraOk]);
 
+  // Diagnostic: submit gating insight when entering submit stage
+  useEffect(() => {
+    if (stage === 'submit') {
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[POSTCOURSE][SUBMIT][GATE]', {
+          cameraOk,
+          hasCoding,
+          devlabCompleted,
+          proctoringStarted: !!proctoringStartedRef.current,
+          canSubmit,
+        });
+      } catch {}
+    }
+  }, [stage, cameraOk, hasCoding, devlabCompleted, canSubmit]);
+
   // Log mount/unmount of DevLab iframe wrapper to ensure stability (no remount loops)
   useEffect(() => {
     if (typeof devlabHtml === 'string' && devlabHtml.trim() !== '') {
@@ -672,9 +693,7 @@ export default function PostCourseExam() {
             className="btn-emerald px-8 py-3 text-lg"
             onClick={handleSubmit}
             disabled={
-              isSubmitting ||
-              !proctoringStartedRef.current ||
-              (hasCoding && !devlabCompletedRef.current)
+              isSubmitting || !canSubmit
             }
           >
             Submit Exam
