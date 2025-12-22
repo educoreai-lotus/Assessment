@@ -78,6 +78,15 @@ export default function PostCourseResults() {
   const passingGrade = Number(result?.passing_grade || 70);
   const passed = !!result?.passed;
   const isBaseline = result?.exam_type === 'baseline';
+  const isPostCourse = !isBaseline;
+  const statusCompleted = String(result?.status || '').toLowerCase() === 'completed';
+
+  const resolvedCourseId = useMemo(() => {
+    const cid =
+      (pkgMeta?.course_id != null && String(pkgMeta.course_id).trim() !== '') ? String(pkgMeta.course_id) :
+      (result?.course_id != null ? String(result.course_id) : '');
+    return cid && cid !== '0' ? cid : '';
+  }, [pkgMeta, result]);
   const rawMaxAttempts =
     result?.max_attempts ??
     result?.policy?.max_attempts ??
@@ -214,29 +223,50 @@ export default function PostCourseResults() {
         </div>
       )}
 
-      {attemptId && !passed && (
-        attemptsUsed < attemptsLimit ? (
-          <button
-            className="mt-4 px-6 py-2 rounded bg-emeraldbrand-800 hover:bg-emeraldbrand-700 text-white"
-            onClick={() => {
-              try {
-                localStorage.removeItem("postcourse_exam_id");
-                localStorage.removeItem("postcourse_attempt_id");
-                localStorage.removeItem("postcourse_answers");
-              } catch {}
-              navigate('/exam/postcourse', { replace: true });
-            }}
-          >
-            Retake Exam
-          </button>
-        ) : (
-          <button
-            className="mt-4 px-6 py-2 rounded bg-gray-700 text-gray-400 cursor-not-allowed"
-            disabled
-          >
-            Max attempts reached ({attemptsLimit}/{attemptsLimit})
-          </button>
-        )
+      {/* Actions */}
+      {isPostCourse && (
+        <div className="mt-6 flex flex-wrap gap-3">
+          {/* Back to Course: visible when exam completed (passed or failed) */}
+          {statusCompleted && resolvedCourseId && (
+            <button
+              className="px-6 py-2 rounded bg-emeraldbrand-800 hover:bg-emeraldbrand-700 text-white"
+              onClick={() => {
+                const url = `https://course-builder-alpha-nine.vercel.app/course/${encodeURIComponent(resolvedCourseId)}/feedback`;
+                window.location.href = url;
+              }}
+            >
+              Back to Course
+            </button>
+          )}
+
+          {/* Retake controls */}
+          {attemptId && !passed && attemptsUsed < attemptsLimit && !statusCompleted && (
+            <button
+              className="px-6 py-2 rounded bg-emeraldbrand-800 hover:bg-emeraldbrand-700 text-white"
+              onClick={() => {
+                try {
+                  localStorage.removeItem("postcourse_exam_id");
+                  localStorage.removeItem("postcourse_attempt_id");
+                  localStorage.removeItem("postcourse_answers");
+                } catch {}
+                navigate('/exam/postcourse', { replace: true });
+              }}
+            >
+              Retake Exam
+            </button>
+          )}
+
+          {/* Disabled retake when passed OR out of attempts */}
+          {(passed || (attemptId && attemptsUsed >= attemptsLimit)) && (
+            <button
+              className="px-6 py-2 rounded bg-gray-700 text-gray-400 cursor-not-allowed"
+              disabled
+              title={passed ? 'Exam passed' : `Max attempts reached (${attemptsLimit}/${attemptsLimit})`}
+            >
+              {passed ? 'Exam passed' : `Max attempts reached (${attemptsLimit}/${attemptsLimit})`}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

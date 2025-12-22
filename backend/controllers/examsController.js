@@ -812,7 +812,15 @@ exports.submitExam = async (req, res, next) => {
 
     // Skills Engine result push is handled inside service to guarantee correct payload wiring.
 
-    const body = codingBlock ? { ...response, coding_results: codingBlock } : response;
+    // Enrich submit response with course_id for reliable redirect wiring
+    let courseIdOut = null;
+    try {
+      const pkgForCid = await ExamPackage.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
+      courseIdOut = pkgForCid?.metadata?.course_id != null ? String(pkgForCid.metadata.course_id) : null;
+    } catch {}
+    const body = codingBlock
+      ? { ...response, coding_results: codingBlock, ...(courseIdOut ? { course_id: courseIdOut } : {}) }
+      : { ...response, ...(courseIdOut ? { course_id: courseIdOut } : {}) };
     try { console.log('[POSTCOURSE][SUBMIT][COMPLETED]', { exam_id: Number(examId), attempt_id: attemptIdNum, status: 'COMPLETED' }); } catch {}
     return res.json(body);
   } catch (err) {
