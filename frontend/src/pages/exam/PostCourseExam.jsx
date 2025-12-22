@@ -406,10 +406,14 @@ export default function PostCourseExam() {
   }
 
   async function handleSubmit() {
-    if (isSubmitting) return;
     try {
       // eslint-disable-next-line no-console
       console.log('[POSTCOURSE][SUBMIT][CLICK]');
+      if (isSubmitting) {
+        // eslint-disable-next-line no-console
+        console.log('[POSTCOURSE][SUBMIT][IGNORED_IS_SUBMITTING]', { isSubmitting });
+        return;
+      }
       // Immediate submit loading UI (Baseline parity)
       setIsSubmitting(true);
       const payloadAnswers = questions.map((q) => ({
