@@ -113,15 +113,23 @@ export default function PostCourseExam() {
   const [hasCoding, setHasCoding] = useState(false);
   const isSubmittingRef = useRef(false);
   const hasStartedRef = useRef(false);
+  const proctoringListenersEnabledRef = useRef(true);
+  const removeProctorListenersRef = useRef(() => {});
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
   [answers]);
   const totalCount = questions.length;
-  const canSubmit = useMemo(() => {
-    const proctoringOk = !!cameraOk;
-    const codingOk = !hasCoding || !!devlabCompleted;
-    return proctoringOk && codingOk;
-  }, [cameraOk, hasCoding, devlabCompleted]);
+
+  function disableProctoringListeners() {
+    try {
+      proctoringListenersEnabledRef.current = false;
+      if (typeof removeProctorListenersRef.current === 'function') {
+        removeProctorListenersRef.current();
+      }
+      // eslint-disable-next-line no-console
+      console.log('[POSTCOURSE][PROCTOR][LISTENERS_DISABLED]');
+    } catch {}
+  }
 
   // DevLab grading ingestion (iframe-safe postMessage)
   useEffect(() => {
@@ -341,8 +349,10 @@ export default function PostCourseExam() {
   useEffect(() => {
     if (!attemptId || !examId) return;
     let mounted = true;
+    proctoringListenersEnabledRef.current = true;
 
     function addStrike(reason) {
+      if (!proctoringListenersEnabledRef.current) return;
       if (!mounted) return;
       setStrikes((prev) => {
         const next = prev + 1;
@@ -382,12 +392,15 @@ export default function PostCourseExam() {
     window.addEventListener('blur', handleBlur);
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('resize', handleResize);
-
-    return () => {
-      mounted = false;
+    removeProctorListenersRef.current = () => {
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('resize', handleResize);
+    };
+
+    return () => {
+      mounted = false;
+      removeProctorListenersRef.current();
     };
   }, [attemptId, examId, navigate]);
 
@@ -423,6 +436,8 @@ export default function PostCourseExam() {
       // Immediate submit loading UI (Baseline parity)
       setIsSubmitting(true);
       isSubmittingRef.current = true;
+      // Prevent integrity listeners from firing during terminal submission
+      disableProctoringListeners();
       const payloadAnswers = questions.map((q) => ({
         question_id: q.originalId,
         type: q.type === 'text' ? 'open' : q.type,
@@ -539,7 +554,7 @@ export default function PostCourseExam() {
     console.log('[POSTCOURSE][CAMERA][EFFECTIVE_READY]', { hasStream, permissionGranted, proctoringStarted });
   }, [cameraReady, permissionDenied, cameraOk]);
 
-  // Diagnostic: submit gating insight when entering submit stage
+  // Diagnostic: submit stage entered
   useEffect(() => {
     if (stage === 'submit') {
       try {
@@ -549,11 +564,10 @@ export default function PostCourseExam() {
           hasCoding,
           devlabCompleted,
           proctoringStarted: !!proctoringStartedRef.current,
-          canSubmit,
         });
       } catch {}
     }
-  }, [stage, cameraOk, hasCoding, devlabCompleted, canSubmit]);
+  }, [stage, cameraOk, hasCoding, devlabCompleted]);
 
   // Log mount/unmount of DevLab iframe wrapper to ensure stability (no remount loops)
   useEffect(() => {
@@ -693,7 +707,8 @@ export default function PostCourseExam() {
             className="btn-emerald px-8 py-3 text-lg"
             onClick={handleSubmit}
             disabled={
-              isSubmitting || !canSubmit
+              isSubmitting ||
+              (hasCoding && !devlabCompleted)
             }
           >
             Submit Exam
