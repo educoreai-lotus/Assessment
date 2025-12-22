@@ -297,7 +297,7 @@ export default function PostCourseExam() {
       }
     }
     startIfReady();
-    return () => { cancelled = false; };
+    return () => { cancelled = true; };
   }, [examId, attemptId, cameraReady, examReady, navigate]);
 
   // DevLab answers bridge removed; DevLab graded asynchronously server-side
@@ -607,13 +607,15 @@ export default function PostCourseExam() {
         </div>
       )}
 
-      {!examCanceled && questions.length === 0 && stage !== 'coding' && (cameraError ? (
-        <div className="text-sm text-neutral-400">
-          Camera access is required to start the exam. Please allow camera access and refresh.
-        </div>
-      ) : (
-        <LoadingSpinner label="Preparing questions..." />
-      ))}
+      {!examCanceled && questions.length === 0 && stage !== 'coding' && (
+        (cameraError || !cameraReady || !cameraOk) ? (
+          <div className="text-sm text-neutral-400">
+            Camera access is required to start the exam. Please allow camera access to continue.
+          </div>
+        ) : (
+          <LoadingSpinner label="Preparing questions..." />
+        )
+      )}
 
       {isSubmitting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
