@@ -12,7 +12,7 @@ function getCoordinatorUrl() {
 async function safeFetchCoverage(params) {
   try {
     const payload = buildCourseBuilderCoveragePayload(params || {});
-    const ret = await sendToCoordinator({ targetService: 'course-builder', payload }).catch(() => ({}));
+  const ret = await sendToCoordinator({ targetService: 'course-builder-service', payload }).catch(() => ({}));
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;
@@ -35,7 +35,7 @@ async function safeFetchCoverage(params) {
 // Outgoing results push through Coordinator
 async function sendCourseBuilderExamResults(payloadObj) {
   const shaped = buildCourseBuilderResultPayload(payloadObj || {});
-  const ret = await sendToCoordinator({ targetService: 'course-builder', payload: shaped }).catch(() => ({}));
+  const ret = await sendToCoordinator({ targetService: 'course-builder-service', payload: shaped }).catch(() => ({}));
   let respString;
   if (typeof ret === 'string') respString = ret;
   else if (ret && typeof ret.data === 'string') respString = ret.data;

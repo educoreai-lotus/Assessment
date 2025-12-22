@@ -2255,7 +2255,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
         // Fire-and-forget send via Coordinator
         try {
           const { sendToCoordinator } = require('../integrations/envelopeSender');
-          sendToCoordinator({ targetService: 'skills-engine', payload }).catch((e) => {
+          sendToCoordinator({ targetService: 'skills-engine-service', payload }).catch((e) => {
             try { console.warn('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][FAILED]', { exam_id: payload.exam_id, error: e?.message || String(e) }); } catch {}
           });
         } catch (e) {
@@ -2552,7 +2552,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         const { normalizeSkillsEngineResponse } = require('../gateways/skillsEngineGateway');
         const timeoutMs = 120000;
         async function fetchWithTimeout() {
-          const coreCall = sendToCoordinator({ targetService: 'skills-engine', payload });
+          const coreCall = sendToCoordinator({ targetService: 'skills-engine-service', payload });
           const timeoutCall = new Promise((_, reject) => setTimeout(() => reject(new Error('SkillsEngineTimeout')), timeoutMs));
           const ret = await Promise.race([coreCall, timeoutCall]);
           let respString;
