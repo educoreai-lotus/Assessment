@@ -226,8 +226,8 @@ export default function PostCourseResults() {
       {/* Actions */}
       {isPostCourse && (
         <div className="mt-6 flex flex-wrap gap-3">
-          {/* Back to Course: visible when exam completed (passed or failed) */}
-          {statusCompleted && resolvedCourseId && (
+          {/* Back to Course: visible when exam completed OR passed */}
+          {(statusCompleted || passed) && resolvedCourseId && (
             <button
               className="px-6 py-2 rounded bg-emeraldbrand-800 hover:bg-emeraldbrand-700 text-white"
               onClick={() => {
