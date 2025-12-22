@@ -91,6 +91,8 @@ export default function PostCourseExam() {
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraOk, setCameraOk] = useState(false);
   const [cameraError, setCameraError] = useState('');
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const hasStreamRef = useRef(false);
 
   const [questions, setQuestions] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -206,8 +208,8 @@ export default function PostCourseExam() {
     let cancelled = false;
     async function startIfReady() {
       if (!examId || !attemptId) return;
-      // Gate start by exam readiness + proctoring OK (cameraOk). Do NOT depend on cameraReady toggles.
-      if (!examReady || !cameraOk) return;
+      // Start exam based ONLY on exam readiness; camera/proctoring run in parallel.
+      if (!examReady) return;
       if (hasStartedRef.current) return;
       try {
         setQuestionsLoading(true);
@@ -298,7 +300,7 @@ export default function PostCourseExam() {
     }
     startIfReady();
     return () => { cancelled = true; };
-  }, [examId, attemptId, cameraOk, examReady, navigate]);
+  }, [examId, attemptId, examReady, navigate]);
 
   // DevLab answers bridge removed; DevLab graded asynchronously server-side
 
@@ -454,11 +456,18 @@ export default function PostCourseExam() {
   // Camera callbacks
   const handleCameraReady = useCallback(() => {
     setCameraReady(true);
+    hasStreamRef.current = true;
   }, []);
   const handleCameraError = useCallback((message) => {
     setCameraError(message || 'Camera access failed');
     setCameraReady(false);
     setCameraOk(false);
+    try {
+      const msg = String(message || '').toLowerCase();
+      if (msg.includes('notallowed') || msg.includes('permission denied') || msg.includes('denied')) {
+        setPermissionDenied(true);
+      }
+    } catch {}
   }, []);
   const handlePhoneDetected = useCallback(() => {
     // Report incident only; NEVER gate /start or control navigation/stage
@@ -504,6 +513,15 @@ export default function PostCourseExam() {
   useEffect(() => {
     console.log("🔥 FRONTEND attemptId =", attemptId);
   }, [attemptId]);
+
+  // Diagnostic: camera effective readiness (does not gate UI)
+  useEffect(() => {
+    const hasStream = !!(cameraReady || hasStreamRef.current);
+    const permissionGranted = !permissionDenied;
+    const proctoringStarted = !!proctoringStartedRef.current;
+    // eslint-disable-next-line no-console
+    console.log('[POSTCOURSE][CAMERA][EFFECTIVE_READY]', { hasStream, permissionGranted, proctoringStarted });
+  }, [cameraReady, permissionDenied, cameraOk]);
 
   // Log mount/unmount of DevLab iframe wrapper to ensure stability (no remount loops)
   useEffect(() => {
@@ -600,7 +618,7 @@ export default function PostCourseExam() {
             <div className="text-gray-400 text-sm">
               Question {currentIndexDisplay} of {questions.length}
             </div>
-            <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || !(cameraReady && cameraOk) || isSubmitting}>
+            <button className="btn-emerald" onClick={goNext} disabled={questionsLoading || isSubmitting}>
               Next
             </button>
           </div>
@@ -608,7 +626,7 @@ export default function PostCourseExam() {
       )}
 
       {!examCanceled && questions.length === 0 && stage !== 'coding' && (
-        (!cameraOk || cameraError) ? (
+        (permissionDenied && !cameraOk) ? (
           <div className="text-sm text-neutral-400">
             Camera access is required to start the exam. Please allow camera access to continue.
           </div>
