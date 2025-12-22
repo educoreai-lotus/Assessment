@@ -105,6 +105,7 @@ export default function PostCourseExam() {
   // DevLab iframe runs self-contained via srcDoc; no JS bridge
   const [stage, setStage] = useState('theory'); // 'theory' | 'coding' | 'submit'
   const [devlabHtml, setDevlabHtml] = useState(null);
+  const devlabHtmlRef = useRef(null);
   const hasStartedRef = useRef(false);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
@@ -225,9 +226,20 @@ export default function PostCourseExam() {
           });
         } catch {}
         setQuestions(Array.isArray(pkg.questions) ? pkg.questions : []);
-        if (pkg.devlab_ui?.componentHtml && typeof pkg.devlab_ui.componentHtml === 'string') {
-          setDevlabHtml(pkg.devlab_ui.componentHtml);
-        }
+        // Inject DevLab HTML ONCE, independent of later camera/proctoring/phone state changes
+        try {
+          const html =
+            pkg?.devlab_ui?.componentHtml ||
+            pkg?.devlabUi?.componentHtml ||
+            pkg?.devlab_ui_html ||
+            null;
+          if (typeof html === 'string' && html.trim() !== '' && !devlabHtmlRef.current) {
+            devlabHtmlRef.current = html;
+            setDevlabHtml(html);
+            // eslint-disable-next-line no-console
+            console.log('[POSTCOURSE][DEVLAB][HTML_SET_ONCE]', { len: html.length });
+          }
+        } catch {}
         setCurrentIdx(0);
         setAnswers({});
         // Entry decision based on questions, not devlab_ui:
@@ -493,6 +505,34 @@ export default function PostCourseExam() {
     console.log("🔥 FRONTEND attemptId =", attemptId);
   }, [attemptId]);
 
+  // Log mount/unmount of DevLab iframe wrapper to ensure stability (no remount loops)
+  useEffect(() => {
+    if (typeof devlabHtml === 'string' && devlabHtml.trim() !== '') {
+      // eslint-disable-next-line no-console
+      console.log('[POSTCOURSE][DEVLAB][WRAPPER_MOUNT]');
+      return () => {
+        // eslint-disable-next-line no-console
+        console.log('[POSTCOURSE][DEVLAB][WRAPPER_UNMOUNT]');
+      };
+    }
+    return undefined;
+  }, [devlabHtml]);
+
+  // Memoize the iframe element so frequent state updates elsewhere don't remount it
+  const devlabIframe = useMemo(() => {
+    if (typeof devlabHtml === 'string' && devlabHtml.trim() !== '') {
+      return (
+        <iframe
+          title="Coding Widget"
+          srcDoc={devlabHtml}
+          style={{ width: '100%', height: '700px', border: '0', borderRadius: '12px' }}
+          sandbox="allow-scripts allow-same-origin"
+        />
+      );
+    }
+    return null;
+  }, [devlabHtml]);
+
   if (loading && !attemptId) return <LoadingSpinner label="Initializing post-course exam..." />;
 
   return (
@@ -586,12 +626,7 @@ export default function PostCourseExam() {
       {!examCanceled && stage === 'coding' && typeof devlabHtml === 'string' && devlabHtml.trim() !== '' && (
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-3">Coding</h3>
-          <iframe
-            title="Coding Widget"
-            srcDoc={devlabHtml}
-            style={{ width: '100%', height: '700px', border: '0', borderRadius: '12px' }}
-            sandbox="allow-scripts allow-forms allow-same-origin"
-          />
+          {devlabIframe}
           <div className="mt-4 flex justify-end">
             <button className="btn-emerald" onClick={() => setStage('submit')} disabled={isSubmitting}>
               Proceed to Submit
