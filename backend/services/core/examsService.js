@@ -2175,92 +2175,94 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
 
   // 3.2) Skills Engine
   try {
-    const { ExamContext } = require('../../models');
-    const ctx = await ExamContext.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
-    if (!ctx || !ctx.user_id) {
-      try { console.error('[SUBMIT][CTX_MISSING]', { attempt_id: String(attemptIdNum) }); } catch {}
-    } else {
-      const examIdRuntime = Number.isFinite(Number(exam_id)) ? Number(exam_id) : Number(attempt.exam_id);
-      // Build payload skills from persisted ExamPackage.grading.per_skill to ensure consistency
-      let persistedPerSkill = perSkill;
-      try {
-        const pkgAfter = await ExamPackage.findOne({ attempt_id: String(attemptIdNum) }).lean();
-        if (pkgAfter && pkgAfter.grading && Array.isArray(pkgAfter.grading.per_skill)) {
-          persistedPerSkill = pkgAfter.grading.per_skill;
-        }
-      } catch {}
-      // Build skills payload. For postcourse, include ONLY acquired skills; baseline unchanged.
-      const rawSkills = Array.isArray(persistedPerSkill) ? persistedPerSkill : [];
-      const filteredSkills =
-        String(examType) === 'postcourse'
-          ? rawSkills.filter((s) => String(s?.status || '').toLowerCase() === 'acquired')
-          : rawSkills;
-      const skillsPayload = filteredSkills.map((s) => ({
-        skill_id: s.skill_id,
-        skill_name: s.skill_name,
-        score: s.score,
-        status: s.status,
-      }));
-      const payload =
-        examType === 'postcourse'
-          ? {
-              action: 'postcourse-exam-result',
-              user_id: ctx.user_id,
-              exam_type: 'postcourse',
-              exam_id: String(examIdRuntime),
-              passing_grade: Number(passing),
-              final_grade: Number(finalGrade),
-              passed,
-              final_status: 'completed',
-              course_name: examPackage?.metadata?.course_name || null,
-              skills: skillsPayload,
-              route: { destination: 'skills-engine-service', strict: true },
-            }
-          : {
-              action: 'baseline-exam-result',
-              user_id: ctx.user_id,
-              exam_type: 'baseline',
-              exam_id: String(examIdRuntime),
-              passing_grade: Number(passing),
-              final_grade: Number(finalGrade),
-              passed,
-              skills: skillsPayload,
-            };
+    // Resolve identifiers from Mongo ExamPackage (authoritative for postcourse)
+    const pkgAfter = await ExamPackage.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
+    const userIdForSkills =
+      (pkgAfter && (pkgAfter.user_id || pkgAfter?.user?.user_id)) ||
+      (examPackage && (examPackage.user_id || examPackage?.user?.user_id)) ||
+      (Number.isFinite(Number(attempt?.user_id)) ? String(attempt.user_id) : null);
+    const courseNameForSkills =
+      (pkgAfter && pkgAfter?.metadata?.course_name) ||
+      (examPackage && examPackage?.metadata?.course_name) ||
+      null;
 
-      // Guard
-      if (!payload.user_id || !payload.exam_id) {
-        try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', { user_id: payload.user_id, exam_id: payload.exam_id, attempt_id: String(attemptIdNum) }); } catch {}
-      } else {
-        try { console.log('[SUBMIT][CTX_RESOLVED]', { attempt_id: String(attemptIdNum), user_id: ctx.user_id }); } catch {}
-        try {
-          console.log('[SUBMIT][SE_PAYLOAD_READY]', {
-            user_id: payload.user_id,
-            exam_id: payload.exam_id,
-            exam_type: payload.exam_type,
-            skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
+    const examIdRuntime = Number.isFinite(Number(exam_id)) ? String(Number(exam_id)) : String(attempt.exam_id);
+
+    // Ensure we use persisted per-skill from package if present
+    let persistedPerSkill = perSkill;
+    try {
+      if (pkgAfter && pkgAfter.grading && Array.isArray(pkgAfter.grading.per_skill)) {
+        persistedPerSkill = pkgAfter.grading.per_skill;
+      }
+    } catch {}
+
+    // Build skills payload (send all skills with score/status)
+    const rawSkills = Array.isArray(persistedPerSkill) ? persistedPerSkill : [];
+    const skillsPayload = rawSkills.map((s) => ({
+      skill_id: s.skill_id,
+      skill_name: s.skill_name,
+      score: s.score,
+      status: s.status,
+    }));
+
+    const payload =
+      examType === 'postcourse'
+        ? {
+            action: 'postcourse-exam-result',
+            user_id: userIdForSkills,
+            exam_type: 'postcourse',
+            exam_id: examIdRuntime,
+            passing_grade: Number(passing),
             final_grade: Number(finalGrade),
             passed,
-          });
-        } catch {}
-        try { console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][SEND]', { user_id: payload.user_id, exam_id: payload.exam_id, exam_type: payload.exam_type, skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0 }); } catch {}
+            final_status: 'completed',
+            course_name: courseNameForSkills,
+            skills: skillsPayload,
+            route: { destination: 'skills-engine-service', strict: true },
+          }
+        : {
+            action: 'baseline-exam-result',
+            user_id: userIdForSkills,
+            exam_type: 'baseline',
+            exam_id: examIdRuntime,
+            passing_grade: Number(passing),
+            final_grade: Number(finalGrade),
+            passed,
+            skills: skillsPayload,
+          };
 
-        // Optional outbox write for observability
-        try {
-          await pool.query(
-            `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
-            ["skills_engine_results", JSON.stringify(payload), "skills_engine"],
-          );
-        } catch {}
+    // Guard
+    if (!payload.user_id || !payload.exam_id) {
+      try { console.error('[SUBMIT][SE_PAYLOAD_INVALID]', { user_id: payload.user_id, exam_id: payload.exam_id, attempt_id: String(attemptIdNum) }); } catch {}
+    } else {
+      try {
+        console.log('[SUBMIT][SE_PAYLOAD_READY]', {
+          user_id: payload.user_id,
+          exam_id: payload.exam_id,
+          exam_type: payload.exam_type,
+          skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0,
+          final_grade: Number(finalGrade),
+          passed,
+        });
+      } catch {}
+      try { console.log('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][SEND]', { user_id: payload.user_id, exam_id: payload.exam_id, exam_type: payload.exam_type, skills_count: Array.isArray(payload.skills) ? payload.skills.length : 0 }); } catch {}
 
-        // Fire-and-forget send via Coordinator
-        try {
-          const { sendToCoordinator } = require('../integrations/envelopeSender');
-          sendToCoordinator({ targetService: 'skills-engine-service', payload }).catch((e) => {
-            try { console.warn('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][FAILED]', { exam_id: payload.exam_id, error: e?.message || String(e) }); } catch {}
-          });
-        } catch (e) {
+      // Optional outbox write for observability
+      try {
+        await pool.query(
+          `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
+          ["skills_engine_results", JSON.stringify(payload), "skills_engine"],
+        );
+      } catch {}
+
+      // Fire-and-forget send via Coordinator
+      try {
+        const { sendToCoordinator } = require('../integrations/envelopeSender');
+        sendToCoordinator({ targetService: 'skills-engine-service', payload }).catch((e) => {
           try { console.warn('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][FAILED]', { exam_id: payload.exam_id, error: e?.message || String(e) }); } catch {}
-        }
+        });
+      } catch (e) {
+        try { console.warn('[OUTBOUND][COORDINATOR][SKILLS_ENGINE][PUSH_RESULTS][FAILED]', { exam_id: payload.exam_id, error: e?.message || String(e) }); } catch {}
       }
     }
   } catch {}
