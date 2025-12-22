@@ -115,6 +115,7 @@ export default function PostCourseExam() {
   const hasStartedRef = useRef(false);
   const proctoringListenersEnabledRef = useRef(true);
   const removeProctorListenersRef = useRef(() => {});
+  const devlabCodingPostedRef = useRef(false);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
   [answers]);
@@ -146,6 +147,33 @@ export default function PostCourseExam() {
       try { console.log('[POSTCOURSE][DEVLAB][COMPLETED]'); } catch {}
       devlabCompletedRef.current = true;
       setDevlabCompleted(true);
+      // Forward coding completion to Assessment backend exactly once
+      if (!devlabCodingPostedRef.current) {
+        devlabCodingPostedRef.current = true;
+        (async () => {
+          try {
+            if (!examId || !attemptId) {
+              // eslint-disable-next-line no-console
+              console.warn('[POSTCOURSE][DEVLAB][CODING_COMPLETE][SKIP]', { examId, attemptId });
+              return;
+            }
+            // eslint-disable-next-line no-console
+            console.log('[POSTCOURSE][DEVLAB][CODING_COMPLETE][CALLING]', { examId, attemptId });
+            await http.post(`/api/exams/${encodeURIComponent(examId)}/coding/complete`, {
+              attempt_id: attemptId,
+              coding_results: evaluation || {},
+              solutions: solutions || [],
+            });
+            // eslint-disable-next-line no-console
+            console.log('[POSTCOURSE][DEVLAB][CODING_COMPLETE][OK]', { examId, attemptId });
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[POSTCOURSE][DEVLAB][CODING_COMPLETE][ERROR]', err?.response?.data || err?.message || err);
+            // allow retry on a subsequent message if it ever comes
+            devlabCodingPostedRef.current = false;
+          }
+        })();
+      }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
