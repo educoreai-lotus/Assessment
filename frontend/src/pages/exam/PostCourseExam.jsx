@@ -526,7 +526,7 @@ export default function PostCourseExam() {
           title="Coding Widget"
           srcDoc={devlabHtml}
           style={{ width: '100%', height: '700px', border: '0', borderRadius: '12px' }}
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts allow-forms allow-same-origin"
         />
       );
     }
