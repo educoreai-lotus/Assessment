@@ -19,13 +19,19 @@ async function waitForPackage(examId, maxWaitMs = 60000) {
   while (Date.now() - start < maxWaitMs) {
     try {
       const res = await http.get(`/api/exams/${examId}`);
+      // eslint-disable-next-line no-console
+      console.log('[POSTCOURSE][EXAM][STATUS][POLL]', {
+        code: res?.status,
+        package_ready: !!res?.data?.package_ready,
+      });
       if (res?.data?.package_ready) {
+        try { console.log('[POSTCOURSE][EXAM][READY]', { exam_id: examId }); } catch {}
         return res.data;
       }
     } catch (err) {
       // Ignore until ready
     }
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
   throw new Error("Exam package still not ready after waiting");
 }
@@ -194,7 +200,7 @@ export default function PostCourseExam() {
         }
         setExamId(String(eid));
         setAttemptId(String(aid));
-        // Optionally wait until package is ready to reduce start errors
+        // Poll until package is ready to avoid racing preparation
         try {
           const pkg = await waitForPackage(String(eid));
           if (pkg?.package_ready) setExamReady(true);
@@ -253,7 +259,7 @@ export default function PostCourseExam() {
       try {
         setQuestionsLoading(true);
         // eslint-disable-next-line no-console
-        console.log('[POSTCOURSE][EXAM][START][CALLING]', { examId, attemptId });
+        console.log('[POSTCOURSE][EXAM][START][ALLOWED]', { examId, attemptId });
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         hasStartedRef.current = true;
@@ -323,6 +329,14 @@ export default function PostCourseExam() {
           // Not fatal: allow polling to continue and retry automatically when READY
           // eslint-disable-next-line no-console
           console.log('[POSTCOURSE][EXAM][START][NOT_READY]', { statusCode, apiErr });
+          try {
+            // Resume polling for readiness, then re-attempt start
+            const pkg = await waitForPackage(String(examId));
+            if (pkg?.package_ready) {
+              setExamReady(true);
+              // Reinvoke startIfReady on next effect tick
+            }
+          } catch {}
           return;
         }
         if (apiErr === 'max_attempts_reached') {
@@ -545,6 +559,7 @@ export default function PostCourseExam() {
   // Start proctoring once when all prerequisites are ready
   useEffect(() => {
     if (!attemptId) return;
+    if (!examReady) return; // Do NOT start proctoring before exam is READY
     if (!cameraReady) return;
     if (proctoringStartedRef.current) return;
     let canceled = false;
@@ -567,7 +582,7 @@ export default function PostCourseExam() {
       }
     })();
     return () => { canceled = true; };
-  }, [attemptId, examId, cameraReady]);
+  }, [attemptId, examId, cameraReady, examReady]);
 
   useEffect(() => {
     console.log("🔥 FRONTEND attemptId =", attemptId);
@@ -645,7 +660,7 @@ export default function PostCourseExam() {
               ? new Date(remainingSec * 1000).toISOString().substr(11, 8)
               : '--:--:--'}
           </div>
-          {attemptId && (
+          {attemptId && examReady && (
             <div className="w-56">
               <CameraPreview onReady={handleCameraReady} onError={handleCameraError} attemptId={attemptId} onPhoneDetected={handlePhoneDetected} />
             </div>
