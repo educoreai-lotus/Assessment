@@ -404,36 +404,33 @@ export default function PostCourseExam() {
   async function handleSubmit() {
     if (isSubmitting) return;
     try {
-      console.trace('[UI][SUBMIT][START]');
+      // Immediate submit loading UI (Baseline parity)
       setIsSubmitting(true);
-      // Only send answers for questions in current attempt's package with metadata
-      const filteredAnswers = Object.entries(answers)
-        .filter(([questionId]) => questions.find((q) => String(q.originalId || q.id) === String(questionId)))
-        .map(([question_id, answer]) => {
-          const qMeta = questions.find((q) => String(q.originalId || q.id) === String(question_id));
-          const type = qMeta ? (qMeta.type === 'text' ? 'open' : qMeta.type) : undefined;
-          return { question_id, type, skill_id: qMeta?.skill_id || '', answer };
-        });
+      const payloadAnswers = questions.map((q) => ({
+        question_id: q.originalId,
+        type: q.type === 'text' ? 'open' : q.type,
+        skill_id: q.skill_id || '',
+        answer: answers[q.id] ?? '',
+      }));
       const result = await examApi.submit(examId, {
         attempt_id: attemptId,
-        answers: filteredAnswers,
+        answers: payloadAnswers,
       });
-      console.trace('[UI][SUBMIT][DONE]');
-      console.log('[UI][SUBMIT][RESP]', result);
       if (result && result.status === 'PENDING_CODING') {
-        // Wait for coding grading to complete
-        let tries = 0;
-        while (tries < 60) {
+        // Poll attempt until coding grading completes (Baseline parity)
+        let attempts = 0;
+        while (attempts < 60) {
           await new Promise((r) => setTimeout(r, 2000));
           const res = await examApi.attempt(attemptId);
           if (res && res.status === 'PENDING_CODING') {
-            tries += 1;
+            attempts += 1;
             continue;
           }
           if (res && res.status === 'CANCELED') {
             navigate('/exam/cancelled', { replace: true, state: { message: 'Exam canceled due to phone detection' } });
             return;
           }
+          // Use same route style as Baseline (supports :attemptId and ?attemptId)
           navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result: res } });
           return;
         }
@@ -446,7 +443,6 @@ export default function PostCourseExam() {
       }
       navigate(`/results/postcourse/${encodeURIComponent(attemptId)}`, { state: { result } });
     } catch (e) {
-      console.trace('[UI][SUBMIT][ERROR] Error:', e?.message || e);
       setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Submit failed');
     } finally {
       setIsSubmitting(false);
