@@ -2168,7 +2168,13 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
           persistedPerSkill = pkgAfter.grading.per_skill;
         }
       } catch {}
-      const skillsPayload = (persistedPerSkill || []).map((s) => ({
+      // Build skills payload. For postcourse, include ONLY acquired skills; baseline unchanged.
+      const rawSkills = Array.isArray(persistedPerSkill) ? persistedPerSkill : [];
+      const filteredSkills =
+        String(examType) === 'postcourse'
+          ? rawSkills.filter((s) => String(s?.status || '').toLowerCase() === 'acquired')
+          : rawSkills;
+      const skillsPayload = filteredSkills.map((s) => ({
         skill_id: s.skill_id,
         skill_name: s.skill_name,
         score: s.score,
