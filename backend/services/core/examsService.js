@@ -2214,6 +2214,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
               final_status: 'completed',
               course_name: examPackage?.metadata?.course_name || null,
               skills: skillsPayload,
+              route: { destination: 'skills-engine-service', strict: true },
             }
           : {
               action: 'baseline-exam-result',
@@ -2275,6 +2276,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       passing_grade: Number(passing),
       final_grade: Number(finalGrade),
       passed,
+      route: { destination: 'course-builder-service', strict: true },
     };
     await pool.query(
       `INSERT INTO outbox_integrations (event_type, payload, target_service) VALUES ($1, $2::jsonb, $3)`,
