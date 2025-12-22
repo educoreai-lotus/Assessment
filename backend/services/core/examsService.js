@@ -2267,15 +2267,18 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
 
   // 3.3) Course Builder (postcourse only)
   if (examType === "postcourse") {
+    // Build canonical user payload to Course Builder (no learner_* fields)
     const payloadCourseBuilder = {
-      learner_id: attempt.user_id != null ? Number(attempt.user_id) : null,
-      learner_name: null,
-      course_id: attempt.course_id != null ? Number(attempt.course_id) : null,
+      action: 'postcourse-exam-result',
+      success: true,
+      user_id: attempt.user_id != null ? String(attempt.user_id) : null,
+      user_name: attempt.user_name != null ? String(attempt.user_name) : null,
+      course_id: attempt.course_id != null ? String(attempt.course_id) : null,
       course_name: examPackage?.metadata?.course_name || "",
       exam_type: "postcourse",
       passing_grade: Number(passing),
       final_grade: Number(finalGrade),
-      passed,
+      passed: !!passed,
       route: { destination: 'course-builder-service', strict: true },
     };
     await pool.query(

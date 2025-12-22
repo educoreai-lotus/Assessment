@@ -112,18 +112,18 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
     try {
       ctx = await ExamContext.findOne({ exam_type: 'postcourse' }).sort({ updated_at: -1 }).lean();
     } catch {}
-    const learnerId = ctx?.user_id || null;
-    const learnerName = ctx?.metadata?.learner_name || null;
+    const userId = ctx?.user_id || null;
+    const userName = ctx?.metadata?.user_name || null;
     const courseId = ctx?.metadata?.course_id || null;
     const courseName = ctx?.metadata?.course_name || null;
-    if (!learnerId || !courseId) {
+    if (!userId || !courseId) {
       return res.status(400).json({ error: 'postcourse_context_missing' });
     }
 
     try {
       console.log('[POSTCOURSE][REQUEST][COVERAGE_MAP]', {
-        learner_id: learnerId,
-        learner_name: learnerName || null,
+        user_id: userId,
+        user_name: userName || null,
         course_id: courseId,
         course_name: courseName || null,
       });
@@ -131,7 +131,7 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
 
     // Fetch coverage map from Course Builder (via Coordinator with safe mock fallback)
     const coverageResp = await safeFetchCoverage({
-      learner_id: learnerId,
+      user_id: userId,
       course_id: courseId,
     }).catch(() => ({}));
 
@@ -154,11 +154,11 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
 
     // Create exam and initial attempt (do not prepare yet until snapshot persisted)
     const created = await createExamRecord({
-      user_id: String(learnerId),
+      user_id: String(userId),
       exam_type: 'postcourse',
       course_id: String(courseId),
       course_name: effectiveCourseName || undefined,
-      user_name: learnerName || null,
+      user_name: userName || null,
       company_id: null,
     });
     if (!created || !created.exam_id || !created.attempt_id) {
@@ -170,9 +170,13 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
       await pool.query(
         `ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS coverage_snapshot JSONB`,
       ).catch(() => {});
+      await pool.query(`ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS user_id TEXT`).catch(()=>{});
+      await pool.query(`ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS user_name TEXT`).catch(()=>{});
+      await pool.query(`ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS course_id TEXT`).catch(()=>{});
+      await pool.query(`ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS course_name TEXT`).catch(()=>{});
       await pool.query(
-        `UPDATE exam_attempts SET coverage_snapshot = $1::jsonb WHERE attempt_id = $2`,
-        [JSON.stringify({ coverage_map: coverageMap }), Number(created.attempt_id)],
+        `UPDATE exam_attempts SET coverage_snapshot = $1::jsonb, user_id = $2, user_name = $3, course_id = $4, course_name = $5 WHERE attempt_id = $6`,
+        [JSON.stringify({ coverage_map: coverageMap }), String(userId), userName || null, String(courseId), effectiveCourseName || null, Number(created.attempt_id)],
       );
     } catch {}
 
@@ -180,7 +184,7 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
       console.log('[POSTCOURSE][EXAM][CREATED]', {
         exam_id: created.exam_id,
         attempt_id: created.attempt_id,
-        user_id: learnerId,
+        user_id: userId,
         course_id: courseId,
       });
     } catch {}
@@ -190,7 +194,7 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
       setImmediate(() => {
         try {
           prepareExamAsync(created.exam_id, created.attempt_id, {
-            user_id: String(learnerId),
+            user_id: String(userId),
             exam_type: 'postcourse',
             course_id: String(courseId),
             course_name: effectiveCourseName || undefined,

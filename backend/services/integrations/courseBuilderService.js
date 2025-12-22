@@ -14,24 +14,24 @@ exports.handleInbound = async (payload) => {
 
   // Legacy/start semantics: accept start-postcourse-exam
   if (action === 'start-postcourse-exam') {
-    // Normalize learner_id → user_id
-    const user_id = payload?.learner_id;
-    const user_name = payload?.learner_name || null;
-    const course_id = payload?.course_id;
-    const course_name = payload?.course_name;
+    // Normalize: canonicalize to user_id / user_name only
+    const user_id = payload?.learner_id ? String(payload.learner_id) : null;
+    const user_name = payload?.learner_name != null ? String(payload.learner_name) : null;
+    const course_id = payload?.course_id != null ? String(payload.course_id) : null;
+    const course_name = payload?.course_name != null ? String(payload.course_name) : null;
 
     // [POSTCOURSE][INBOUND] Persist context only; do NOT create exam here
     try {
-      console.log('[POSTCOURSE][INBOUND][COURSE_BUILDER_CONTEXT]', {
-        learner_id: user_id || null,
-        learner_name: user_name || null,
+      console.log('[POSTCOURSE][CTX_NORMALIZED]', {
+        user_id: user_id || null,
+        user_name: user_name || null,
         course_id: course_id || null,
         course_name: course_name || null,
       });
     } catch {}
     try {
       if (!user_id || !course_id) {
-        return { error: 'invalid_payload', missing: ['learner_id', 'course_id'].filter((k)=>!((k==='learner_id'&&user_id)||(k==='course_id'&&course_id))) };
+        return { error: 'invalid_payload', missing: ['user_id', 'course_id'].filter((k)=>!((k==='user_id'&&user_id)||(k==='course_id'&&course_id))) };
       }
       await ExamContext.findOneAndUpdate(
         { user_id: String(user_id), exam_type: 'postcourse' },
@@ -39,7 +39,7 @@ exports.handleInbound = async (payload) => {
           user_id: String(user_id),
           exam_type: 'postcourse',
           metadata: {
-            learner_name: user_name || null,
+            user_name: user_name || null,
             course_id: String(course_id),
             course_name: course_name || null,
           },
@@ -61,33 +61,33 @@ exports.handleInbound = async (payload) => {
 
   // New: create_assessment – Course Builder creates Post-Course exam and supplies coverage_map
   if (action === 'create_assessment') {
-    const learner_id = payload?.learner_id;
-    const learner_name = payload?.learner_name || null;
-    const course_id = payload?.course_id;
-    const course_name = payload?.course_name || null;
+    const user_id = payload?.learner_id ? String(payload.learner_id) : null;
+    const user_name = payload?.learner_name != null ? String(payload.learner_name) : null;
+    const course_id = payload?.course_id != null ? String(payload.course_id) : null;
+    const course_name = payload?.course_name != null ? String(payload.course_name) : null;
 
     // Phase 1 ingestion: Persist context only; never create exam/attempt here
     try {
-      console.log('[POSTCOURSE][INBOUND][COURSE_BUILDER_CONTEXT]', {
-        learner_id: learner_id || null,
-        learner_name: learner_name || null,
+      console.log('[POSTCOURSE][CTX_NORMALIZED]', {
+        user_id: user_id || null,
+        user_name: user_name || null,
         course_id: course_id || null,
         course_name: course_name || null,
       });
     } catch {}
 
-    if (!learner_id || !course_id) {
+    if (!user_id || !course_id) {
       return { status: 'ignored', reason: 'missing_required_ids' };
     }
 
     try {
       await ExamContext.findOneAndUpdate(
-        { user_id: String(learner_id), exam_type: 'postcourse' },
+        { user_id: String(user_id), exam_type: 'postcourse' },
         {
-          user_id: String(learner_id),
+          user_id: String(user_id),
           exam_type: 'postcourse',
           metadata: {
-            learner_name: learner_name || null,
+            user_name: user_name || null,
             course_id: String(course_id),
             course_name: course_name || null,
           },
