@@ -608,7 +608,7 @@ export default function PostCourseExam() {
       )}
 
       {!examCanceled && questions.length === 0 && stage !== 'coding' && (
-        (cameraError || !cameraReady || !cameraOk) ? (
+        (!cameraOk || cameraError) ? (
           <div className="text-sm text-neutral-400">
             Camera access is required to start the exam. Please allow camera access to continue.
           </div>
