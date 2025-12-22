@@ -129,15 +129,25 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
       });
     } catch {}
 
-    // Fetch coverage map from Course Builder (via Coordinator with safe mock fallback)
-    const coverageResp = await safeFetchCoverage({
-      user_id: userId,
-      course_id: courseId,
-    }).catch(() => ({}));
-
-    const normalized = coverageResp && typeof coverageResp === 'object' ? coverageResp : {};
-    const coverageMap = Array.isArray(normalized.coverage_map) ? normalized.coverage_map : [];
-    const effectiveCourseName = courseName || null;
+    // Fetch coverage map from Course Builder (strict, no mock fallback)
+    const { strictFetchCoverage } = require('../services/gateways/courseBuilderGateway');
+    let coverageMap = [];
+    let effectiveCourseName = courseName || null;
+    try {
+      const coordResponse = await strictFetchCoverage({
+        user_id: userId,
+        course_id: courseId,
+      });
+      const raw = coordResponse && typeof coordResponse === 'object' ? coordResponse : {};
+      coverageMap = Array.isArray(raw.coverage_map) ? raw.coverage_map : [];
+    } catch (e) {
+      try { console.error('[POSTCOURSE][COVERAGE][MISSING]', { exam_id: null, attempt_id: null, message: e?.message || String(e) }); } catch {}
+      return res.status(400).json({ error: 'coverage_snapshot_missing' });
+    }
+    if (!Array.isArray(coverageMap) || coverageMap.length === 0) {
+      try { console.error('[POSTCOURSE][COVERAGE][MISSING]', { exam_id: null, attempt_id: null, reason: 'empty' }); } catch {}
+      return res.status(400).json({ error: 'coverage_snapshot_missing' });
+    }
 
     try {
       console.log('[POSTCOURSE][RESPONSE][COVERAGE_MAP]', {
@@ -178,6 +188,7 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
         `UPDATE exam_attempts SET coverage_snapshot = $1::jsonb, user_id = $2, user_name = $3, course_id = $4, course_name = $5 WHERE attempt_id = $6`,
         [JSON.stringify({ coverage_map: coverageMap }), String(userId), userName || null, String(courseId), effectiveCourseName || null, Number(created.attempt_id)],
       );
+      try { console.log('[POSTCOURSE][COVERAGE][SAVED]', { attempt_id: Number(created.attempt_id), items: Array.isArray(coverageMap) ? coverageMap.length : 0 }); } catch {}
     } catch {}
 
     try {

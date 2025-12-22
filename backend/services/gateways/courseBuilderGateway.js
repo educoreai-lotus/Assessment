@@ -12,7 +12,7 @@ function getCoordinatorUrl() {
 async function safeFetchCoverage(params) {
   try {
     const payload = buildCourseBuilderCoveragePayload(params || {});
-  const ret = await sendToCoordinator({ targetService: 'course-builder-service', payload }).catch(() => ({}));
+    const ret = await sendToCoordinator({ targetService: 'course-builder-service', payload }).catch(() => ({}));
     let respString;
     if (typeof ret === 'string') respString = ret;
     else if (ret && typeof ret.data === 'string') respString = ret.data;
@@ -30,6 +30,27 @@ async function safeFetchCoverage(params) {
     console.warn('CourseBuilder coverage fetch via Coordinator failed, using mock. Reason:', err?.message || err);
     return mockFetchCoverage(params || {});
   }
+}
+
+// Strict coverage fetcher for post-course: no mock fallback, flexible shape parsing
+async function strictFetchCoverage(params) {
+  const payload = buildCourseBuilderCoveragePayload(params || {});
+  const ret = await sendToCoordinator({ targetService: 'course-builder-service', payload });
+  let respString;
+  if (typeof ret === 'string') respString = ret;
+  else if (ret && typeof ret.data === 'string') respString = ret.data;
+  else respString = JSON.stringify((ret && ret.data) || {});
+  const resp = JSON.parse(respString || '{}');
+  const coverage =
+    (resp?.response && resp.response.coverage_map) ??
+    (resp?.payload && resp.payload.coverage_map) ??
+    resp?.coverage_map ??
+    null;
+  if (!coverage || !Array.isArray(coverage) || coverage.length === 0) {
+    try { console.error('[POSTCOURSE][COVERAGE][MISSING]', { coord_keys: Object.keys(resp || {}) }); } catch {}
+    throw new Error('coverage_snapshot_missing');
+  }
+  return { coverage_map: coverage };
 }
 
 // Outgoing results push through Coordinator
@@ -61,6 +82,6 @@ async function safePushExamResults(payload) {
   }
 }
 
-module.exports = { safeFetchCoverage, safePushExamResults, sendCourseBuilderExamResults };
+module.exports = { safeFetchCoverage, strictFetchCoverage, safePushExamResults, sendCourseBuilderExamResults };
 
 
