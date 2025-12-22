@@ -36,6 +36,17 @@ async function waitForPackage(examId, maxWaitMs = 60000) {
   throw new Error("Exam package still not ready after waiting");
 }
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function waitForPackageWithGrace(examId, maxWaitMs = 60000, graceMs = 1000) {
+  const data = await waitForPackage(examId, maxWaitMs);
+  // Small grace window to allow SQL exam.status to flip to READY
+  await sleep(graceMs);
+  return data;
+}
+
 export default function PostCourseExam() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -260,6 +271,8 @@ export default function PostCourseExam() {
         setQuestionsLoading(true);
         // eslint-disable-next-line no-console
         console.log('[POSTCOURSE][EXAM][START][ALLOWED]', { examId, attemptId });
+        // Grace delay to avoid race between package_ready and SQL exam.status flip
+        await sleep(1000);
         const data = await examApi.start(examId, { attempt_id: attemptId });
         if (cancelled) return;
         hasStartedRef.current = true;
@@ -331,7 +344,7 @@ export default function PostCourseExam() {
           console.log('[POSTCOURSE][EXAM][START][NOT_READY]', { statusCode, apiErr });
           // Resume polling for readiness, then attempt starting again immediately
           try {
-            const pkg = await waitForPackage(String(examId));
+            const pkg = await waitForPackageWithGrace(String(examId), 60000, 1000);
             if (pkg?.package_ready && !cancelled) {
               // eslint-disable-next-line no-console
               console.log('[POSTCOURSE][EXAM][READY]', { exam_id: String(examId) });
