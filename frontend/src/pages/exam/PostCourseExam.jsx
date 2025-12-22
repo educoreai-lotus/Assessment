@@ -206,8 +206,8 @@ export default function PostCourseExam() {
     let cancelled = false;
     async function startIfReady() {
       if (!examId || !attemptId) return;
-      // HARD-DECOUPLE phone detection: start is gated ONLY by READY + cameraReady
-      if (!examReady || !cameraReady) return;
+      // Gate start by exam readiness + proctoring OK (cameraOk). Do NOT depend on cameraReady toggles.
+      if (!examReady || !cameraOk) return;
       if (hasStartedRef.current) return;
       try {
         setQuestionsLoading(true);
@@ -298,7 +298,7 @@ export default function PostCourseExam() {
     }
     startIfReady();
     return () => { cancelled = true; };
-  }, [examId, attemptId, cameraReady, examReady, navigate]);
+  }, [examId, attemptId, cameraOk, examReady, navigate]);
 
   // DevLab answers bridge removed; DevLab graded asynchronously server-side
 
