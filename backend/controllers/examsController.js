@@ -663,7 +663,7 @@ exports.submitExam = async (req, res, next) => {
       try { console.log('[EXAM][SUBMIT][EMPTY][ALLOWED]', { exam_id: Number(examId), attempt_id: attemptIdNum }); } catch {}
     }
 
-    // Coding grading sync: if coding is required and not yet graded, do not finalize
+    // Coding grading sync: if coding is required and not yet graded, check for already-present DevLab results and finalize synchronously
     try {
       // Determine coding_required from package (best-effort)
       const pkg = await ExamPackage.findOne({ attempt_id: String(attemptIdNum) }).lean().catch(() => null);
@@ -691,17 +691,37 @@ exports.submitExam = async (req, res, next) => {
         codingStatus = csRows && csRows[0] ? (csRows[0].coding_status || null) : null;
         const codingReqFlag = csRows && csRows[0] ? !!csRows[0].coding_required : codingRequired;
         if (codingReqFlag && String(codingStatus || '').toLowerCase() !== 'graded') {
-          // Move attempt into pending_coding state
-          try {
-            await pool.query(
-              `UPDATE exam_attempts SET status = 'pending_coding' WHERE attempt_id = $1 AND COALESCE(status,'') <> 'canceled'`,
-              [attemptIdNum],
-            );
+          // If DevLab results already exist in the package, mark coding as graded synchronously and continue
+          const hasCodingResults =
+            !!(pkg && (pkg.coding_results || (Array.isArray(pkg.coding_grading_results) && pkg.coding_grading_results.length > 0) || Number.isFinite(Number(pkg.coding_score_total))));
+          if (hasCodingResults) {
+            const score = Number.isFinite(Number(pkg.coding_score_total)) ? Number(pkg.coding_score_total) : 0;
             try {
-              console.log('[EXAM][FINALIZE][BLOCKED][WAITING_FOR_CODING]', { exam_id: Number(examId), attempt_id: attemptIdNum });
+              await pool.query(
+                `UPDATE exam_attempts
+                   SET coding_required = TRUE,
+                       coding_status = 'graded',
+                       coding_score = COALESCE(coding_score, $1),
+                       coding_submitted_at = COALESCE(coding_submitted_at, NOW())
+                 WHERE attempt_id = $2`,
+                [score, attemptIdNum],
+              );
+              try { console.log('[EXAM][CODING][FAST_COMPLETE]', { attempt_id: attemptIdNum, score }); } catch {}
             } catch {}
-          } catch {}
-          return res.json({ status: 'PENDING_CODING' });
+            // continue to normal submit flow without returning PENDING_CODING
+          } else {
+            // Move attempt into pending_coding state
+            try {
+              await pool.query(
+                `UPDATE exam_attempts SET status = 'pending_coding' WHERE attempt_id = $1 AND COALESCE(status,'') <> 'canceled'`,
+                [attemptIdNum],
+              );
+              try {
+                console.log('[EXAM][FINALIZE][BLOCKED][WAITING_FOR_CODING]', { exam_id: Number(examId), attempt_id: attemptIdNum });
+              } catch {}
+            } catch {}
+            return res.json({ status: 'PENDING_CODING' });
+          }
         }
       } catch {}
     } catch {}

@@ -1413,6 +1413,27 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       await pool.query(`ALTER TABLE exam_attempts ADD COLUMN IF NOT EXISTS coding_status VARCHAR(20) DEFAULT 'pending'`);
     } catch {}
 
+    // If DevLab results already exist in the package, mark coding as graded synchronously to avoid blocking
+    try {
+      const hasCodingResults =
+        !!(examPackage && (examPackage.coding_results || (Array.isArray(examPackage.coding_grading_results) && examPackage.coding_grading_results.length > 0) || Number.isFinite(Number(examPackage.coding_score_total))));
+      if (hasCodingResults && String(attempt.coding_status || '').toLowerCase() !== 'graded') {
+        const score = Number.isFinite(Number(examPackage.coding_score_total)) ? Number(examPackage.coding_score_total) : 0;
+        await pool.query(
+          `UPDATE exam_attempts
+             SET coding_required = TRUE,
+                 coding_status = 'graded',
+                 coding_score = COALESCE(coding_score, $1),
+                 coding_submitted_at = COALESCE(coding_submitted_at, NOW())
+           WHERE attempt_id = $2`,
+          [score, attemptIdNum],
+        );
+        // Reflect in-memory to bypass pending gate below
+        attempt.coding_status = 'graded';
+        try { console.log('[CODING][FAST_COMPLETE][SERVICE]', { attempt_id: attemptIdNum, score }); } catch {}
+      }
+    } catch {}
+
     const { codingExists, pending } = isCodingPending({ attemptRow: attempt, examPackage });
     if (codingExists) {
       // Persist coding_required true and ensure pending status if not graded
