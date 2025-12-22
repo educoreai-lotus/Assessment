@@ -1,9 +1,15 @@
 function buildCourseBuilderCoveragePayload(params = {}) {
-  return {
+  const userId = params && params.user_id != null ? String(params.user_id) : undefined;
+  const payload = {
     action: 'coverage_map',
     route: { destination: 'course-builder-service', strict: true },
     ...params,
   };
+  // Boundary adapter: Course Builder coverage still expects learner_id
+  if (userId && payload.learner_id == null) {
+    payload.learner_id = userId;
+  }
+  return payload;
 }
 
 // Flexible builder: accepts either a pre-shaped flat object (with optional route),
