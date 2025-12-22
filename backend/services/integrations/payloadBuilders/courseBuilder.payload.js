@@ -12,41 +12,31 @@ function buildCourseBuilderCoveragePayload(params = {}) {
   return payload;
 }
 
-// Flexible builder: accepts either a pre-shaped flat object (with optional route),
-// or nested { learner, course, exam } object and adds default route.
+// Result payload builder: construct canonical shape expected by Course Builder
+// Pass through important fields and map legacy learner_* to user_*
 function buildCourseBuilderResultPayload(input = {}) {
-  // If caller passed a flat, already-shaped payload, normalize and keep route
-  if (
-    Object.prototype.hasOwnProperty.call(input, 'learner_id') ||
-    Object.prototype.hasOwnProperty.call(input, 'course_id') ||
-    Object.prototype.hasOwnProperty.call(input, 'exam_id') ||
-    Object.prototype.hasOwnProperty.call(input, 'route')
-  ) {
-    return {
-      action: input.action || 'postcourse-exam-result',
-      learner_id: input.learner_id ?? null,
-      learner_name: input.learner_name ?? null,
-      course_id: input.course_id ?? null,
-      course_name: input.course_name ?? null,
-      exam_id: input.exam_id ?? null,
-      attempt_id: input.attempt_id ?? null,
-      exam_type: input.exam_type || 'postcourse',
-      route: input.route || { destination: 'course-builder-service', strict: true },
-    };
-  }
-
-  const { learner, course, exam } = input || {};
-  return {
-    action: 'postcourse-exam-result',
-    learner_id: learner?.learner_id ?? learner?.user_id ?? null,
-    learner_name: learner?.learner_name ?? learner?.user_name ?? null,
-    course_id: course?.course_id ?? null,
-    course_name: course?.course_name ?? null,
-    exam_id: exam?.exam_id ?? null,
-    attempt_id: exam?.attempt_id ?? null,
-    exam_type: exam?.exam_type ?? 'postcourse',
-    route: { destination: 'course-builder-service', strict: true },
+  const out = {
+    action: input.action || 'postcourse-exam-result',
+    route: input.route || { destination: 'course-builder-service', strict: true },
+    // Canonical identifiers
+    user_id: input.user_id ?? input.learner_id ?? null,
+    user_name: input.user_name ?? input.learner_name ?? null,
+    course_id: input.course_id ?? null,
+    course_name: input.course_name ?? null,
+    exam_id: input.exam_id ?? null,
+    attempt_id: input.attempt_id ?? null,
+    exam_type: input.exam_type || 'postcourse',
+    // Outcome
+    passing_grade: input.passing_grade != null ? Number(input.passing_grade) : undefined,
+    final_grade: input.final_grade != null ? Number(input.final_grade) : undefined,
+    passed: input.passed != null ? !!input.passed : undefined,
+    // Extra keys are intentionally not added to avoid leaking internal data
   };
+  // Remove undefined keys (Coordinator prefers compact envelopes)
+  for (const k of Object.keys(out)) {
+    if (out[k] === undefined) delete out[k];
+  }
+  return out;
 }
 
 module.exports = {

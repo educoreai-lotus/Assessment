@@ -2268,17 +2268,31 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
   // 3.3) Course Builder (postcourse only)
   if (examType === "postcourse") {
     // Build canonical user payload to Course Builder (no learner_* fields)
+    // Prefer Mongo ExamPackage linkages (persisted during coverage ingestion)
+    let pkgForOutbound = null;
+    try { pkgForOutbound = await ExamPackage.findOne({ attempt_id: String(attemptIdNum) }).lean(); } catch {}
+    const userIdOutbound =
+      (pkgForOutbound && (pkgForOutbound.user_id || pkgForOutbound?.user?.user_id)) ||
+      (attempt.user_id != null ? String(attempt.user_id) : null);
+    const courseIdOutbound =
+      (pkgForOutbound && (pkgForOutbound.course_id || pkgForOutbound?.metadata?.course_id)) ||
+      (attempt.course_id != null ? String(attempt.course_id) : null);
+    const courseNameOutbound =
+      (pkgForOutbound && (pkgForOutbound?.metadata?.course_name)) ||
+      (typeof examPackage?.metadata?.course_name === 'string' ? examPackage.metadata.course_name : '') ||
+      null;
+
     const payloadCourseBuilder = {
       action: 'postcourse-exam-result',
-      success: true,
-      user_id: attempt.user_id != null ? String(attempt.user_id) : null,
-      user_name: attempt.user_name != null ? String(attempt.user_name) : null,
-      course_id: attempt.course_id != null ? String(attempt.course_id) : null,
-      course_name: examPackage?.metadata?.course_name || "",
+      user_id: userIdOutbound || null,
+      course_id: courseIdOutbound || null,
+      course_name: courseNameOutbound || null,
       exam_type: "postcourse",
       passing_grade: Number(passing),
       final_grade: Number(finalGrade),
       passed: !!passed,
+      exam_id: String(attempt.exam_id || exam_id),
+      attempt_id: String(attemptIdNum),
       route: { destination: 'course-builder-service', strict: true },
     };
     await pool.query(
