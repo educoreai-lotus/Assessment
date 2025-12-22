@@ -91,9 +91,12 @@ async function getAttemptDetail(attemptId) {
     const maxAttempts = Number.isFinite(Number(rawMax))
       ? Number(rawMax)
       : defaultMaxAttempts;
+    // Prefer Mongo's original string identifiers for course linkage
+    const courseIdFromPkg =
+      (pkg && (pkg.course_id || pkg?.metadata?.course_id)) ? String(pkg.course_id || pkg.metadata.course_id) : null;
     return {
       ...base,
-      course_id: a.course_id != null ? Number(a.course_id) : null,
+      course_id: courseIdFromPkg != null ? courseIdFromPkg : (a.course_id != null ? String(a.course_id) : null),
       course_name: courseName,
       attempt_no: a.attempt_no,
       max_attempts: maxAttempts,
