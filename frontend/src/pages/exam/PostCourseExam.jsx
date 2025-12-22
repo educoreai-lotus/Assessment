@@ -344,62 +344,75 @@ export default function PostCourseExam() {
           console.log('[POSTCOURSE][EXAM][START][NOT_READY]', { statusCode, apiErr });
           // Resume polling for readiness, then attempt starting again immediately
           try {
-            const pkg = await waitForPackageWithGrace(String(examId), 60000, 1000);
-            if (pkg?.package_ready && !cancelled) {
+            // Backoff loop: poll readiness, then attempt /start again until success or timeout
+            const maxAttempts = 10;
+            for (let i = 0; i < maxAttempts && !cancelled && !hasStartedRef.current; i += 1) {
+              const pkg = await waitForPackageWithGrace(String(examId), 60000, 1000);
+              if (!pkg?.package_ready) continue;
               // eslint-disable-next-line no-console
-              console.log('[POSTCOURSE][EXAM][READY]', { exam_id: String(examId) });
-              // eslint-disable-next-line no-console
-              console.log('[POSTCOURSE][EXAM][START][ALLOWED]', { examId, attemptId });
-              const retryData = await examApi.start(examId, { attempt_id: attemptId });
-              if (cancelled) return;
-              hasStartedRef.current = true;
-              const pkg2 = normalizeExamPackage(retryData || {});
-              setQuestions(Array.isArray(pkg2.questions) ? pkg2.questions : []);
+              console.log('[POSTCOURSE][EXAM][READY]', { exam_id: String(examId), retry_index: i });
+              await sleep(500);
               try {
-                const html2 =
-                  pkg2?.devlab_ui?.componentHtml ||
-                  pkg2?.devlabUi?.componentHtml ||
-                  pkg2?.devlab_ui_html ||
-                  null;
-                if (typeof html2 === 'string' && html2.trim() !== '' && !devlabHtmlRef.current) {
-                  devlabHtmlRef.current = html2;
-                  setDevlabHtml(html2);
-                  console.log('[POSTCOURSE][DEVLAB][HTML_SET_ONCE]', { len: html2.length });
+                // eslint-disable-next-line no-console
+                console.log('[POSTCOURSE][EXAM][START][ALLOWED]', { examId, attemptId, retry_index: i });
+                const retryData = await examApi.start(examId, { attempt_id: attemptId });
+                if (cancelled) return;
+                hasStartedRef.current = true;
+                const pkg2 = normalizeExamPackage(retryData || {});
+                setQuestions(Array.isArray(pkg2.questions) ? pkg2.questions : []);
+                try {
+                  const html2 =
+                    pkg2?.devlab_ui?.componentHtml ||
+                    pkg2?.devlabUi?.componentHtml ||
+                    pkg2?.devlab_ui_html ||
+                    null;
+                  if (typeof html2 === 'string' && html2.trim() !== '' && !devlabHtmlRef.current) {
+                    devlabHtmlRef.current = html2;
+                    setDevlabHtml(html2);
+                    console.log('[POSTCOURSE][DEVLAB][HTML_SET_ONCE]', { len: html2.length });
+                  }
+                } catch {}
+                try {
+                  const codingExists2 =
+                    (Array.isArray(pkg2?.coding_questions) && pkg2.coding_questions.length > 0) ||
+                    !!(pkg2?.devlab_ui?.componentHtml);
+                  setHasCoding(!!codingExists2);
+                } catch {}
+                setCurrentIdx(0);
+                setAnswers({});
+                try {
+                  const hasTheory2 = Array.isArray(pkg2.questions) && pkg2.questions.length > 0;
+                  const hasCoding2 = Array.isArray(pkg2.coding_questions) && pkg2.coding_questions.length > 0;
+                  if (hasTheory2) {
+                    setStage('theory');
+                    console.log('[POSTCOURSE][STAGE][SET]', 'theory');
+                  } else if (hasCoding2) {
+                    setStage('coding');
+                    console.log('[POSTCOURSE][STAGE][SET]', 'coding');
+                  } else {
+                    setStage('theory');
+                    console.log('[POSTCOURSE][STAGE][SET]', 'theory');
+                  }
+                } catch {}
+                try { localStorage.setItem("postcourse_answers", JSON.stringify({})); } catch {}
+                if (retryData?.expires_at) {
+                  setExpiresAtIso(String(retryData.expires_at));
+                  const now = Date.now();
+                  const exp = new Date(String(retryData.expires_at)).getTime();
+                  const diff = Math.max(0, Math.floor((exp - now) / 1000));
+                  setRemainingSec(Number.isFinite(diff) ? diff : null);
+                } else if (Number.isFinite(Number(retryData?.duration_seconds))) {
+                  setRemainingSec(Number(retryData.duration_seconds));
                 }
-              } catch {}
-              try {
-                const codingExists2 =
-                  (Array.isArray(pkg2?.coding_questions) && pkg2.coding_questions.length > 0) ||
-                  !!(pkg2?.devlab_ui?.componentHtml);
-                setHasCoding(!!codingExists2);
-              } catch {}
-              setCurrentIdx(0);
-              setAnswers({});
-              try {
-                const hasTheory2 = Array.isArray(pkg2.questions) && pkg2.questions.length > 0;
-                const hasCoding2 = Array.isArray(pkg2.coding_questions) && pkg2.coding_questions.length > 0;
-                if (hasTheory2) {
-                  setStage('theory');
-                  console.log('[POSTCOURSE][STAGE][SET]', 'theory');
-                } else if (hasCoding2) {
-                  setStage('coding');
-                  console.log('[POSTCOURSE][STAGE][SET]', 'coding');
-                } else {
-                  setStage('theory');
-                  console.log('[POSTCOURSE][STAGE][SET]', 'theory');
-                }
-              } catch {}
-              try { localStorage.setItem("postcourse_answers", JSON.stringify({})); } catch {}
-              if (retryData?.expires_at) {
-                setExpiresAtIso(String(retryData.expires_at));
-                const now = Date.now();
-                const exp = new Date(String(retryData.expires_at)).getTime();
-                const diff = Math.max(0, Math.floor((exp - now) / 1000));
-                setRemainingSec(Number.isFinite(diff) ? diff : null);
-              } else if (Number.isFinite(Number(retryData?.duration_seconds))) {
-                setRemainingSec(Number(retryData.duration_seconds));
+                return;
+              } catch (err2) {
+                const code2 = err2?.response?.status;
+                const err2Str = err2?.response?.data?.error || err2?.message || '';
+                // eslint-disable-next-line no-console
+                console.log('[POSTCOURSE][EXAM][START][RETRY_FAILED]', { code: code2, error: err2Str, retry_index: i });
+                // short wait before next loop
+                await sleep(750);
               }
-              return;
             }
           } catch {
             // swallow; will continue showing preparing UI
