@@ -188,6 +188,9 @@ router.post('/:examId/submit', examsController.submitExam);
 // DevLab coding grading ingestion (exam-type agnostic)
 router.post('/submit-coding-grade', examsController.submitCodingGrade);
 
+// Post-course: coding completion forwarder (same persistence as submit-coding-grade)
+router.post('/:examId/coding/complete', examsController.completeCodingForExam);
+
 // Post-course coverage flow entrypoint (frontend -> backend)
 router.post('/postcourse/coverage', examsController.requestPostcourseCoverage);
 

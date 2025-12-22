@@ -720,6 +720,7 @@ exports.submitExam = async (req, res, next) => {
                 console.log('[EXAM][FINALIZE][BLOCKED][WAITING_FOR_CODING]', { exam_id: Number(examId), attempt_id: attemptIdNum });
               } catch {}
             } catch {}
+            try { console.log('[POSTCOURSE][SUBMIT][PENDING_CODING]', { exam_id: Number(examId), attempt_id: attemptIdNum }); } catch {}
             return res.json({ status: 'PENDING_CODING' });
           }
         }
@@ -764,10 +765,99 @@ exports.submitExam = async (req, res, next) => {
 
     // Skills Engine result push is handled inside service to guarantee correct payload wiring.
 
-    return res.json(codingBlock ? { ...response, coding_results: codingBlock } : response);
+    const body = codingBlock ? { ...response, coding_results: codingBlock } : response;
+    try { console.log('[POSTCOURSE][SUBMIT][COMPLETED]', { exam_id: Number(examId), attempt_id: attemptIdNum, status: 'COMPLETED' }); } catch {}
+    return res.json(body);
   } catch (err) {
     try { console.log('[TRACE][EXAM][SUBMIT][ERROR]', { error: 'unexpected_error', message: err?.message }); } catch {}
     return res.status(500).json({ error: 'submit_internal_error', message: 'Unexpected error while submitting exam' });
+  }
+};
+
+// POST /api/exams/:examId/coding/complete
+// Persist DevLab coding results for a given exam/attempt and unblock finalization
+exports.completeCodingForExam = async (req, res, next) => {
+  try {
+    const { examId } = req.params;
+    const examIdNum = normalizeToInt(examId);
+    const attemptIdNum = normalizeToInt(req.body?.attempt_id);
+    const evaluation = (req.body && req.body.coding_results) || req.body?.evaluation || {};
+    const solutions = Array.isArray(req.body?.solutions) ? req.body.solutions : [];
+
+    if (examIdNum == null || attemptIdNum == null) {
+      return res.status(400).json({ error: 'invalid_exam_or_attempt_id' });
+    }
+
+    // Normalize score and skills feedback
+    const score =
+      Number.isFinite(Number(evaluation?.score)) ? Number(evaluation.score) :
+      Number.isFinite(Number(evaluation?.data?.score)) ? Number(evaluation.data.score) : 0;
+    const skillsFeedback = (evaluation && typeof evaluation.skills === 'object' && evaluation.skills) ? evaluation.skills
+      : (evaluation && typeof evaluation.data?.skills === 'object' && evaluation.data.skills) ? evaluation.data.skills
+      : {};
+    const questions = Array.isArray(evaluation?.questions) ? evaluation.questions : [];
+
+    // Guard attempt/exam match
+    const { rows } = await pool.query(
+      `SELECT attempt_id, exam_id, status FROM exam_attempts WHERE attempt_id = $1`,
+      [attemptIdNum],
+    );
+    const att = rows?.[0] || null;
+    if (!att) return res.status(404).json({ error: 'attempt_not_found' });
+    if (Number(att.exam_id) !== Number(examIdNum)) return res.status(400).json({ error: 'exam_mismatch' });
+    if (String(att.status || '').toLowerCase() === 'canceled') return res.status(403).json({ status: 'CANCELED' });
+
+    // Persist to Mongo ExamPackage
+    try {
+      const gradingArray = Object.entries(skillsFeedback || {}).map(([k, v]) => ({
+        skill_id: k,
+        score: Number.isFinite(Number(v?.score)) ? Number(v?.score) : 0,
+        feedback: v?.feedback,
+        source: 'devlab',
+      }));
+      const patch = {
+        coding_results: {
+          questions,
+          solutions,
+          skills: skillsFeedback,
+          score,
+          graded_at: new Date(),
+          source: 'devlab',
+        },
+        coding_score_total: Number.isFinite(Number(score)) ? Number(score) : 0,
+        coding_score_max: 100,
+        ...(Array.isArray(gradingArray) ? { 'coding_grading_results': gradingArray } : {}),
+      };
+      await ExamPackage.updateOne(
+        { attempt_id: String(attemptIdNum) },
+        { $set: patch },
+        { upsert: false },
+      );
+    } catch {}
+
+    // Persist to Postgres
+    try {
+      await pool.query(
+        `UPDATE exam_attempts
+           SET coding_score = $1,
+               coding_status = 'graded',
+               coding_submitted_at = NOW()
+         WHERE attempt_id = $2`,
+        [score, attemptIdNum],
+      );
+    } catch {}
+
+    try { console.log('[POSTCOURSE][CODING][PERSISTED]', { exam_id: examIdNum, attempt_id: attemptIdNum, score }); } catch {}
+
+    // Trigger recompute/finalize in background
+    try {
+      const { recomputeFinalResults } = require('../services/core/examsService');
+      setImmediate(() => recomputeFinalResults(attemptIdNum).catch(() => {}));
+    } catch {}
+
+    return res.json({ ok: true, status: 'CODING_GRADED' });
+  } catch (err) {
+    return next(err);
   }
 };
 
