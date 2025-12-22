@@ -175,20 +175,52 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
       return res.status(500).json({ error: 'exam_creation_failed' });
     }
 
-    // Persist coverage snapshot onto attempt for prepare step
+    // Persist coverage snapshot into Mongo exam_packages (required architecture)
     try {
-      await pool.query(
-        `ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS coverage_snapshot JSONB`,
-      ).catch(() => {});
-      await pool.query(`ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS user_id TEXT`).catch(()=>{});
-      await pool.query(`ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS user_name TEXT`).catch(()=>{});
-      await pool.query(`ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS course_id TEXT`).catch(()=>{});
-      await pool.query(`ALTER TABLE IF NOT EXISTS ONLY exam_attempts ADD COLUMN IF NOT EXISTS course_name TEXT`).catch(()=>{});
-      await pool.query(
-        `UPDATE exam_attempts SET coverage_snapshot = $1::jsonb, user_id = $2, user_name = $3, course_id = $4, course_name = $5 WHERE attempt_id = $6`,
-        [JSON.stringify({ coverage_map: coverageMap }), String(userId), userName || null, String(courseId), effectiveCourseName || null, Number(created.attempt_id)],
+      const receivedAt = new Date();
+      const schemaVersion = '1.0';
+      await ExamPackage.findOneAndUpdate(
+        { exam_id: String(created.exam_id), attempt_id: String(created.attempt_id) },
+        {
+          assessment_type: 'postcourse',
+          exam_type: 'postcourse',
+          exam_id: String(created.exam_id),
+          attempt_id: String(created.attempt_id),
+          user_id: String(userId),
+          course_id: String(courseId),
+          user: { user_id: String(userId), name: userName || undefined },
+          coverage_map: coverageMap,
+          context: {
+            ...(typeof ctx?.context === 'object' ? ctx.context : {}),
+            coverage: {
+              status: 'READY',
+              source: 'course-builder',
+              received_at: receivedAt,
+              schema_version: schemaVersion,
+            },
+          },
+          metadata: {
+            ...(typeof ctx?.metadata === 'object' ? ctx.metadata : {}),
+            course_name: effectiveCourseName || undefined,
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
       );
-      try { console.log('[POSTCOURSE][COVERAGE][SAVED]', { attempt_id: Number(created.attempt_id), items: Array.isArray(coverageMap) ? coverageMap.length : 0 }); } catch {}
+      try {
+        console.log('[POSTCOURSE][COVERAGE][SAVED]', {
+          exam_id: created.exam_id,
+          attempt_id: created.attempt_id,
+          coverage_items_count: Array.isArray(coverageMap) ? coverageMap.length : 0,
+        });
+      } catch {}
+    } catch (e) {
+      return res.status(500).json({ error: 'coverage_persist_failed' });
+    }
+
+    // After coverage saved: status transition
+    try {
+      const { setExamStatus } = require('../services/core/examsService');
+      await setExamStatus(created.exam_id, { status: 'PREPARING', progress: 10 });
     } catch {}
 
     try {
@@ -200,7 +232,7 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
       });
     } catch {}
 
-    // Kick off async preparation (theoretical + DevLab via injected coverage snapshot)
+    // Kick off async preparation (theoretical + DevLab), coverage will be loaded from Mongo
     try {
       setImmediate(() => {
         try {
@@ -209,7 +241,7 @@ exports.requestPostcourseCoverage = async (req, res, next) => {
             exam_type: 'postcourse',
             course_id: String(courseId),
             course_name: effectiveCourseName || undefined,
-            coverage_map: coverageMap,
+            coverage_map: undefined,
           }).catch((e) => {
             try { console.log('[TRACE][POSTCOURSE][PREP_ERROR]', { message: e?.message }); } catch {}
           });

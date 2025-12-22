@@ -36,6 +36,18 @@ router.post('/', examsController.createExam);
 
 /**
  * @openapi
+ * /api/exams/postcourse/coverage:
+ *   post:
+ *     summary: Ingest post-course coverage and persist snapshot
+ *     description: Calls Coordinator → Course Builder to fetch coverage_map, validates, persists to Mongo exam_packages, and starts preparation.
+ *     responses:
+ *       200:
+ *         description: Coverage ingested and preparation started
+ */
+router.post('/postcourse/coverage', examsController.requestPostcourseCoverage);
+
+/**
+ * @openapi
  * /api/exams/{examId}/start:
  *   post:
  *     summary: Start an exam attempt

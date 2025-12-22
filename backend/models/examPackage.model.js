@@ -52,8 +52,13 @@ const ExamPackageSchema = new Schema(
     },
     // New: explicit assessment type for the package (e.g., 'baseline', 'postcourse')
     assessment_type: { type: String, required: false, index: true },
+    // Alias/duplicate for clarity in downstream consumers
+    exam_type: { type: String, required: false, index: true },
     exam_id: { type: String, required: true, index: true },
     attempt_id: { type: String, required: true, index: true },
+    // Root-level linkage for simpler queries
+    user_id: { type: String, required: false, index: true },
+    course_id: { type: String, required: false, index: true },
     user: {
       user_id: { type: String, required: true, index: true },
       name: String,
@@ -104,6 +109,11 @@ const ExamPackageSchema = new Schema(
       default: [],
     },
     metadata: {
+      type: Schema.Types.Mixed,
+      default: {},
+    },
+    // Context envelope for upstream snapshots (coverage, skills, etc.)
+    context: {
       type: Schema.Types.Mixed,
       default: {},
     },

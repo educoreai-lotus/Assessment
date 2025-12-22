@@ -2522,7 +2522,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     const userInt = Number(userStr.replace(/[^0-9]/g, ""));
     const courseInt = normalizeToInt(course_id);
     try { console.log('[TRACE][prepareExamAsync started]', { exam_id: examId, attempt_id: attemptId, exam_type }); } catch {}
-    await setExamStatus(examId, { status: 'PREPARING', progress: 5 });
+    // Do not regress progress; start at >=10 after coverage ingestion
+    await setExamStatus(examId, { status: 'PREPARING', progress: 12 });
 
     // Fetch upstream policy/skills/coverage
     let policy = {};
@@ -2681,24 +2682,28 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     } else if (exam_type === 'postcourse') {
       // Post-course: STATIC policy; DO NOT call Directory or external coverage
       policy = { passing_grade: 60, max_attempts: 3 };
-      // Load coverage snapshot from attempt
-      let snapshot = null;
+      // Load coverage snapshot from Mongo exam_packages (REQUIRED)
+      let mongoCoverageDoc = null;
       try {
-        const { rows } = await pool.query(
-          `SELECT coverage_snapshot FROM exam_attempts WHERE attempt_id = $1`,
-          [Number(attemptId)],
-        );
-        snapshot = rows && rows[0] ? rows[0].coverage_snapshot : null;
-      } catch (err) {
-        // fall through to missing snapshot handling
-      }
-      const snapArray = Array.isArray(snapshot) ? snapshot : (snapshot && Array.isArray(snapshot.coverage_map) ? snapshot.coverage_map : null);
+        const { ExamPackage } = require('../../models');
+        mongoCoverageDoc = await ExamPackage.findOne({ exam_id: String(examId), attempt_id: String(attemptId) }, { coverage_map: 1 }).lean();
+      } catch {}
+      const snapArray = Array.isArray(mongoCoverageDoc?.coverage_map) ? mongoCoverageDoc.coverage_map : null;
       if (!Array.isArray(snapArray) || snapArray.length === 0) {
+        try {
+          console.error('[PREP][CONTEXT][MISSING]', {
+            exam_id: examId,
+            attempt_id: attemptId,
+            field: Array.isArray(mongoCoverageDoc?.coverage_map) ? 'coverage_map_empty' : (mongoCoverageDoc ? 'coverage_map' : 'document'),
+          });
+        } catch {}
         await setExamStatus(examId, { status: 'FAILED', error_message: 'coverage_snapshot_missing', failed_step: 'prepare_context', progress: 100 });
         return;
       }
       coveragePayload = { coverage_map: snapArray, course_name: course_name || undefined };
-      try { console.log('[POSTCOURSE][COVERAGE][SNAPSHOT]', { exam_id: examId, attempt_id: attemptId, items: snapArray.length }); } catch {}
+      try {
+        console.log('[PREP][CONTEXT][LOAD]', { source: 'mongo', coverage_items_count: snapArray.length });
+      } catch {}
       } else {
         await setExamStatus(examId, { status: 'FAILED', error_message: 'invalid_exam_type', failed_step: 'input_validation', progress: 100 });
         return;
