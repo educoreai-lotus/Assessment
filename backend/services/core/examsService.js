@@ -725,7 +725,8 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
           difficulty: 'medium',
           amount: Array.isArray(skillNamesForDevLab) ? (skillNamesForDevLab.length || 2) : null,
           humanLanguage: 'en',
-          route: { destination: 'devlab', strict: true },
+          route: { destination: 'devlab-service', strict: true },
+          status: true,
           content: { type: 'coding' },
         },
       });
@@ -757,7 +758,8 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
       difficulty: 'medium',
       amount: skillNamesForDevLab.length || 2,
       humanLanguage: 'en',
-      route: { destination: 'devlab', strict: true },
+      route: { destination: 'devlab-service', strict: true },
+      status: true,
       content: { type: 'coding' },
     });
     try { console.log('[DEVLAB][GEN][AFTER_RESPONSE]', { keys: Object.keys(devlabPayload || {}), elapsed_ms: Date.now() - __tDev }); } catch {}
@@ -2766,7 +2768,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
             difficulty: 'medium',
             amount: Array.isArray(skillNamesForDevLab2) ? (skillNamesForDevLab2.length || 2) : null,
             humanLanguage: 'en',
-            route: { destination: 'devlab', strict: true },
+            route: { destination: 'devlab-service', strict: true },
+            status: true,
             content: { type: 'coding' },
           },
         });
@@ -2814,7 +2817,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
             difficulty: 'medium',
             amount: skillNamesForDevLab2.length || 2,
             humanLanguage: 'en',
-            route: { destination: 'devlab', strict: true },
+            route: { destination: 'devlab-service', strict: true },
+            status: true,
             content: { type: 'coding' },
           }),
           timeoutPromise,
