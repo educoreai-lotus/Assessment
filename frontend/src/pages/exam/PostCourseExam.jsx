@@ -404,6 +404,8 @@ export default function PostCourseExam() {
   async function handleSubmit() {
     if (isSubmitting) return;
     try {
+      // eslint-disable-next-line no-console
+      console.log('[POSTCOURSE][SUBMIT][CLICK]');
       // Immediate submit loading UI (Baseline parity)
       setIsSubmitting(true);
       const payloadAnswers = questions.map((q) => ({
@@ -412,6 +414,8 @@ export default function PostCourseExam() {
         skill_id: q.skill_id || '',
         answer: answers[q.id] ?? '',
       }));
+      // eslint-disable-next-line no-console
+      console.log('[POSTCOURSE][SUBMIT][REQUEST_SENT]', { examId, attemptId, answersCount: payloadAnswers.length });
       const result = await examApi.submit(examId, {
         attempt_id: attemptId,
         answers: payloadAnswers,
@@ -653,7 +657,7 @@ export default function PostCourseExam() {
 
       {!examCanceled && stage === 'submit' && (
         <div className="mt-8 flex items-center justify-center">
-          <button className="btn-emerald px-8 py-3 text-lg" onClick={handleSubmit} disabled={isSubmitting || !cameraOk}>
+          <button className="btn-emerald px-8 py-3 text-lg" onClick={handleSubmit} disabled={isSubmitting || !proctoringStartedRef.current}>
             Submit Exam
           </button>
         </div>
