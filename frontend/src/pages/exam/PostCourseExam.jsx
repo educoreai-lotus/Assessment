@@ -108,6 +108,9 @@ export default function PostCourseExam() {
   const [stage, setStage] = useState('theory'); // 'theory' | 'coding' | 'submit'
   const [devlabHtml, setDevlabHtml] = useState(null);
   const devlabHtmlRef = useRef(null);
+  const devlabCompletedRef = useRef(false);
+  const [devlabCompleted, setDevlabCompleted] = useState(false);
+  const [hasCoding, setHasCoding] = useState(false);
   const hasStartedRef = useRef(false);
   const answeredCount = useMemo(() =>
     Object.values(answers).filter(v => v !== '' && v != null).length,
@@ -125,16 +128,10 @@ export default function PostCourseExam() {
         // eslint-disable-next-line no-console
         console.log('[DEVLAB][GRADE][RECEIVED]', { score, skillsFeedback });
       } catch {}
-      try {
-        http.post('/api/exams/submit-coding-grade', {
-          exam_id: examId,
-          attempt_id: attemptId,
-          score,
-          skillsFeedback,
-          questions,
-          solutions,
-        }).catch(() => {});
-      } catch {}
+      // Mark DevLab completion; do NOT submit here (Baseline parity)
+      try { console.log('[POSTCOURSE][DEVLAB][COMPLETED]'); } catch {}
+      devlabCompletedRef.current = true;
+      setDevlabCompleted(true);
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
@@ -241,6 +238,13 @@ export default function PostCourseExam() {
             // eslint-disable-next-line no-console
             console.log('[POSTCOURSE][DEVLAB][HTML_SET_ONCE]', { len: html.length });
           }
+        } catch {}
+        // Track whether coding exists to gate submit availability after DevLab completes
+        try {
+          const codingExists =
+            (Array.isArray(pkg?.coding_questions) && pkg.coding_questions.length > 0) ||
+            !!(pkg?.devlab_ui?.componentHtml);
+          setHasCoding(!!codingExists);
         } catch {}
         setCurrentIdx(0);
         setAnswers({});
@@ -657,7 +661,15 @@ export default function PostCourseExam() {
 
       {!examCanceled && stage === 'submit' && (
         <div className="mt-8 flex items-center justify-center">
-          <button className="btn-emerald px-8 py-3 text-lg" onClick={handleSubmit} disabled={isSubmitting || !proctoringStartedRef.current}>
+          <button
+            className="btn-emerald px-8 py-3 text-lg"
+            onClick={handleSubmit}
+            disabled={
+              isSubmitting ||
+              !proctoringStartedRef.current ||
+              (hasCoding && !devlabCompletedRef.current)
+            }
+          >
             Submit Exam
           </button>
         </div>
