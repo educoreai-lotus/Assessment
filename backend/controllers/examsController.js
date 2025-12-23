@@ -270,6 +270,17 @@ exports.getExam = async (req, res, next) => {
     if (!pkg) {
       return res.status(202).json({ package_ready: false });
     }
+  // Gate readiness on SQL exam status to avoid race conditions
+  let examStatus = null;
+  try {
+    const { rows } = await pool.query(`SELECT status FROM exams WHERE exam_id = $1`, [examIdNum]);
+    examStatus = rows && rows[0] ? String(rows[0].status || '') : null;
+  } catch {
+    examStatus = null;
+  }
+  if (examStatus !== 'READY') {
+    return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
+  }
   try {
     console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });
   } catch {}
