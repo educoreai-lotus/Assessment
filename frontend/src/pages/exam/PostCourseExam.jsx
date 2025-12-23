@@ -14,16 +14,22 @@ import { normalizeExamPackage } from '../../utils/examPackage';
 // and helps detect unexpected remounts
 
 
+let lastStatusPollLogAt = 0;
 async function waitForPackage(examId, maxWaitMs = 60000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     try {
       const res = await http.get(`/api/exams/${examId}`);
-      // eslint-disable-next-line no-console
-      console.log('[POSTCOURSE][EXAM][STATUS][POLL]', {
-        code: res?.status,
-        package_ready: !!res?.data?.package_ready,
-      });
+      // Throttle status poll logs to reduce console noise
+      const now = Date.now();
+      if (now - lastStatusPollLogAt > 3000) {
+        lastStatusPollLogAt = now;
+        // eslint-disable-next-line no-console
+        console.log('[POSTCOURSE][EXAM][STATUS][POLL]', {
+          code: res?.status,
+          package_ready: !!res?.data?.package_ready,
+        });
+      }
       if (res?.data?.package_ready) {
         try { console.log('[POSTCOURSE][EXAM][READY]', { exam_id: examId }); } catch {}
         return res.data;

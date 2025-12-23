@@ -8,6 +8,8 @@ export default function CameraPreview({ onReady, onError, attemptId, onPhoneDete
   const detectorRef = useRef(null);
   const intervalRef = useRef(null);
   const phoneDetectedRef = useRef(false);
+  const lastRawLogTsRef = useRef(0);
+  const readyFiredRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -26,10 +28,22 @@ export default function CameraPreview({ onReady, onError, attemptId, onPhoneDete
         if (video) {
           try {
             video.srcObject = media;
-            await video.play();
+            // Prefer metadata readiness as a reliable signal for stream availability
+            const onMeta = () => {
+              if (!readyFiredRef.current) {
+                readyFiredRef.current = true;
+                onReady?.();
+              }
+            };
+            video.addEventListener('loadedmetadata', onMeta, { once: true });
+            // Play can fail silently on some browsers; do not block readiness on it
+            try { await video.play(); } catch {}
           } catch {}
         }
-        onReady?.();
+        if (!readyFiredRef.current) {
+          readyFiredRef.current = true;
+          onReady?.();
+        }
 
         // Start phone detection loop after camera is active
         try {
@@ -60,11 +74,15 @@ export default function CameraPreview({ onReady, onError, attemptId, onPhoneDete
               }
               try {
                 const predictions = await detectorRef.current.detect(videoEl);
-                // log raw predictions (mandatory)
-                console.log('[PHONE-DETECT][RAW]', predictions.map(p => ({
-                  class: p.class,
-                  score: Number(p.score || 0).toFixed(2),
-                })));
+                // Throttle verbose logs and only print when there is at least one prediction
+                const now = Date.now();
+                if (Array.isArray(predictions) && predictions.length > 0 && now - lastRawLogTsRef.current > 3000) {
+                  lastRawLogTsRef.current = now;
+                  console.log('[PHONE-DETECT][RAW]', predictions.map(p => ({
+                    class: p.class,
+                    score: Number(p.score || 0).toFixed(2),
+                  })));
+                }
                 const phone = Array.isArray(predictions)
                   ? predictions.find((p) => p && ['cell phone', 'remote'].includes(p.class) && p.score >= 0.35)
                   : null;
