@@ -264,13 +264,14 @@ export default function PostCourseExam() {
     let cancelled = false;
     async function startIfReady() {
       if (!examId || !attemptId) return;
-      // Start exam based ONLY on exam readiness; camera/proctoring run in parallel.
+      // Start exam only when package is ready AND proctoring session has started
       if (!examReady) return;
+      if (!proctoringStartedRef.current) return;
       if (hasStartedRef.current) return;
       try {
         setQuestionsLoading(true);
         // eslint-disable-next-line no-console
-        console.log('[POSTCOURSE][EXAM][START][ALLOWED]', { examId, attemptId });
+        console.log('[POSTCOURSE][EXAM][START][ALLOWED]', { examId, attemptId, proctoringStarted: !!proctoringStartedRef.current });
         // Grace delay to avoid race between package_ready and SQL exam.status flip
         await sleep(1000);
         const data = await examApi.start(examId, { attempt_id: attemptId });
@@ -338,6 +339,73 @@ export default function PostCourseExam() {
       } catch (e) {
         const statusCode = e?.response?.status;
         const apiErr = e?.response?.data?.message || e?.response?.data?.error || e?.message || '';
+        // If proctoring hasn't been observed as started yet, attempt to start then retry
+        if (statusCode === 403 && (apiErr === 'proctoring_not_started' || apiErr.includes('proctoring'))) {
+          try {
+            // eslint-disable-next-line no-console
+            console.log('[POSTCOURSE][EXAM][START][GATE_PROCTORING]', { examId, attemptId, cameraReady });
+            if (!proctoringStartedRef.current && cameraReady && attemptId) {
+              await examApi.proctoringStart(attemptId);
+              proctoringStartedRef.current = true;
+            }
+            await sleep(500);
+            // eslint-disable-next-line no-console
+            console.log('[POSTCOURSE][EXAM][START][RETRY_AFTER_PROCTORING]', { examId, attemptId });
+            const retryData = await examApi.start(examId, { attempt_id: attemptId });
+            if (cancelled) return;
+            hasStartedRef.current = true;
+            const pkg2 = normalizeExamPackage(retryData || {});
+            setQuestions(Array.isArray(pkg2.questions) ? pkg2.questions : []);
+            try {
+              const html2 =
+                pkg2?.devlab_ui?.componentHtml ||
+                pkg2?.devlabUi?.componentHtml ||
+                pkg2?.devlab_ui_html ||
+                null;
+              if (typeof html2 === 'string' && html2.trim() !== '' && !devlabHtmlRef.current) {
+                devlabHtmlRef.current = html2;
+                setDevlabHtml(html2);
+                console.log('[POSTCOURSE][DEVLAB][HTML_SET_ONCE]', { len: html2.length });
+              }
+            } catch {}
+            try {
+              const codingExists2 =
+                (Array.isArray(pkg2?.coding_questions) && pkg2.coding_questions.length > 0) ||
+                !!(pkg2?.devlab_ui?.componentHtml);
+              setHasCoding(!!codingExists2);
+            } catch {}
+            setCurrentIdx(0);
+            setAnswers({});
+            try {
+              const hasTheory2 = Array.isArray(pkg2.questions) && pkg2.questions.length > 0;
+              const hasCoding2 = Array.isArray(pkg2.coding_questions) && pkg2.coding_questions.length > 0;
+              if (hasTheory2) {
+                setStage('theory');
+                console.log('[POSTCOURSE][STAGE][SET]', 'theory');
+              } else if (hasCoding2) {
+                setStage('coding');
+                console.log('[POSTCOURSE][STAGE][SET]', 'coding');
+              } else {
+                setStage('theory');
+                console.log('[POSTCOURSE][STAGE][SET]', 'theory');
+              }
+            } catch {}
+            try { localStorage.setItem("postcourse_answers", JSON.stringify({})); } catch {}
+            if (retryData?.expires_at) {
+              setExpiresAtIso(String(retryData.expires_at));
+              const now = Date.now();
+              const exp = new Date(String(retryData.expires_at)).getTime();
+              const diff = Math.max(0, Math.floor((exp - now) / 1000));
+              setRemainingSec(Number.isFinite(diff) ? diff : null);
+            } else if (Number.isFinite(Number(retryData?.duration_seconds))) {
+              setRemainingSec(Number(retryData.duration_seconds));
+            }
+            return;
+          } catch (retryErr) {
+            // eslint-disable-next-line no-console
+            console.log('[POSTCOURSE][EXAM][START][RETRY_AFTER_PROCTORING][FAILED]', retryErr?.response?.data || retryErr?.message || retryErr);
+          }
+        }
         if (statusCode === 409 || apiErr === 'exam_not_ready') {
           // Not fatal: allow polling to continue and retry automatically when READY
           // eslint-disable-next-line no-console
@@ -639,20 +707,20 @@ export default function PostCourseExam() {
   // Start proctoring once when all prerequisites are ready
   useEffect(() => {
     if (!attemptId) return;
-    if (!examReady) return; // Do NOT start proctoring before exam is READY
     if (!cameraReady) return;
     if (proctoringStartedRef.current) return;
     let canceled = false;
     (async () => {
       try {
         // eslint-disable-next-line no-console
-        console.log('[POSTCOURSE][PROCTORING][START][CALLING]', { examId, attemptId, cameraReady });
-        await examApi.proctoringStartForExam(examId, { attempt_id: attemptId });
+        console.log('[POSTCOURSE][PROCTORING][START][CALLING]', { attemptId, cameraReady });
+        // Start camera/proctoring asap using attempt-based endpoint (no need to wait for examReady)
+        await examApi.proctoringStart(attemptId);
         if (canceled) return;
         proctoringStartedRef.current = true;
         setCameraOk(true);
         // eslint-disable-next-line no-console
-        console.log('[POSTCOURSE][PROCTORING][START][OK]', { examId, attemptId });
+        console.log('[POSTCOURSE][PROCTORING][START][OK]', { attemptId });
       } catch (e) {
         if (canceled) return;
         setCameraOk(false);
@@ -662,7 +730,7 @@ export default function PostCourseExam() {
       }
     })();
     return () => { canceled = true; };
-  }, [attemptId, examId, cameraReady, examReady]);
+  }, [attemptId, cameraReady]);
 
   useEffect(() => {
     console.log("🔥 FRONTEND attemptId =", attemptId);
