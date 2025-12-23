@@ -376,7 +376,7 @@ exports.getExam = async (req, res, next) => {
     if (String(pkgAttempt?.final_status || '').toLowerCase() === 'completed' && (!pkgAttempt?.grading || !Array.isArray(pkgAttempt?.grading?.per_skill))) {
       return res.status(500).json({ error: 'grading_missing', message: 'Grading not available for completed exam' });
     }
-    const responsePayload = { package_ready: true, ...pkgAttempt };
+    const responsePayload = { package_ready: true, ...pkgAttempt, attempt_id: String(resolvedAttemptId) };
     try {
       const perSkill = Array.isArray(pkgAttempt?.grading?.per_skill) ? pkgAttempt.grading.per_skill : (Array.isArray(pkgAttempt?.metadata?.skills) ? pkgAttempt.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
       const finalGrade = pkgAttempt?.grading?.final_grade != null ? Number(pkgAttempt.grading.final_grade) : null;
