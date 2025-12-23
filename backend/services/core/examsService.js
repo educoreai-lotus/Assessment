@@ -885,12 +885,15 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
         console.log('[BASELINE][AI][FAIL] Reason:', err?.message);
       }
     } catch {}
-    // Fallback to theoretical mocks if OpenAI fails
+    // Post-course: do NOT fallback to mocks
+    if (String(exam_type).toLowerCase() === 'postcourse') {
+      throw err;
+    }
+    // Baseline: fallback to theoretical mocks if OpenAI fails
     try {
       const { buildMockQuestions } = require("../mocks/theoryMock");
       const skillsForMocks = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
       const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
-      // map mocks into unified normalized structure; MCQs only in mock; OPEN omitted if not available
       const normalizedMcqs = mocks.map((m) => ({
         qid: m.qid,
         type: "mcq",
@@ -901,32 +904,21 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
         options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
         correct_answer: m.prompt?.correct_answer || "",
       }));
-      // duplicate MCQ set once if we need two per skill in postcourse
-      const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
-      let fallback = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+      let fallback = validateTheoreticalQuestions([...normalizedMcqs]);
       // Baseline mode: maintain same count as AI-items and shuffle order
-      if (exam_type === 'baseline') {
-        try {
-          // eslint-disable-next-line no-console
-          console.log('[BASELINE][MOCK] Using fallback theoretical questions');
-        } catch {}
-        // Fisher-Yates shuffle
-        for (let i = fallback.length - 1; i > 0; i -= 1) {
-          const j = Math.floor(Math.random() * (i + 1));
-          const tmp = fallback[i];
-          fallback[i] = fallback[j];
-          fallback[j] = tmp;
-        }
-        const desired = Math.max(1, Array.isArray(skillsArray) ? Math.min(fallback.length, questionCount) : questionCount);
-        fallback = fallback.slice(0, desired);
-      }
-      questions = fallback;
       try {
-        if (String(exam_type).toLowerCase() === 'postcourse') {
-          // eslint-disable-next-line no-console
-          console.log('[TRACE][POSTCOURSE][MOCK_FALLBACK]', { reason: 'ai_failed', mcq_count: normalizedMcqs.length, duplicated_for_open: duplicatedForOpen.length });
-        }
+        // eslint-disable-next-line no-console
+        console.log('[BASELINE][MOCK] Using fallback theoretical questions');
       } catch {}
+      for (let i = fallback.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = fallback[i];
+        fallback[i] = fallback[j];
+        fallback[j] = tmp;
+      }
+      const desired = Math.max(1, Array.isArray(skillsArray) ? Math.min(fallback.length, questionCount) : questionCount);
+      fallback = fallback.slice(0, desired);
+      questions = fallback;
     } catch (mockErr) {
       try {
         // eslint-disable-next-line no-console
@@ -937,6 +929,9 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   }
   // If AI returned zero items, also fallback to mocks
   if (!Array.isArray(questions) || questions.length === 0) {
+    if (String(exam_type).toLowerCase() === 'postcourse') {
+      throw new Error('postcourse_no_theoretical_questions_generated');
+    }
     try {
       const { buildMockQuestions } = require("../mocks/theoryMock");
       const skillsForMocks = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
@@ -951,29 +946,20 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
         options: Array.isArray(m.prompt?.options) ? m.prompt.options : [],
         correct_answer: m.prompt?.correct_answer || "",
       }));
-      const duplicatedForOpen = exam_type === "postcourse" ? normalizedMcqs : [];
-      let fallback2 = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
-      if (exam_type === 'baseline') {
-        try {
-          // eslint-disable-next-line no-console
-          console.log('[BASELINE][MOCK] Using fallback theoretical questions');
-        } catch {}
-        for (let i = fallback2.length - 1; i > 0; i -= 1) {
-          const j = Math.floor(Math.random() * (i + 1));
-          const tmp = fallback2[i];
-          fallback2[i] = fallback2[j];
-          fallback2[j] = tmp;
-        }
-        const desired = Math.max(1, Array.isArray(skillsArray) ? Math.min(fallback2.length, questionCount) : questionCount);
-        fallback2 = fallback2.slice(0, desired);
-      }
-      questions = fallback2;
+      let fallback2 = validateTheoreticalQuestions([...normalizedMcqs]);
       try {
-        if (String(exam_type).toLowerCase() === 'postcourse') {
-          // eslint-disable-next-line no-console
-          console.log('[TRACE][POSTCOURSE][MOCK_FALLBACK]', { reason: 'no_items_generated', mcq_count: normalizedMcqs.length, duplicated_for_open: duplicatedForOpen.length });
-        }
+        // eslint-disable-next-line no-console
+        console.log('[BASELINE][MOCK] Using fallback theoretical questions');
       } catch {}
+      for (let i = fallback2.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = fallback2[i];
+        fallback2[i] = fallback2[j];
+        fallback2[j] = tmp;
+      }
+      const desired = Math.max(1, Array.isArray(skillsArray) ? Math.min(fallback2.length, questionCount) : questionCount);
+      fallback2 = fallback2.slice(0, desired);
+      questions = fallback2;
     } catch (mockErr2) {
       try {
         // eslint-disable-next-line no-console
@@ -2951,13 +2937,16 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         }
       } catch {}
     } catch (e) {
+      if (String(exam_type).toLowerCase() === 'postcourse') {
+        await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'theory_generation_failed', failed_step: 'generate_questions', progress: 100 });
+        return;
+      }
       try {
         const { buildMockQuestions } = require("../mocks/theoryMock");
         const skillsForMocks = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
         const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
         const normalizedMcqs = mocks.map((m) => ({ qid: m.qid, type: 'mcq', skill_id: m.skill_id, difficulty: 'medium', question: m.prompt?.question || '', stem: m.prompt?.question || '', options: Array.isArray(m.prompt?.options) ? m.prompt.options : [], correct_answer: m.prompt?.correct_answer || '' }));
-        const duplicatedForOpen = exam_type === 'postcourse' ? normalizedMcqs : [];
-        questions = validateTheoreticalQuestions([...normalizedMcqs, ...duplicatedForOpen]);
+        questions = validateTheoreticalQuestions([...normalizedMcqs]);
       } catch (e2) {
         await setExamStatus(examId, { status: 'FAILED', error_message: e2?.message || 'generation_failed', failed_step: 'generate_questions', progress: 100 });
         return;
