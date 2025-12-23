@@ -266,40 +266,83 @@ exports.getExam = async (req, res, next) => {
     if (examIdNum == null) {
       return res.status(400).json({ error: 'invalid_exam_id' });
     }
-    const pkg = await ExamPackage.findOne({ exam_id: String(examIdNum) }).lean();
+    // Gate readiness on SQL exam status to avoid race conditions
+    let examStatus = null;
+    let examType = null;
+    try {
+      const { rows } = await pool.query(`SELECT status, exam_type FROM exams WHERE exam_id = $1`, [examIdNum]);
+      if (rows && rows[0]) {
+        examStatus = rows[0].status ? String(rows[0].status) : null;
+        examType = rows[0].exam_type ? String(rows[0].exam_type) : null;
+      }
+    } catch {
+      examStatus = null;
+      examType = null;
+    }
+
+    // Baseline: preserve existing behavior (exam-scoped package only)
+    const isPostCourse = String(examType || '').toLowerCase() === 'postcourse';
+
+    let pkg = await ExamPackage.findOne({ exam_id: String(examIdNum) }).lean();
+
+    // Post-course: resolve readiness via attempt-scoped package if exam-scoped not found
+    if (!pkg && isPostCourse) {
+      let attemptId = null;
+      try {
+        const { rows } = await pool.query(
+          `SELECT ea.attempt_id
+           FROM exam_attempts ea
+           WHERE ea.exam_id = $1
+             AND COALESCE(ea.status, '') NOT IN ('canceled','invalidated')
+           ORDER BY ea.attempt_no DESC, ea.attempt_id DESC
+           LIMIT 1`,
+          [examIdNum],
+        );
+        attemptId = rows && rows[0] ? rows[0].attempt_id : null;
+      } catch {}
+      if (attemptId != null) {
+        const pkgByAttempt = await ExamPackage.findOne({ attempt_id: String(attemptId) }).lean();
+        if (pkgByAttempt) {
+          pkg = pkgByAttempt;
+          try {
+            console.log('[READINESS][POSTCOURSE][BY_ATTEMPT]', {
+              exam_id: examIdNum,
+              attempt_id: Number(attemptId),
+              package_id: String(pkgByAttempt?._id || ''),
+            });
+          } catch {}
+        }
+      }
+    }
+
+    // If no package resolved yet:
     if (!pkg) {
+      // For baseline (and general case), preserve previous 202 response
       return res.status(202).json({ package_ready: false });
     }
-  // Gate readiness on SQL exam status to avoid race conditions
-  let examStatus = null;
-  try {
-    const { rows } = await pool.query(`SELECT status FROM exams WHERE exam_id = $1`, [examIdNum]);
-    examStatus = rows && rows[0] ? String(rows[0].status || '') : null;
-  } catch {
-    examStatus = null;
-  }
-  if (examStatus !== 'READY') {
-    return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
-  }
-  try {
-    console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });
-  } catch {}
-  // Guard: after completion, grading must be present
-  if (String(pkg?.final_status || '').toLowerCase() === 'completed' && (!pkg?.grading || !Array.isArray(pkg?.grading?.per_skill))) {
-    return res.status(500).json({ error: 'grading_missing', message: 'Grading not available for completed exam' });
-  }
-  const responsePayload = { package_ready: true, ...pkg };
-  try {
-    const perSkill = Array.isArray(pkg?.grading?.per_skill) ? pkg.grading.per_skill : (Array.isArray(pkg?.metadata?.skills) ? pkg.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
-    const finalGrade = pkg?.grading?.final_grade != null ? Number(pkg.grading.final_grade) : null;
-    const passed = pkg?.grading?.passed != null ? !!pkg.grading.passed : null;
-    console.log('[RESULTS][API][RESPONSE]', {
-      per_skill: perSkill.map(s => ({ skill_id: s.skill_id, score: s.score ?? null, status: s.status ?? null })),
-      final_grade: finalGrade,
-      passed,
-    });
-  } catch {}
-  return res.status(200).json(responsePayload);
+
+    if (examStatus !== 'READY') {
+      return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
+    }
+    try {
+      console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });
+    } catch {}
+    // Guard: after completion, grading must be present
+    if (String(pkg?.final_status || '').toLowerCase() === 'completed' && (!pkg?.grading || !Array.isArray(pkg?.grading?.per_skill))) {
+      return res.status(500).json({ error: 'grading_missing', message: 'Grading not available for completed exam' });
+    }
+    const responsePayload = { package_ready: true, ...pkg };
+    try {
+      const perSkill = Array.isArray(pkg?.grading?.per_skill) ? pkg.grading.per_skill : (Array.isArray(pkg?.metadata?.skills) ? pkg.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
+      const finalGrade = pkg?.grading?.final_grade != null ? Number(pkg.grading.final_grade) : null;
+      const passed = pkg?.grading?.passed != null ? !!pkg.grading.passed : null;
+      console.log('[RESULTS][API][RESPONSE]', {
+        per_skill: perSkill.map(s => ({ skill_id: s.skill_id, score: s.score ?? null, status: s.status ?? null })),
+        final_grade: finalGrade,
+        passed,
+      });
+    } catch {}
+    return res.status(200).json(responsePayload);
   } catch (err) {
     return next(err);
   }
