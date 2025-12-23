@@ -311,114 +311,31 @@ exports.getExam = async (req, res, next) => {
       return res.status(200).json(responsePayload);
     }
 
-    // Post-course: prefer package_ref-based resolution, fall back to attempt_id lookup
+    // Post-course: STRICT readiness by provided attempt_id only
     const attemptIdParam = req?.query?.attempt_id != null ? normalizeToInt(req.query.attempt_id) : null;
-    let resolvedAttemptId = attemptIdParam != null ? attemptIdParam : null;
-
-    // Validate attempt belongs to exam and fetch package_ref when possible
-    let attemptRow = null;
-    if (resolvedAttemptId != null) {
-      try {
-        const { rows } = await pool.query(
-          `SELECT attempt_id, exam_id, package_ref FROM exam_attempts WHERE attempt_id = $1`,
-          [resolvedAttemptId],
-        );
-        attemptRow = rows && rows[0] ? rows[0] : null;
-        if (attemptRow && Number(attemptRow.exam_id) !== Number(examIdNum)) {
-          attemptRow = null;
-        }
-      } catch {
-        attemptRow = null;
-      }
-    }
-
-    // If no valid attempt provided, deterministically resolve via SQL (prefer package_ref)
-    if (!attemptRow) {
-      try {
-        // Prefer an attempt already linked to a package
-        let rows = await pool.query(
-          `SELECT attempt_id, exam_id, package_ref
-             FROM exam_attempts
-            WHERE exam_id = $1 AND package_ref IS NOT NULL
-            ORDER BY created_at DESC, attempt_no DESC, attempt_id DESC
-            LIMIT 1`,
-          [examIdNum],
-        ).then(r => r.rows).catch(() => []);
-        attemptRow = rows && rows[0] ? rows[0] : null;
-        // Fallback: any attempt for this exam (most recent)
-        if (!attemptRow) {
-          rows = await pool.query(
-            `SELECT attempt_id, exam_id, package_ref
-               FROM exam_attempts
-              WHERE exam_id = $1
-              ORDER BY created_at DESC, attempt_no DESC, attempt_id DESC
-              LIMIT 1`,
-            [examIdNum],
-          ).then(r => r.rows).catch(() => []);
-          attemptRow = rows && rows[0] ? rows[0] : null;
-        }
-        resolvedAttemptId = attemptRow ? Number(attemptRow.attempt_id) : null;
-      } catch {
-        attemptRow = null;
-        resolvedAttemptId = null;
-      }
-    }
-
-    if (resolvedAttemptId == null) {
+    if (attemptIdParam == null) {
       return res.status(202).json({ package_ready: false });
     }
-
-    // Prefer package_ref-based fetch
-    let pkgAttempt = null;
-    let usedPackageRef = false;
-    if (attemptRow && attemptRow.package_ref) {
-      try {
-        pkgAttempt = await ExamPackage.findOne({ _id: String(attemptRow.package_ref) }).lean();
-        usedPackageRef = !!pkgAttempt;
-      } catch {
-        pkgAttempt = null;
-      }
-    }
-    // Fallback to attempt_id-based fetch (normalize to string)
-    if (!pkgAttempt) {
-      pkgAttempt = await ExamPackage.findOne({ attempt_id: String(resolvedAttemptId) }).lean();
-    }
-    if (!pkgAttempt) {
-      return res.status(202).json({ package_ready: false });
-    }
-
+    // If exam not READY, not ready
     if (examStatus !== 'READY') {
       return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
     }
-
-    // One-time readiness log
+    // Fetch package by attempt_id (string-normalized)
+    const aid = String(attemptIdParam);
+    const pkgAttempt = await ExamPackage.findOne({ attempt_id: aid }).lean();
+    if (!pkgAttempt) {
+      return res.status(200).json({ package_ready: false });
+    }
+    // Exactly one readiness log
     try {
       console.log('[POSTCOURSE][READY][RETURNING_TRUE]', {
         exam_id: examIdNum,
-        attempt_id: Number(resolvedAttemptId),
-        has_package_ref: !!(attemptRow && attemptRow.package_ref),
+        attempt_id: attemptIdParam,
         package_id: String(pkgAttempt?._id || ''),
       });
     } catch {}
-
-    try {
-      console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });
-    } catch {}
-    if (String(pkgAttempt?.final_status || '').toLowerCase() === 'completed' && (!pkgAttempt?.grading || !Array.isArray(pkgAttempt?.grading?.per_skill))) {
-      return res.status(500).json({ error: 'grading_missing', message: 'Grading not available for completed exam' });
-    }
-    const responsePayload = { package_ready: true, ...pkgAttempt, attempt_id: String(resolvedAttemptId) };
-    try {
-      const perSkill = Array.isArray(pkgAttempt?.grading?.per_skill) ? pkgAttempt.grading.per_skill : (Array.isArray(pkgAttempt?.metadata?.skills) ? pkgAttempt.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
-      const finalGrade = pkgAttempt?.grading?.final_grade != null ? Number(pkgAttempt.grading.final_grade) : null;
-      const passed = pkgAttempt?.grading?.passed != null ? !!pkgAttempt.grading.passed : null;
-      console.log('[RESULTS][API][RESPONSE]', {
-        per_skill: perSkill.map(s => ({ skill_id: s.skill_id, score: s.score ?? null, status: s.status ?? null })),
-        final_grade: finalGrade,
-        passed,
-      });
-    } catch {}
-    return res.status(200).json(responsePayload);
+    // Return ready immediately
+    return res.status(200).json({ package_ready: true, attempt_id: aid, exam_id: Number(examIdNum), ...pkgAttempt });
   } catch (err) {
     return next(err);
   }
