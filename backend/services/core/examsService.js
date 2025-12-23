@@ -594,9 +594,9 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
   if (exam_type === "baseline") {
     questionCount = Array.isArray(skillsArray) ? skillsArray.length : 0;
   } else if (exam_type === "postcourse") {
-    // 2 per skill (1 MCQ + 1 OPEN) if possible
     const uniqueSkillIds = Array.from(new Set((skillsArray || []).map((s) => String(s.skill_id)).filter(Boolean)));
-    questionCount = uniqueSkillIds.length * 2;
+    // 1 per skill (either MCQ or OPEN)
+    questionCount = uniqueSkillIds.length;
   }
   if (isTest && (!Number.isFinite(questionCount) || questionCount < 2)) {
     questionCount = 2;
@@ -792,18 +792,19 @@ async function createExam({ user_id, exam_type, course_id, course_name, user_nam
     // eslint-disable-next-line no-console
     console.debug("Theoretical generation skills:", uniqueSkills);
     const items = [];
-    if (exam_type === "postcourse") {
-      // At least 1 MCQ and 1 OPEN per skill
-      for (const sid of uniqueSkills) {
-        items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type: 'mcq' });
-        items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type: 'open' });
-      }
-    } else {
+    if (exam_type !== "postcourse") {
       for (let i = 0; i < questionCount; i += 1) {
         const skill_id = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
         if (!skill_id) continue;
         const type = i % 2 === 0 ? 'mcq' : 'open';
         items.push({ skill_id, difficulty: 'medium', humanLanguage: 'en', type });
+      }
+    } else {
+      // Post-course: one per skill, alternate type for variety
+      for (let i = 0; i < uniqueSkills.length; i += 1) {
+        const sid = uniqueSkills[i];
+        const type = i % 2 === 0 ? 'mcq' : 'open';
+        items.push({ skill_id: sid, difficulty: 'medium', humanLanguage: 'en', type });
       }
     }
     let generated = [];
@@ -2731,7 +2732,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       questionCount = Array.isArray(skillsArray) ? skillsArray.length : 0;
     } else {
       const uniqueSkillIds = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
-      questionCount = uniqueSkillIds.length * 2;
+      // 1 per skill (either MCQ or OPEN)
+      questionCount = uniqueSkillIds.length;
     }
     if (isTest && (!Number.isFinite(questionCount) || questionCount < 2)) questionCount = 2;
     const durationMinutes = Math.max(15, Number.isFinite(questionCount) ? questionCount * 4 : 0);
@@ -2883,42 +2885,42 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           });
           return Promise.race([promise, timeout]).finally(() => { if (t) clearTimeout(t); });
         };
-        for (const sid of uniqueSkills) {
+        for (let i = 0; i < uniqueSkills.length; i += 1) {
+          const sid = uniqueSkills[i];
           const sname = skillIdToNameMap.get(sid) || '';
-          for (const type of ['mcq', 'open']) {
-            let attempt = 0;
-            let accepted = false;
-            while (attempt < 2 && !accepted) {
-              attempt += 1;
-              try {
-                const seed = `${Date.now()}-${Math.random()}`;
-                const gen = await withTimeout(
-                  generateTheoreticalQuestions({ items: [{ skill_id: sid, skill_name: sname, type, difficulty: 'medium', humanLanguage: 'en' }], seed }),
-                  30000
-                );
-                const arr = Array.isArray(gen) ? gen : [];
-                for (const raw of arr) {
-                  // Validate and normalize
-                  let validation = { valid: true, reasons: [] };
-                  try { validation = await validateQuestion({ question: raw }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; }
-                  const hints = raw?.hint ? [String(raw.hint)] : undefined;
-                  const normalized = normalizeAiQuestion({ ...raw, hint: hints });
-                  // must match skill and type
-                  const skillOk = String(normalized?.skill_id || '').trim() === String(sid);
-                  const typeOk = String(normalized?.type || '').toLowerCase() === String(type);
-                  if (validation?.valid && skillOk && typeOk && addIfUnique(normalized)) {
-                    questions.push(normalized);
-                    accepted = true;
-                    break;
-                  }
+          const type = i % 2 === 0 ? 'mcq' : 'open';
+          let attempt = 0;
+          let accepted = false;
+          while (attempt < 2 && !accepted) {
+            attempt += 1;
+            try {
+              const seed = `${Date.now()}-${Math.random()}`;
+              const gen = await withTimeout(
+                generateTheoreticalQuestions({ items: [{ skill_id: sid, skill_name: sname, type, difficulty: 'medium', humanLanguage: 'en' }], seed }),
+                12000
+              );
+              const arr = Array.isArray(gen) ? gen : [];
+              for (const raw of arr) {
+                // Validate and normalize
+                let validation = { valid: true, reasons: [] };
+                try { validation = await validateQuestion({ question: raw }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; }
+                const hints = raw?.hint ? [String(raw.hint)] : undefined;
+                const normalized = normalizeAiQuestion({ ...raw, hint: hints });
+                // must match skill and type
+                const skillOk = String(normalized?.skill_id || '').trim() === String(sid);
+                const typeOk = String(normalized?.type || '').toLowerCase() === String(type);
+                if (validation?.valid && skillOk && typeOk && addIfUnique(normalized)) {
+                  questions.push(normalized);
+                  accepted = true;
+                  break;
                 }
-              } catch (e) {
-                try { console.log('[POSTCOURSE][AI][RETRY]', { skill_id: sid, type, attempt, error: e?.message }); } catch {}
               }
+            } catch (e) {
+              try { console.log('[POSTCOURSE][AI][RETRY]', { skill_id: sid, type, attempt, error: e?.message }); } catch {}
             }
-            if (!accepted) {
-              try { console.log('[POSTCOURSE][AI][SKIPPED_SKILL_TYPE]', { skill_id: sid, type, reason: 'generation_failed_or_duplicate' }); } catch {}
-            }
+          }
+          if (!accepted) {
+            try { console.log('[POSTCOURSE][AI][SKIPPED_SKILL]', { skill_id: sid, type, reason: 'generation_failed_or_duplicate' }); } catch {}
           }
         }
         questions = validateTheoreticalQuestions(questions);
