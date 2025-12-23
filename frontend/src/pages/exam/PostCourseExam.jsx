@@ -215,7 +215,8 @@ export default function PostCourseExam() {
           navigate('/exam-intro?examType=postcourse', { replace: true });
           return;
         }
-        setExamId(String(eid));
+        // Resolve canonical examId from attempt to avoid mismatches
+        let resolvedEid = String(eid);
         // Attempt/Exam mismatch guard: some links may pass examId as attemptId by mistake
         let resolvedAid = String(aid);
         if (String(aid) === String(eid)) {
@@ -232,10 +233,21 @@ export default function PostCourseExam() {
             }
           } catch {}
         }
+        // If attempt points to a different exam, trust the attempt's exam_id
+        try {
+          const att = await examApi.attempt(resolvedAid).catch(() => null);
+          const attExamId = att?.exam_id != null ? String(att.exam_id) : null;
+          if (attExamId && attExamId !== resolvedEid) {
+            // eslint-disable-next-line no-console
+            console.log('[POSTCOURSE][EXAM_ID_RESOLVED_FROM_ATTEMPT]', { from: resolvedEid, to: attExamId, attemptId: resolvedAid });
+            resolvedEid = attExamId;
+          }
+        } catch {}
+        setExamId(resolvedEid);
         setAttemptId(resolvedAid);
         // Poll until package is ready to avoid racing preparation
         try {
-          const pkg = await waitForPackage(String(eid));
+          const pkg = await waitForPackage(String(resolvedEid));
           if (pkg?.package_ready) setExamReady(true);
         } catch {}
         if (!mounted) return;
