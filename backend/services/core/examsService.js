@@ -2873,20 +2873,43 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       const uniqueSkills = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
       const skillIdToNameMap = new Map((Array.isArray(skillsArray) ? skillsArray : []).map(s => [String(s.skill_id), String(s.skill_name || '')]));
 
-      // Post-course: chunked per-skill generation (one question per skill), with adaptive retry for missing
+      // Post-course: generate EXACTLY 6 theory questions from 6 different skills (4 MCQ + 2 OPEN)
       if (exam_type === 'postcourse' && !isTest) {
         const seenStems = new Set();
         const requestedTypeBySkill = new Map();
-        for (let i = 0; i < uniqueSkills.length; i += 1) {
-          const sid = uniqueSkills[i];
-          const sname = skillIdToNameMap.get(sid) || '';
-          const type = i % 2 === 0 ? 'mcq' : 'open';
-          requestedTypeBySkill.set(String(sid), type);
+        // Deterministic shuffle of skills based on exam/attempt seed
+        const seedStr = `${examId}-${attemptId}-${skillsArray?.length || 0}`;
+        function hash32(s) {
+          let h = 2166136261 >>> 0;
+          for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619) >>> 0;
+          }
+          return h >>> 0;
         }
+        function seededShuffle(arr, seed) {
+          const out = arr.slice();
+          let x = seed >>> 0;
+          for (let i = out.length - 1; i > 0; i--) {
+            x ^= x << 13; x >>>= 0;
+            x ^= x >> 17; x >>>= 0;
+            x ^= x << 5;  x >>>= 0;
+            const j = x % (i + 1);
+            const tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+          }
+          return out;
+        }
+        const shuffled = seededShuffle(uniqueSkills, hash32(seedStr));
+        const targetCount = Math.min(6, shuffled.length);
+        const selectedSkills = shuffled.slice(0, targetCount);
+        const items = selectedSkills.map((sid, idx) => {
+          const sname = skillIdToNameMap.get(sid) || '';
+          const type = idx < 4 ? 'mcq' : 'open';
+          requestedTypeBySkill.set(String(sid), type);
+          return { skill_id: sid, skill_name: sname, type, difficulty: 'medium', humanLanguage: 'en' };
+        });
         const fillFrom = async (generatedArr, targetMap) => {
           for (const raw of (Array.isArray(generatedArr) ? generatedArr : [])) {
-            // Validate and normalize
-            // Post-course path: skip heavy external validation to meet time budget
             let validation = { valid: true, reasons: [] };
             const hints = raw?.hint ? [String(raw.hint)] : undefined;
             const normalized = normalizeAiQuestion({ ...raw, hint: hints });
@@ -2895,95 +2918,72 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
             const typeOk = String(normalized?.type || '').toLowerCase() === wantType;
             const stem = String(normalized?.stem || normalized?.question || normalized?.prompt?.question || '').trim().toLowerCase();
             if (!sid || !wantType || !typeOk || !validation?.valid || !stem) continue;
+            if (!selectedSkills.includes(sid)) continue;
             if (targetMap.has(sid)) continue;
             if (seenStems.has(stem)) continue;
             seenStems.add(stem);
             targetMap.set(sid, normalized);
           }
         };
-        // Track theory generation status for post-course (non-blocking)
         theoryStatus = 'pending';
         const pickedBySkill = new Map();
-
-        // Chunk pass (size 4)
-        const chunkSize = 4;
-        for (let start = 0, chunkIndex = 0; start < uniqueSkills.length; start += chunkSize, chunkIndex += 1) {
-          const end = Math.min(uniqueSkills.length, start + chunkSize);
-          const chunkSkills = uniqueSkills.slice(start, end);
-          const items = chunkSkills.map((sid) => ({
-            skill_id: sid,
-            skill_name: skillIdToNameMap.get(sid) || '',
-            type: requestedTypeBySkill.get(String(sid)) || 'mcq',
-            difficulty: 'medium',
-            humanLanguage: 'en',
-          }));
-          const timeoutMs = 90000; // 90s for chunked post-course calls
-          try { console.log('[POSTCOURSE][AI][CHUNK_START]', { chunk_index: chunkIndex, chunk_size: items.length, remaining: uniqueSkills.length - end, timeout_ms: timeoutMs }); } catch {}
-          let arr = [];
-          try {
-            const seed = `${Date.now()}-${Math.random()}-${chunkIndex}`;
-            arr = await generateTheoreticalQuestions({ items, seed, timeoutMs });
-          } catch (e) {
-            try { console.log('[POSTCOURSE][AI][CHUNK_ERROR]', { chunk_index: chunkIndex, message: e?.message }); } catch {}
-            arr = [];
-          }
-          await fillFrom(arr, pickedBySkill);
-          try { console.log('[POSTCOURSE][AI][CHUNK_DONE]', { chunk_index: chunkIndex, produced: Array.isArray(arr) ? arr.length : 0, total_so_far: pickedBySkill.size }); } catch {}
-          if (pickedBySkill.size > 0) theoryStatus = 'partial';
+        // Single pass for 6 items
+        let arr = [];
+        const timeoutMs = 90000;
+        try {
+          const seed = `${Date.now()}-${Math.random()}-pc6`;
+          console.log('[POSTCOURSE][AI][CHUNK_START]', { chunk_index: 0, chunk_size: items.length, remaining: 0, timeout_ms: timeoutMs });
+          arr = await generateTheoreticalQuestions({ items, seed, timeoutMs });
+        } catch (e) {
+          try { console.log('[POSTCOURSE][AI][CHUNK_ERROR]', { chunk_index: 0, message: e?.message }); } catch {}
+          arr = [];
         }
-
-        // After first pass, determine missing
-        let missing = uniqueSkills.filter((sid) => !pickedBySkill.has(String(sid)));
-        if (missing.length > 0) {
-          const sample = missing.slice(0, Math.min(3, missing.length));
-          try { console.log('[POSTCOURSE][AI][MISSING_AFTER_PASS]', { missing_count: missing.length, missing_skills_sample: sample }); } catch {}
-        }
-
-        // Retry pass for missing (chunk size 2, 45s timeout)
+        await fillFrom(arr, pickedBySkill);
+        try { console.log('[POSTCOURSE][AI][CHUNK_DONE]', { chunk_index: 0, produced: Array.isArray(arr) ? arr.length : 0, total_so_far: pickedBySkill.size }); } catch {}
+        if (pickedBySkill.size > 0) { theoryStatus = 'partial'; }
+        // Single retry for any missing (chunk size 2, 45s)
+        let missing = selectedSkills.filter((sid) => !pickedBySkill.has(String(sid)));
         if (missing.length > 0) {
           const retryChunk = 2;
-          let producedInRetry = 0;
-          for (let start = 0, chunkIndex = 0; start < missing.length; start += retryChunk, chunkIndex += 1) {
+          let producedRetry = 0;
+          for (let start = 0, ci = 0; start < missing.length; start += retryChunk, ci += 1) {
             const end = Math.min(missing.length, start + retryChunk);
             const chunkSkills = missing.slice(start, end);
-            const items = chunkSkills.map((sid, idx) => ({
+            const retryItems = chunkSkills.map((sid, idx) => ({
               skill_id: sid,
               skill_name: skillIdToNameMap.get(sid) || '',
-              type: requestedTypeBySkill.get(String(sid)) || (idx % 2 === 0 ? 'mcq' : 'open'),
+              type: requestedTypeBySkill.get(String(sid)) || (idx < 1 ? 'mcq' : 'open'),
               difficulty: 'medium',
               humanLanguage: 'en',
             }));
-            const timeoutMs = 45000;
-            try { console.log('[POSTCOURSE][AI][CHUNK_START]', { chunk_index: `retry_${chunkIndex}`, chunk_size: items.length, remaining: missing.length - end, timeout_ms: timeoutMs }); } catch {}
-            let arr = [];
+            const retryTimeoutMs = 45000;
+            try { console.log('[POSTCOURSE][AI][CHUNK_START]', { chunk_index: `retry_${ci}`, chunk_size: retryItems.length, remaining: missing.length - end, timeout_ms: retryTimeoutMs }); } catch {}
+            let arr2 = [];
             try {
-              const seed = `${Date.now()}-${Math.random()}-retry-${chunkIndex}`;
-              arr = await generateTheoreticalQuestions({ items, seed, timeoutMs });
+              const seed2 = `${Date.now()}-${Math.random()}-pc6-retry-${ci}`;
+              arr2 = await generateTheoreticalQuestions({ items: retryItems, seed: seed2, timeoutMs: retryTimeoutMs });
             } catch (e) {
-              try { console.log('[POSTCOURSE][AI][CHUNK_ERROR]', { chunk_index: `retry_${chunkIndex}`, message: e?.message }); } catch {}
-              arr = [];
+              try { console.log('[POSTCOURSE][AI][CHUNK_ERROR]', { chunk_index: `retry_${ci}`, message: e?.message }); } catch {}
+              arr2 = [];
             }
-            await fillFrom(arr, pickedBySkill);
-            producedInRetry += Array.isArray(arr) ? arr.length : 0;
-            try { console.log('[POSTCOURSE][AI][CHUNK_DONE]', { chunk_index: `retry_${chunkIndex}`, produced: Array.isArray(arr) ? arr.length : 0, total_so_far: pickedBySkill.size }); } catch {}
+            await fillFrom(arr2, pickedBySkill);
+            producedRetry += Array.isArray(arr2) ? arr2.length : 0;
+            try { console.log('[POSTCOURSE][AI][CHUNK_DONE]', { chunk_index: `retry_${ci}`, produced: Array.isArray(arr2) ? arr2.length : 0, total_so_far: pickedBySkill.size }); } catch {}
           }
-          missing = uniqueSkills.filter((sid) => !pickedBySkill.has(String(sid)));
-          try { console.log('[POSTCOURSE][AI][RETRY_DONE]', { produced: producedInRetry, missing_after_retry: missing.length }); } catch {}
+          missing = selectedSkills.filter((sid) => !pickedBySkill.has(String(sid)));
+          try { console.log('[POSTCOURSE][AI][RETRY_DONE]', { produced: producedRetry, missing_after_retry: missing.length }); } catch {}
         }
-
-        // Materialize questions
-        questions = validateTheoreticalQuestions(Array.from(pickedBySkill.values()));
-        // Finalize theory status after pass/retry
-        if (pickedBySkill.size >= uniqueSkills.length) {
+        const finalList = Array.from(pickedBySkill.values()).slice(0, targetCount);
+        questions = validateTheoreticalQuestions(finalList);
+        if (pickedBySkill.size >= targetCount) {
           theoryStatus = 'ready';
           try { console.log('[POSTCOURSE][AI][THEORY_READY]'); } catch {}
         } else if (pickedBySkill.size > 0) {
-          // Some questions exist but not all skills covered
           theoryStatus = 'partial';
-          try { console.log('[POSTCOURSE][AI][THEORY_STATUS]', { theory_status: theoryStatus, questions_count: questions.length, skills_count: uniqueSkills.length }); } catch {}
+          try { console.log('[POSTCOURSE][AI][THEORY_STATUS]', { theory_status: theoryStatus, questions_count: questions.length, skills_count: targetCount }); } catch {}
         } else {
           theoryStatus = 'failed';
-          try { console.log('[POSTCOURSE][AI][THEORY_STATUS]', { theory_status: theoryStatus, questions_count: 0, skills_count: uniqueSkills.length }); } catch {}
+          try { console.log('[POSTCOURSE][AI][THEORY_STATUS]', { theory_status: theoryStatus, questions_count: 0, skills_count: targetCount }); } catch {}
         }
       } else {
         // baseline or test path: existing batch behavior
