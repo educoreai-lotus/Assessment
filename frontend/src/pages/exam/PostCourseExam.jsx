@@ -879,10 +879,26 @@ export default function PostCourseExam() {
               {answeredCount}/{totalCount} answered
             </div>
           )}
-          <div className="px-3 py-1 rounded-md bg-emerald-900/50 border border-emerald-700 text-emerald-200 font-mono">
-            {Number.isFinite(remainingSec) && remainingSec != null
-              ? new Date(remainingSec * 1000).toISOString().substr(11, 8)
-              : '--:--:--'}
+          <div
+            className={`px-3 py-1 rounded-md font-mono border ${
+              Number.isFinite(remainingSec) && remainingSec != null
+                ? (remainingSec <= 60
+                    ? 'bg-red-900/70 border-red-600 text-red-100'
+                    : remainingSec <= 300
+                    ? 'bg-yellow-900/70 border-yellow-600 text-yellow-100'
+                    : 'bg-emerald-900/60 border-emerald-700 text-emerald-200')
+                : 'bg-neutral-800 border-neutral-700 text-neutral-300'
+            }`}
+            aria-live="polite"
+            aria-label="Time remaining"
+            title="Time remaining"
+          >
+            <span className="mr-2">⏱ Time left:</span>
+            <span className="tabular-nums">
+              {Number.isFinite(remainingSec) && remainingSec != null
+                ? new Date(remainingSec * 1000).toISOString().substr(11, 8)
+                : '--:--:--'}
+            </span>
           </div>
           {attemptId && (
             <div className="w-56">
