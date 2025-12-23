@@ -740,7 +740,7 @@ export default function PostCourseExam() {
               ? new Date(remainingSec * 1000).toISOString().substr(11, 8)
               : '--:--:--'}
           </div>
-          {attemptId && examReady && (
+          {attemptId && (
             <div className="w-56">
               <CameraPreview onReady={handleCameraReady} onError={handleCameraError} attemptId={attemptId} onPhoneDetected={handlePhoneDetected} />
             </div>
