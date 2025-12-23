@@ -114,6 +114,7 @@ async function buildExamPackageDoc({
   // devlab_widget,
   // devlab_raw,
   devlab_ui,
+  theory_status,
 }) {
   const doc = new ExamPackage({
     // assessment_type explicitly persisted alongside IDs for reporting/filtering
@@ -217,6 +218,8 @@ async function buildExamPackageDoc({
       expires_at: expires_at_iso ?? undefined,
       // Transparent UI pass-through (optional)
       devlab_ui: devlab_ui || undefined,
+      // Post-course explicit theory generation state
+      theory_status: theory_status || undefined,
     },
   });
   // Emit full package payload before persisting, for postcourse only
@@ -2863,6 +2866,9 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     await setExamStatus(examId, { status: 'PREPARING', progress: 55 });
 
     let questions = [];
+    // Post-course explicit theory generation status persisted in package metadata
+    // Values: 'pending' | 'partial' | 'ready' | 'failed'
+    let theoryStatus = undefined;
     try {
       const uniqueSkills = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
       const skillIdToNameMap = new Map((Array.isArray(skillsArray) ? skillsArray : []).map(s => [String(s.skill_id), String(s.skill_name || '')]));
@@ -2912,6 +2918,8 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
             targetMap.set(sid, normalized);
           }
         };
+        // Track theory generation status for post-course (non-blocking)
+        theoryStatus = 'pending';
         // First batch
         const seed1 = `${Date.now()}-${Math.random()}`;
         let gen1 = [];
@@ -2923,6 +2931,9 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         }
         const pickedBySkill = new Map();
         await fillFrom(gen1, pickedBySkill);
+        if (pickedBySkill.size > 0) {
+          theoryStatus = 'partial';
+        }
         // Second batch only for missing
         const missing = uniqueSkills.filter((sid) => !pickedBySkill.has(String(sid)));
         if (missing.length > 0) {
@@ -2945,6 +2956,18 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         }
         // Materialize questions
         questions = validateTheoreticalQuestions(Array.from(pickedBySkill.values()));
+        // Finalize theory status after retry
+        if (pickedBySkill.size === uniqueSkills.length) {
+          theoryStatus = 'ready';
+          try { console.log('[POSTCOURSE][AI][THEORY_READY]'); } catch {}
+        } else if (pickedBySkill.size > 0) {
+          // Some questions exist but not all skills covered; non-blocking proceed
+          theoryStatus = 'failed';
+          try { console.log('[POSTCOURSE][AI][THEORY_FAILED_CONTINUING]'); } catch {}
+        } else {
+          theoryStatus = 'failed';
+          try { console.log('[POSTCOURSE][AI][THEORY_FAILED_CONTINUING]'); } catch {}
+        }
       } else {
         // baseline or test path: existing batch behavior
         const items = [];
@@ -3016,6 +3039,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         // Do not fail entire exam; proceed with coding questions only
         try { console.log('[POSTCOURSE][AI][ERROR_NONBLOCKING]', { message: e?.message, step: 'generate_questions' }); } catch {}
         questions = [];
+        theoryStatus = 'failed';
       } else {
         try {
           const { buildMockQuestions } = require("../mocks/theoryMock");
@@ -3074,6 +3098,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         time_allocated_minutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
         expires_at_iso: null,
         devlab_ui: devlabUi,
+        theory_status: (String(exam_type).toLowerCase() === 'postcourse') ? theoryStatus : undefined,
       });
       try {
         console.log('[BASELINE][BUILD][PACKAGE_WRITE]', { exam_id: examId, attempt_id: attemptId, skills_count: Array.isArray(skillsArray) ? skillsArray.length : 0 });

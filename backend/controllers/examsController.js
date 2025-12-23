@@ -717,6 +717,9 @@ exports.startExam = async (req, res, next) => {
       duration_seconds: durationSecondsVal,
       package_ref: pkg?._id ? String(pkg._id) : null,
       camera_required: true,
+      metadata: {
+        theory_status: pkg?.metadata?.theory_status != null ? String(pkg.metadata.theory_status) : null,
+      },
     });
   } catch (err) {
     try { console.log('[TRACE][EXAM][START][ERROR]', { error: 'unexpected_error', message: err?.message }); } catch {}
