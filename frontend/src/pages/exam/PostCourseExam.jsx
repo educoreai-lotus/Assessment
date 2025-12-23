@@ -210,7 +210,23 @@ export default function PostCourseExam() {
           return;
         }
         setExamId(String(eid));
-        setAttemptId(String(aid));
+        // Attempt/Exam mismatch guard: some links may pass examId as attemptId by mistake
+        let resolvedAid = String(aid);
+        if (String(aid) === String(eid)) {
+          try {
+            const userId = localStorage.getItem('demo_user_id') || '';
+            if (userId) {
+              const list = await examApi.attemptsByUser(userId).catch(() => []);
+              const match = Array.isArray(list) ? list.find(a => String(a?.exam_id) === String(eid)) : null;
+              if (match?.attempt_id) {
+                resolvedAid = String(match.attempt_id);
+                // eslint-disable-next-line no-console
+                console.log('[POSTCOURSE][ATTEMPT_RESOLVED_FROM_USER]', { examId: String(eid), attemptId: resolvedAid });
+              }
+            }
+          } catch {}
+        }
+        setAttemptId(resolvedAid);
         // Poll until package is ready to avoid racing preparation
         try {
           const pkg = await waitForPackage(String(eid));
