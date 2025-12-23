@@ -86,6 +86,29 @@ export default function PostCourseExam() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
+  // Stable question id helpers to avoid re-answering due to index/order changes
+  const getStableQuestionId = useCallback((q, idx) => {
+    if (q && q.id != null && String(q.id).length) return String(q.id);
+    if (q && q.question_id != null) return String(q.question_id);
+    if (q && q.originalId != null) return String(q.originalId);
+    if (q && q.qid != null) return String(q.qid);
+    const stem =
+      (q && typeof q?.prompt?.question === 'string' && q.prompt.question) ? q.prompt.question
+      : (typeof q?.question === 'string' && q.question) ? q.question
+      : (typeof q?.stem === 'string' && q.stem) ? q.stem
+      : '';
+    const sid = q && q.skill_id != null ? String(q.skill_id) : 'na';
+    return `${sid}::${String(stem).slice(0, 128) || String(idx)}`;
+  }, []);
+
+  const mapQuestionsWithId = useCallback((arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.map((q, idx) => ({
+      ...q,
+      id: getStableQuestionId(q, idx),
+    }));
+  }, [getStableQuestionId]);
+
   // Gate: redirect to Intro unless accepted for this attempt
   useEffect(() => {
     const acceptedParam = searchParams.get('introAccepted') === 'true';
@@ -337,6 +360,22 @@ export default function PostCourseExam() {
     console.log('[POSTCOURSE][EXAM][READY_STATE]', { examReady });
   }, [examReady]);
 
+  // Log question load with answer status to prevent duplicate-answer confusion
+  useEffect(() => {
+    if (!Array.isArray(questions) || questions.length === 0) return;
+    if (currentIdx < 0 || currentIdx >= questions.length) return;
+    const q = questions[currentIdx];
+    if (!q) return;
+    const qid = q.id || getStableQuestionId(q, currentIdx);
+    const val = qid != null ? answers[qid] : undefined;
+    // eslint-disable-next-line no-console
+    console.log('[POSTCOURSE][QUESTION][LOAD]', {
+      index: currentIdx,
+      questionId: String(qid || ''),
+      alreadyAnswered: !!(val !== undefined && String(val).length > 0),
+    });
+  }, [currentIdx, questions, answers, getStableQuestionId]);
+
   useEffect(() => {
     let cancelled = false;
     async function startIfReady() {
@@ -362,7 +401,7 @@ export default function PostCourseExam() {
             has_html: !!pkg.devlab_ui?.componentHtml,
           });
         } catch {}
-        setQuestions(Array.isArray(pkg.questions) ? pkg.questions : []);
+        setQuestions(mapQuestionsWithId(pkg.questions));
         // Inject DevLab HTML ONCE, independent of later camera/proctoring/phone state changes
         try {
           const html =
@@ -388,8 +427,8 @@ export default function PostCourseExam() {
         setAnswers({});
         // Entry decision based on questions, not devlab_ui:
         try {
-          const hasTheory = Array.isArray(pkg.questions) && pkg.questions.length > 0;
-          const hasCoding = Array.isArray(pkg.coding_questions) && pkg.coding_questions.length > 0;
+        const hasTheory = Array.isArray(pkg.questions) && pkg.questions.length > 0;
+        const hasCoding = Array.isArray(pkg.coding_questions) && pkg.coding_questions.length > 0;
           if (hasTheory) {
             setStage('theory');
             console.log('[POSTCOURSE][STAGE][SET]', 'theory');
@@ -431,7 +470,7 @@ export default function PostCourseExam() {
             if (cancelled) return;
             hasStartedRef.current = true;
             const pkg2 = normalizeExamPackage(retryData || {});
-            setQuestions(Array.isArray(pkg2.questions) ? pkg2.questions : []);
+            setQuestions(mapQuestionsWithId(pkg2.questions));
             try {
               const html2 =
                 pkg2?.devlab_ui?.componentHtml ||
