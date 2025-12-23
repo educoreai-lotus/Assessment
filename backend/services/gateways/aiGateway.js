@@ -23,7 +23,7 @@ async function callOpenAiChat({ system, user, json = true }) {
     ],
     response_format: json ? { type: 'json_object' } : undefined,
   };
-  const { data } = await axios.post('https://api.openai.com/v1/chat/completions', body, { headers, timeout: 30000 });
+  const { data } = await axios.post('https://api.openai.com/v1/chat/completions', body, { headers, timeout: 60000 });
   const content = data?.choices?.[0]?.message?.content || '';
   return content;
 }

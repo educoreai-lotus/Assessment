@@ -45,10 +45,15 @@ exports.startCamera = async (req, res, next) => {
       [attempt_id],
     );
     console.log("🔥 SELECT result rows =", rows);
+    let examId = rows.length > 0 ? rows[0].exam_id : null;
+
+    // If attempt not found yet due to race, proceed with a provisional session
     if (rows.length === 0) {
-      return res.status(404).json({ error: 'attempt_not_found' });
+      try {
+        console.log('[TRACE][PROCTORING][START_CAMERA][ATTEMPT_NOT_FOUND_PROVISIONAL]', { attempt_id });
+      } catch {}
+      examId = '0';
     }
-    const examId = rows[0].exam_id;
 
     const doc = await ProctoringSession.findOneAndUpdate(
       { attempt_id: String(attempt_id) },
