@@ -332,18 +332,31 @@ exports.getExam = async (req, res, next) => {
       }
     }
 
-    // If no valid attempt provided, deterministically resolve via SQL
+    // If no valid attempt provided, deterministically resolve via SQL (prefer package_ref)
     if (!attemptRow) {
       try {
-        const { rows } = await pool.query(
+        // Prefer an attempt already linked to a package
+        let rows = await pool.query(
           `SELECT attempt_id, exam_id, package_ref
              FROM exam_attempts
-            WHERE exam_id = $1
+            WHERE exam_id = $1 AND package_ref IS NOT NULL
             ORDER BY created_at DESC, attempt_no DESC, attempt_id DESC
             LIMIT 1`,
           [examIdNum],
-        );
+        ).then(r => r.rows).catch(() => []);
         attemptRow = rows && rows[0] ? rows[0] : null;
+        // Fallback: any attempt for this exam (most recent)
+        if (!attemptRow) {
+          rows = await pool.query(
+            `SELECT attempt_id, exam_id, package_ref
+               FROM exam_attempts
+              WHERE exam_id = $1
+              ORDER BY created_at DESC, attempt_no DESC, attempt_id DESC
+              LIMIT 1`,
+            [examIdNum],
+          ).then(r => r.rows).catch(() => []);
+          attemptRow = rows && rows[0] ? rows[0] : null;
+        }
         resolvedAttemptId = attemptRow ? Number(attemptRow.attempt_id) : null;
       } catch {
         attemptRow = null;
