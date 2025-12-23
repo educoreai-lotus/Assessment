@@ -2867,63 +2867,63 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       const uniqueSkills = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
       const skillIdToNameMap = new Map((Array.isArray(skillsArray) ? skillsArray : []).map(s => [String(s.skill_id), String(s.skill_name || '')]));
 
-      // Post-course: per-skill generation with one retry; no mocks; enforce uniqueness globally
+      // Post-course: batched per-skill generation (one question per skill), one retry for missing
       if (exam_type === 'postcourse' && !isTest) {
         const seenStems = new Set();
-        const addIfUnique = (q) => {
-          const stem = String(q?.stem || q?.question || q?.prompt?.question || '').trim();
-          if (!stem) return false;
-          const key = stem.toLowerCase();
-          if (seenStems.has(key)) return false;
-          seenStems.add(key);
-          return true;
-        };
-        const withTimeout = (promise, ms) => {
-          let t;
-          const timeout = new Promise((_, reject) => {
-            t = setTimeout(() => reject(new Error(`timeout_of_${ms}ms_exceeded`)), ms);
-          });
-          return Promise.race([promise, timeout]).finally(() => { if (t) clearTimeout(t); });
-        };
+        const requestedTypeBySkill = new Map();
+        const itemsBatch = [];
         for (let i = 0; i < uniqueSkills.length; i += 1) {
           const sid = uniqueSkills[i];
           const sname = skillIdToNameMap.get(sid) || '';
           const type = i % 2 === 0 ? 'mcq' : 'open';
-          let attempt = 0;
-          let accepted = false;
-          while (attempt < 2 && !accepted) {
-            attempt += 1;
-            try {
-              const seed = `${Date.now()}-${Math.random()}`;
-              const gen = await withTimeout(
-                generateTheoreticalQuestions({ items: [{ skill_id: sid, skill_name: sname, type, difficulty: 'medium', humanLanguage: 'en' }], seed }),
-                12000
-              );
-              const arr = Array.isArray(gen) ? gen : [];
-              for (const raw of arr) {
-                // Validate and normalize
-                let validation = { valid: true, reasons: [] };
-                try { validation = await validateQuestion({ question: raw }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; }
-                const hints = raw?.hint ? [String(raw.hint)] : undefined;
-                const normalized = normalizeAiQuestion({ ...raw, hint: hints });
-                // must match skill and type
-                const skillOk = String(normalized?.skill_id || '').trim() === String(sid);
-                const typeOk = String(normalized?.type || '').toLowerCase() === String(type);
-                if (validation?.valid && skillOk && typeOk && addIfUnique(normalized)) {
-                  questions.push(normalized);
-                  accepted = true;
-                  break;
-                }
-              }
-            } catch (e) {
-              try { console.log('[POSTCOURSE][AI][RETRY]', { skill_id: sid, type, attempt, error: e?.message }); } catch {}
-            }
-          }
-          if (!accepted) {
-            try { console.log('[POSTCOURSE][AI][SKIPPED_SKILL]', { skill_id: sid, type, reason: 'generation_failed_or_duplicate' }); } catch {}
-          }
+          requestedTypeBySkill.set(String(sid), type);
+          itemsBatch.push({ skill_id: sid, skill_name: sname, type, difficulty: 'medium', humanLanguage: 'en' });
         }
-        questions = validateTheoreticalQuestions(questions);
+        const fillFrom = async (generatedArr, targetMap) => {
+          for (const raw of (Array.isArray(generatedArr) ? generatedArr : [])) {
+            // Validate and normalize
+            let validation = { valid: true, reasons: [] };
+            try { validation = await validateQuestion({ question: raw }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; }
+            const hints = raw?.hint ? [String(raw.hint)] : undefined;
+            const normalized = normalizeAiQuestion({ ...raw, hint: hints });
+            const sid = String(normalized?.skill_id || '').trim();
+            const wantType = String(requestedTypeBySkill.get(sid) || '').toLowerCase();
+            const typeOk = String(normalized?.type || '').toLowerCase() === wantType;
+            const stem = String(normalized?.stem || normalized?.question || normalized?.prompt?.question || '').trim().toLowerCase();
+            if (!sid || !wantType || !typeOk || !validation?.valid || !stem) continue;
+            if (targetMap.has(sid)) continue;
+            if (seenStems.has(stem)) continue;
+            seenStems.add(stem);
+            targetMap.set(sid, normalized);
+          }
+        };
+        // First batch
+        const seed1 = `${Date.now()}-${Math.random()}`;
+        const gen1 = await generateTheoreticalQuestions({ items: itemsBatch, seed: seed1 });
+        const pickedBySkill = new Map();
+        await fillFrom(gen1, pickedBySkill);
+        // Second batch only for missing
+        const missing = uniqueSkills.filter((sid) => !pickedBySkill.has(String(sid)));
+        if (missing.length > 0) {
+          try { console.log('[POSTCOURSE][AI][RETRY_BATCH]', { missing_count: missing.length }); } catch {}
+          const itemsRetry = missing.map((sid, idx) => ({
+            skill_id: sid,
+            skill_name: skillIdToNameMap.get(sid) || '',
+            type: requestedTypeBySkill.get(String(sid)) || (idx % 2 === 0 ? 'mcq' : 'open'),
+            difficulty: 'medium',
+            humanLanguage: 'en',
+          }));
+          const seed2 = `${Date.now()}-${Math.random()}`;
+          let gen2 = [];
+          try {
+            gen2 = await generateTheoreticalQuestions({ items: itemsRetry, seed: seed2 });
+          } catch (e) {
+            try { console.log('[POSTCOURSE][AI][RETRY_BATCH_ERROR]', { message: e?.message }); } catch {}
+          }
+          await fillFrom(gen2, pickedBySkill);
+        }
+        // Materialize questions
+        questions = validateTheoreticalQuestions(Array.from(pickedBySkill.values()));
       } else {
         // baseline or test path: existing batch behavior
         const items = [];
