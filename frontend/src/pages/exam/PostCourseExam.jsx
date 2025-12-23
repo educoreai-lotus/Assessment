@@ -52,6 +52,17 @@ async function waitForPackage(examId, attemptId, maxWaitMs = 60000) {
           // Ignore and continue polling
         }
       }
+      // If we still aren't ready, check if attempt's exam_id differs; suggest redirect
+      if (!res?.data?.package_ready && attemptId) {
+        try {
+          const att = await http.get(`/api/attempts/${encodeURIComponent(attemptId)}`).then(r => r.data).catch(() => null);
+          const attExamId = att?.exam_id != null ? String(att.exam_id) : null;
+          if (attExamId && attExamId !== String(examId)) {
+            console.log('[POSTCOURSE][EXAM][REDIRECT_EXAM_ID_SUGGEST]', { from: String(examId), to: attExamId, attemptId });
+            return { package_ready: false, redirect_exam_id: attExamId };
+          }
+        } catch {}
+      }
     } catch (err) {
       // Ignore until ready
     }
@@ -265,8 +276,24 @@ export default function PostCourseExam() {
         setAttemptId(resolvedAid);
         // Poll until package is ready to avoid racing preparation (attempt-scoped)
         try {
-          const pkg = await waitForPackage(String(resolvedEid), String(resolvedAid));
-          if (pkg?.package_ready) setExamReady(true);
+          // Loop to handle possible examId redirect suggestion from waitForPackage
+          let eidCur = String(resolvedEid);
+          // At most two redirects to avoid loops
+          for (let i = 0; i < 2; i += 1) {
+            const pkg = await waitForPackage(eidCur, String(resolvedAid));
+            if (pkg?.redirect_exam_id && pkg.redirect_exam_id !== eidCur) {
+              // eslint-disable-next-line no-console
+              console.log('[POSTCOURSE][EXAM_ID][UPDATED_FROM_ATTEMPT]', { from: eidCur, to: pkg.redirect_exam_id });
+              eidCur = String(pkg.redirect_exam_id);
+              setExamId(eidCur);
+              continue;
+            }
+            if (pkg?.package_ready) {
+              setExamReady(true);
+              break;
+            }
+            break;
+          }
         } catch {}
         if (!mounted) return;
         // Reset any local UI artifacts (do not flip camera states back to false if already true)
