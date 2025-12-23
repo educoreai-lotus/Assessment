@@ -1192,7 +1192,39 @@ async function recomputeFinalResults(attemptIdNum) {
   for (const c of codingSkills) {
     map.set(String(c?.skill_id || ''), { ...c });
   }
-  const finalPerSkill = Array.from(map.values());
+  let finalPerSkill = Array.from(map.values());
+
+  // Scope results to only the skills used in this post-course exam attempt
+  if (String(attempt.exam_type) === 'postcourse') {
+    const allowed = new Set();
+    try {
+      if (Array.isArray(pkg?.questions)) {
+        for (const q of pkg.questions) {
+          if (q && q.skill_id != null) allowed.add(String(q.skill_id));
+        }
+      }
+      if (Array.isArray(pkg?.coding_questions)) {
+        for (const cq of pkg.coding_questions) {
+          if (Array.isArray(cq?.skills)) {
+            for (const sid of cq.skills) {
+              if (sid != null) allowed.add(String(sid));
+            }
+          }
+        }
+      }
+    } catch {}
+    if (allowed.size > 0) {
+      finalPerSkill = finalPerSkill.filter((s) => allowed.has(String(s?.skill_id || '')));
+      try {
+        console.log('[POSTCOURSE][RESULTS][SCOPED]', {
+          attempt_id: attemptIdNum,
+          exam_id: attempt.exam_id,
+          skills_in_exam: Array.from(allowed),
+          results_count: finalPerSkill.length,
+        });
+      } catch {}
+    }
+  }
   const scores = finalPerSkill.map((s) => Number(s?.score || 0));
   const finalGrade =
     scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
@@ -1928,10 +1960,42 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
     (examPackage?.metadata && Array.isArray(examPackage.metadata.skills)
       ? examPackage.metadata.skills
       : []) || [];
+  // Build allowed skills set for post-course: only skills present in this exam package
+  let allowedSkillIds = null;
+  if (String(examType) === 'postcourse') {
+    allowedSkillIds = new Set();
+    try {
+      if (Array.isArray(examPackage?.questions)) {
+        for (const q of examPackage.questions) {
+          if (q && q.skill_id != null) allowedSkillIds.add(String(q.skill_id));
+        }
+      }
+      if (Array.isArray(examPackage?.coding_questions)) {
+        for (const cq of examPackage.coding_questions) {
+          if (Array.isArray(cq?.skills)) {
+            for (const sid of cq.skills) {
+              if (sid != null) allowedSkillIds.add(String(sid));
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+  // Filter skillsMeta for post-course to only allowed skills
+  const filteredSkillsMeta =
+    allowedSkillIds && allowedSkillIds.size > 0
+      ? skillsMeta.filter((s) => allowedSkillIds.has(String(s.skill_id || s.id || '')))
+      : skillsMeta;
   const skillIdToName = new Map(
-    skillsMeta.map((s) => [String(s.skill_id || s.id || ""), s.skill_name || s.name || ""]),
+    filteredSkillsMeta.map((s) => [String(s.skill_id || s.id || ""), s.skill_name || s.name || ""]),
   );
-  try { console.log('[SUBMIT][SKILLS_SOURCE]', { skills_count: skillsMeta.length }); } catch {}
+  try {
+    console.log('[SUBMIT][SKILLS_SOURCE]', {
+      skills_count: skillsMeta.length,
+      filtered_count: filteredSkillsMeta.length,
+      postcourse_scoped: String(examType) === 'postcourse',
+    });
+  } catch {}
   const perSkill = [];
   let overriddenByCoding = 0;
   const codingByName = {};
@@ -1950,7 +2014,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
       }
     }
   } catch {}
-  for (const meta of skillsMeta) {
+  for (const meta of filteredSkillsMeta) {
     const sid = String(meta.skill_id || meta.id || '').trim();
     const name = meta.skill_name || meta.name || sid;
     const items = bySkill.get(sid) || [];
@@ -1986,12 +2050,21 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
     }
     perSkill.push(out);
   }
-  // Append coding-only skills not present in theory
+  // Append coding-only skills not present in theory (respect allowedSkillIds for post-course)
   let appendedCoding = 0;
   for (const [nm, v] of Object.entries(codingByName)) {
     const exists = perSkill.some((ps) => String(ps.skill_name) === nm);
     if (exists) continue;
-    const sid = nameToId.get(nm) || nm;
+    // Try to resolve id from skillsMeta mapping
+    let sid = null;
+    for (const s of filteredSkillsMeta) {
+      const name = s.skill_name || s.name || String(s.skill_id || s.id || '');
+      if (name === nm) { sid = String(s.skill_id || s.id || nm); break; }
+    }
+    if (!sid) sid = nm;
+    if (allowedSkillIds && allowedSkillIds.size > 0 && !allowedSkillIds.has(String(sid))) {
+      continue;
+    }
     perSkill.push({
       skill_id: String(sid),
       skill_name: nm,
