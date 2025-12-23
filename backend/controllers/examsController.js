@@ -280,62 +280,79 @@ exports.getExam = async (req, res, next) => {
       examType = null;
     }
 
-    // Baseline: preserve existing behavior (exam-scoped package only)
     const isPostCourse = String(examType || '').toLowerCase() === 'postcourse';
 
-    let pkg = await ExamPackage.findOne({ exam_id: String(examIdNum) }).lean();
-
-    // Post-course: resolve readiness via attempt-scoped package if exam-scoped not found
-    if (!pkg && isPostCourse) {
-      let attemptId = null;
+    // Baseline: preserve existing behavior (exam-scoped readiness)
+    if (!isPostCourse) {
+      const pkg = await ExamPackage.findOne({ exam_id: String(examIdNum) }).lean();
+      if (!pkg) {
+        return res.status(202).json({ package_ready: false });
+      }
+      if (examStatus !== 'READY') {
+        return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
+      }
       try {
-        const { rows } = await pool.query(
-          `SELECT ea.attempt_id
-           FROM exam_attempts ea
-           WHERE ea.exam_id = $1
-             AND COALESCE(ea.status, '') NOT IN ('canceled','invalidated')
-           ORDER BY ea.attempt_no DESC, ea.attempt_id DESC
-           LIMIT 1`,
-          [examIdNum],
-        );
-        attemptId = rows && rows[0] ? rows[0].attempt_id : null;
+        console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });
       } catch {}
-      if (attemptId != null) {
-        const pkgByAttempt = await ExamPackage.findOne({ attempt_id: String(attemptId) }).lean();
-        if (pkgByAttempt) {
-          pkg = pkgByAttempt;
-          try {
-            console.log('[READINESS][POSTCOURSE][BY_ATTEMPT]', {
-              exam_id: examIdNum,
-              attempt_id: Number(attemptId),
-              package_id: String(pkgByAttempt?._id || ''),
-            });
-          } catch {}
-        }
+      if (String(pkg?.final_status || '').toLowerCase() === 'completed' && (!pkg?.grading || !Array.isArray(pkg?.grading?.per_skill))) {
+        return res.status(500).json({ error: 'grading_missing', message: 'Grading not available for completed exam' });
+      }
+      const responsePayload = { package_ready: true, ...pkg };
+      try {
+        const perSkill = Array.isArray(pkg?.grading?.per_skill) ? pkg.grading.per_skill : (Array.isArray(pkg?.metadata?.skills) ? pkg.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
+        const finalGrade = pkg?.grading?.final_grade != null ? Number(pkg.grading.final_grade) : null;
+        const passed = pkg?.grading?.passed != null ? !!pkg.grading.passed : null;
+        console.log('[RESULTS][API][RESPONSE]', {
+          per_skill: perSkill.map(s => ({ skill_id: s.skill_id, score: s.score ?? null, status: s.status ?? null })),
+          final_grade: finalGrade,
+          passed,
+        });
+      } catch {}
+      return res.status(200).json(responsePayload);
+    }
+
+    // Post-course: strictly attempt-scoped readiness
+    const attemptIdParam = req?.query?.attempt_id != null ? normalizeToInt(req.query.attempt_id) : null;
+    let resolvedAttemptId = attemptIdParam != null ? attemptIdParam : null;
+
+    if (resolvedAttemptId == null) {
+      // Deterministic resolution via package document for this exam
+      // We use the package's attempt_id (not "latest attempt") to avoid ambiguity
+      const pkgByExam = await ExamPackage.findOne({ exam_id: String(examIdNum) }, { attempt_id: 1, _id: 0 }).lean();
+      if (pkgByExam && pkgByExam.attempt_id != null) {
+        resolvedAttemptId = normalizeToInt(pkgByExam.attempt_id);
       }
     }
 
-    // If no package resolved yet:
-    if (!pkg) {
-      // For baseline (and general case), preserve previous 202 response
+    if (resolvedAttemptId == null) {
+      // Cannot resolve attempt deterministically: not ready
+      return res.status(202).json({ package_ready: false });
+    }
+
+    // Fetch strictly by attempt_id
+    const pkgAttempt = await ExamPackage.findOne({ attempt_id: String(resolvedAttemptId) }).lean();
+    if (!pkgAttempt) {
       return res.status(202).json({ package_ready: false });
     }
 
     if (examStatus !== 'READY') {
       return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
     }
+
+    // Required log before returning readiness
+    try { console.log('[POSTCOURSE][READY][ATTEMPT_MATCH]', { exam_id: examIdNum, attempt_id: resolvedAttemptId }); } catch {}
+
     try {
       console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });
     } catch {}
-    // Guard: after completion, grading must be present
-    if (String(pkg?.final_status || '').toLowerCase() === 'completed' && (!pkg?.grading || !Array.isArray(pkg?.grading?.per_skill))) {
+    if (String(pkgAttempt?.final_status || '').toLowerCase() === 'completed' && (!pkgAttempt?.grading || !Array.isArray(pkgAttempt?.grading?.per_skill))) {
       return res.status(500).json({ error: 'grading_missing', message: 'Grading not available for completed exam' });
     }
-    const responsePayload = { package_ready: true, ...pkg };
+    const responsePayload = { package_ready: true, ...pkgAttempt };
     try {
-      const perSkill = Array.isArray(pkg?.grading?.per_skill) ? pkg.grading.per_skill : (Array.isArray(pkg?.metadata?.skills) ? pkg.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
-      const finalGrade = pkg?.grading?.final_grade != null ? Number(pkg.grading.final_grade) : null;
-      const passed = pkg?.grading?.passed != null ? !!pkg.grading.passed : null;
+      const perSkill = Array.isArray(pkgAttempt?.grading?.per_skill) ? pkgAttempt.grading.per_skill : (Array.isArray(pkgAttempt?.metadata?.skills) ? pkgAttempt.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
+      const finalGrade = pkgAttempt?.grading?.final_grade != null ? Number(pkgAttempt.grading.final_grade) : null;
+      const passed = pkgAttempt?.grading?.passed != null ? !!pkgAttempt.grading.passed : null;
       console.log('[RESULTS][API][RESPONSE]', {
         per_skill: perSkill.map(s => ({ skill_id: s.skill_id, score: s.score ?? null, status: s.status ?? null })),
         final_grade: finalGrade,
