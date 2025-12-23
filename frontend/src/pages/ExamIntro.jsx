@@ -106,67 +106,60 @@ export default function ExamIntro() {
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl bg-white/80 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm p-6">
-        <div className="mb-4">
+      <div className="w-full max-w-3xl bg-white/80 dark:bg-zinc-900 rounded-xl shadow-sm p-6 text-left">
+        <div className="mb-4 text-left">
           <h1 className="text-2xl font-semibold">{title}</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
-            Please review the rules below. You must acknowledge to begin.
+            Please review the information below and acknowledge to begin.
           </p>
         </div>
 
-        <div className="space-y-4">
-          <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <p className="text-yellow-800 dark:text-yellow-200 font-medium">
-              Warning: Violations may result in exam termination.
+        <div className="space-y-4 text-left">
+          <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg shadow-sm">
+            <p className="text-amber-900 dark:text-amber-200 font-medium">
+              ⚠️ Please note: Any violation of the rules may result in exam termination.
             </p>
           </div>
 
-          <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
-            <h2 className="font-medium mb-2">What you are about to enter</h2>
+          <div className="p-5 bg-neutral-50 dark:bg-zinc-900/30 rounded-lg shadow-sm">
+            <h2 className="font-medium mb-2">What you’re about to enter</h2>
             <ul className="list-disc list-inside space-y-1 text-sm">
-              <li>Purpose: measure your current proficiency for this assessment.</li>
-              <li>Questions are designed to be medium difficulty.</li>
-              <li>May include theoretical and coding tasks where applicable.</li>
+              <li>Purpose: Measures your current proficiency level.</li>
+              <li>Difficulty: Medium difficulty.</li>
+              <li>Format: May include theoretical questions and coding tasks.</li>
             </ul>
           </div>
 
-          <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
+          <div className="p-5 bg-neutral-50 dark:bg-zinc-900/30 rounded-lg shadow-sm">
             <h2 className="font-medium mb-2">Time & submission rules</h2>
             <ul className="list-disc list-inside space-y-1 text-sm">
-              <li>Time is limited.</li>
+              <li>The exam is time-limited.</li>
               <li>Submission is final.</li>
-              <li>Your exam will auto-submit if time expires.</li>
+              <li>The exam auto-submits when time expires.</li>
             </ul>
           </div>
 
-          <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
+          <div className="p-5 bg-neutral-50 dark:bg-zinc-900/30 rounded-lg shadow-sm">
             <h2 className="font-medium mb-2">Proctoring & integrity rules</h2>
             <ul className="list-disc list-inside space-y-1 text-sm">
               <li>Camera must remain active during the exam.</li>
-              <li>Tab switching is monitored and recorded.</li>
-              <li>Three strikes result in automatic termination.</li>
+              <li>Tab switching is monitored.</li>
+              <li>Three violations result in automatic termination.</li>
             </ul>
           </div>
 
           {examType === 'postcourse' && (
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
-              <h2 className="font-medium mb-2">Attempts rules</h2>
+            <div className="p-5 bg-neutral-50 dark:bg-zinc-900/30 rounded-lg shadow-sm">
+              <h2 className="font-medium mb-2">Attempts policy</h2>
               <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Attempts are limited by policy.</li>
-                <li>Retakes only cover failed skills.</li>
-                <li>Once passed, the exam is locked.</li>
+                <li>Attempts are limited.</li>
+                <li>Retakes include failed skills only.</li>
+                <li>Exam locks after all skills are passed.</li>
               </ul>
             </div>
           )}
 
-          <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg">
-            <h2 className="font-medium mb-2">Identity verification (coming soon)</h2>
-            <p className="text-sm text-zinc-700 dark:text-zinc-300">
-              ID & face verification will be required before starting (coming soon).
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 text-left">
             <input
               id="ack"
               type="checkbox"
