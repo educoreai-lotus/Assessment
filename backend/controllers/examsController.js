@@ -311,54 +311,65 @@ exports.getExam = async (req, res, next) => {
       return res.status(200).json(responsePayload);
     }
 
-    // Post-course: strictly attempt-scoped readiness
+    // Post-course: prefer package_ref-based resolution, fall back to attempt_id lookup
     const attemptIdParam = req?.query?.attempt_id != null ? normalizeToInt(req.query.attempt_id) : null;
     let resolvedAttemptId = attemptIdParam != null ? attemptIdParam : null;
 
-    if (resolvedAttemptId == null) {
-      // Deterministic resolution via SQL: attempt with non-null package_ref for this exam
+    // Validate attempt belongs to exam and fetch package_ref when possible
+    let attemptRow = null;
+    if (resolvedAttemptId != null) {
       try {
         const { rows } = await pool.query(
-          `SELECT ea.attempt_id
-             FROM exam_attempts ea
-            WHERE ea.exam_id = $1
-              AND ea.package_ref IS NOT NULL
-            ORDER BY ea.created_at DESC, ea.attempt_no DESC, ea.attempt_id DESC
+          `SELECT attempt_id, exam_id, package_ref FROM exam_attempts WHERE attempt_id = $1`,
+          [resolvedAttemptId],
+        );
+        attemptRow = rows && rows[0] ? rows[0] : null;
+        if (attemptRow && Number(attemptRow.exam_id) !== Number(examIdNum)) {
+          attemptRow = null;
+        }
+      } catch {
+        attemptRow = null;
+      }
+    }
+
+    // If no valid attempt provided, deterministically resolve via SQL
+    if (!attemptRow) {
+      try {
+        const { rows } = await pool.query(
+          `SELECT attempt_id, exam_id, package_ref
+             FROM exam_attempts
+            WHERE exam_id = $1
+            ORDER BY created_at DESC, attempt_no DESC, attempt_id DESC
             LIMIT 1`,
           [examIdNum],
         );
-        const row = rows && rows[0] ? rows[0] : null;
-        if (row && row.attempt_id != null) {
-          resolvedAttemptId = normalizeToInt(row.attempt_id);
-        }
-      } catch {}
+        attemptRow = rows && rows[0] ? rows[0] : null;
+        resolvedAttemptId = attemptRow ? Number(attemptRow.attempt_id) : null;
+      } catch {
+        attemptRow = null;
+        resolvedAttemptId = null;
+      }
     }
 
     if (resolvedAttemptId == null) {
-      // Fallback deterministic resolution: any attempt for this exam by created_at desc
-      try {
-        const { rows } = await pool.query(
-          `SELECT ea.attempt_id
-             FROM exam_attempts ea
-            WHERE ea.exam_id = $1
-            ORDER BY ea.created_at DESC, ea.attempt_no DESC, ea.attempt_id DESC
-            LIMIT 1`,
-          [examIdNum],
-        );
-        const row = rows && rows[0] ? rows[0] : null;
-        if (row && row.attempt_id != null) {
-          resolvedAttemptId = normalizeToInt(row.attempt_id);
-        }
-      } catch {}
-    }
-
-    if (resolvedAttemptId == null) {
-      // Cannot resolve attempt deterministically: not ready
       return res.status(202).json({ package_ready: false });
     }
 
-    // Fetch strictly by attempt_id
-    const pkgAttempt = await ExamPackage.findOne({ attempt_id: String(resolvedAttemptId) }).lean();
+    // Prefer package_ref-based fetch
+    let pkgAttempt = null;
+    let usedPackageRef = false;
+    if (attemptRow && attemptRow.package_ref) {
+      try {
+        pkgAttempt = await ExamPackage.findOne({ _id: String(attemptRow.package_ref) }).lean();
+        usedPackageRef = !!pkgAttempt;
+      } catch {
+        pkgAttempt = null;
+      }
+    }
+    // Fallback to attempt_id-based fetch (normalize to string)
+    if (!pkgAttempt) {
+      pkgAttempt = await ExamPackage.findOne({ attempt_id: String(resolvedAttemptId) }).lean();
+    }
     if (!pkgAttempt) {
       return res.status(202).json({ package_ready: false });
     }
@@ -367,8 +378,15 @@ exports.getExam = async (req, res, next) => {
       return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
     }
 
-    // Required log before returning readiness
-    try { console.log('[POSTCOURSE][READY][ATTEMPT_MATCH]', { exam_id: examIdNum, attempt_id: resolvedAttemptId }); } catch {}
+    // One-time readiness log
+    try {
+      console.log('[POSTCOURSE][READY][RETURNING_TRUE]', {
+        exam_id: examIdNum,
+        attempt_id: Number(resolvedAttemptId),
+        has_package_ref: !!(attemptRow && attemptRow.package_ref),
+        package_id: String(pkgAttempt?._id || ''),
+      });
+    } catch {}
 
     try {
       console.log('[RESULTS][API][SOURCE]', { source: 'exam_package', exam_id: examIdNum });

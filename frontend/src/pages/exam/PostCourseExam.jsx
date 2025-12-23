@@ -17,6 +17,7 @@ import { normalizeExamPackage } from '../../utils/examPackage';
 let lastStatusPollLogAt = 0;
 async function waitForPackage(examId, attemptId, maxWaitMs = 60000) {
   const start = Date.now();
+  let triedStartOnce = false;
   while (Date.now() - start < maxWaitMs) {
     try {
       // eslint-disable-next-line no-console
@@ -36,6 +37,20 @@ async function waitForPackage(examId, attemptId, maxWaitMs = 60000) {
       if (res?.data?.package_ready) {
         try { console.log('[POSTCOURSE][EXAM][READY]', { exam_id: examId }); } catch {}
         return res.data;
+      }
+      // Fallback: if backend reports READY status but package_ready is false, try /start once
+      const statusStr = res?.data?.status || res?.data?.exam_status || null;
+      if (!res?.data?.package_ready && statusStr === 'READY' && attemptId && !triedStartOnce) {
+        triedStartOnce = true;
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[POSTCOURSE][EXAM][FALLBACK_START]', { examId, attemptId });
+          await http.post(`/api/exams/${encodeURIComponent(examId)}/start`, { attempt_id: String(attemptId) });
+          // Consider readiness satisfied to unblock UI; /start will provide package on next flow
+          return { package_ready: true, via_fallback: true };
+        } catch {
+          // Ignore and continue polling
+        }
       }
     } catch (err) {
       // Ignore until ready
