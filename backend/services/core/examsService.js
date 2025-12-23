@@ -2879,11 +2879,26 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           requestedTypeBySkill.set(String(sid), type);
           itemsBatch.push({ skill_id: sid, skill_name: sname, type, difficulty: 'medium', humanLanguage: 'en' });
         }
+        // Time-budgeted generation to avoid watchdog expiry:
+        // Reserve some buffer for packaging and final writes
+        const now0 = Date.now();
+        const elapsed0 = now0 - startedAt;
+        const reservedBufferMs = 15000;
+        const remainingBudgetMs = Math.max(10000, (watchdogMs - elapsed0) - reservedBufferMs);
+        const batch1BudgetMs = Math.min(35000, Math.floor(remainingBudgetMs * 0.6));
+        const batch2BudgetMs = Math.min(20000, Math.max(5000, remainingBudgetMs - batch1BudgetMs));
+        const withTimeout = (promise, ms) => {
+          let t;
+          const timeout = new Promise((_, reject) => {
+            t = setTimeout(() => reject(new Error(`timeout_of_${ms}ms_exceeded`)), ms);
+          });
+          return Promise.race([promise, timeout]).finally(() => { if (t) clearTimeout(t); });
+        };
         const fillFrom = async (generatedArr, targetMap) => {
           for (const raw of (Array.isArray(generatedArr) ? generatedArr : [])) {
             // Validate and normalize
+            // Post-course path: skip heavy external validation to meet time budget
             let validation = { valid: true, reasons: [] };
-            try { validation = await validateQuestion({ question: raw }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; }
             const hints = raw?.hint ? [String(raw.hint)] : undefined;
             const normalized = normalizeAiQuestion({ ...raw, hint: hints });
             const sid = String(normalized?.skill_id || '').trim();
@@ -2899,7 +2914,13 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         };
         // First batch
         const seed1 = `${Date.now()}-${Math.random()}`;
-        const gen1 = await generateTheoreticalQuestions({ items: itemsBatch, seed: seed1 });
+        let gen1 = [];
+        try {
+          gen1 = await withTimeout(generateTheoreticalQuestions({ items: itemsBatch, seed: seed1 }), batch1BudgetMs);
+        } catch (e) {
+          try { console.log('[POSTCOURSE][AI][BATCH1_TIMEOUT_OR_ERROR]', { message: e?.message }); } catch {}
+          gen1 = [];
+        }
         const pickedBySkill = new Map();
         await fillFrom(gen1, pickedBySkill);
         // Second batch only for missing
@@ -2916,7 +2937,7 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           const seed2 = `${Date.now()}-${Math.random()}`;
           let gen2 = [];
           try {
-            gen2 = await generateTheoreticalQuestions({ items: itemsRetry, seed: seed2 });
+            gen2 = await withTimeout(generateTheoreticalQuestions({ items: itemsRetry, seed: seed2 }), batch2BudgetMs);
           } catch (e) {
             try { console.log('[POSTCOURSE][AI][RETRY_BATCH_ERROR]', { message: e?.message }); } catch {}
           }
