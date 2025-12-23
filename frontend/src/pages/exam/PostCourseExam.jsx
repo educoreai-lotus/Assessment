@@ -15,11 +15,14 @@ import { normalizeExamPackage } from '../../utils/examPackage';
 
 
 let lastStatusPollLogAt = 0;
-async function waitForPackage(examId, maxWaitMs = 60000) {
+async function waitForPackage(examId, attemptId, maxWaitMs = 60000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     try {
-      const res = await http.get(`/api/exams/${examId}`);
+      // eslint-disable-next-line no-console
+      console.log('[POSTCOURSE][EXAM][STATUS][POLLING_WITH_ATTEMPT]', { examId, attemptId });
+      const url = attemptId ? `/api/exams/${examId}?attempt_id=${encodeURIComponent(attemptId)}` : `/api/exams/${examId}`;
+      const res = await http.get(url);
       // Throttle status poll logs to reduce console noise
       const now = Date.now();
       if (now - lastStatusPollLogAt > 3000) {
@@ -46,8 +49,8 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function waitForPackageWithGrace(examId, maxWaitMs = 60000, graceMs = 1000) {
-  const data = await waitForPackage(examId, maxWaitMs);
+async function waitForPackageWithGrace(examId, attemptId, maxWaitMs = 60000, graceMs = 1000) {
+  const data = await waitForPackage(examId, attemptId, maxWaitMs);
   // Small grace window to allow SQL exam.status to flip to READY
   await sleep(graceMs);
   return data;
@@ -245,17 +248,15 @@ export default function PostCourseExam() {
         } catch {}
         setExamId(resolvedEid);
         setAttemptId(resolvedAid);
-        // Poll until package is ready to avoid racing preparation
+        // Poll until package is ready to avoid racing preparation (attempt-scoped)
         try {
-          const pkg = await waitForPackage(String(resolvedEid));
+          const pkg = await waitForPackage(String(resolvedEid), String(resolvedAid));
           if (pkg?.package_ready) setExamReady(true);
         } catch {}
         if (!mounted) return;
-        // Reset any local UI artifacts
+        // Reset any local UI artifacts (do not flip camera states back to false if already true)
         proctoringStartedRef.current = false;
-        setCameraReady(false);
-        setCameraOk(false);
-        setCameraError('');
+        setCameraError((prev) => prev); // keep existing error or none
         setQuestions([]);
         setAnswers({});
         setCurrentIdx(0);
@@ -448,7 +449,7 @@ export default function PostCourseExam() {
             // Backoff loop: poll readiness, then attempt /start again until success or timeout
             const maxAttempts = 10;
             for (let i = 0; i < maxAttempts && !cancelled && !hasStartedRef.current; i += 1) {
-              const pkg = await waitForPackageWithGrace(String(examId), 60000, 1000);
+              const pkg = await waitForPackageWithGrace(String(examId), String(attemptId), 60000, 1000);
               if (!pkg?.package_ready) continue;
               // eslint-disable-next-line no-console
               console.log('[POSTCOURSE][EXAM][READY]', { exam_id: String(examId), retry_index: i });
@@ -737,16 +738,16 @@ export default function PostCourseExam() {
     } catch {}
   }, [attemptId]);
 
-  // Start proctoring once when all prerequisites are ready
+  // Start proctoring once when all prerequisites are ready (effective camera ready)
   useEffect(() => {
     if (!attemptId) return;
-    if (!cameraReady) return;
+    if (!(cameraReady || hasStreamRef.current)) return;
     if (proctoringStartedRef.current) return;
     let canceled = false;
     (async () => {
       try {
         // eslint-disable-next-line no-console
-        console.log('[POSTCOURSE][PROCTORING][START][CALLING]', { attemptId, cameraReady });
+        console.log('[POSTCOURSE][PROCTORING][START][CALLING]', { attemptId, cameraReady, hasStream: !!hasStreamRef.current });
         // Start camera/proctoring asap using attempt-based endpoint (no need to wait for examReady)
         await examApi.proctoringStart(attemptId);
         if (canceled) return;

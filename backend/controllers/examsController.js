@@ -316,12 +316,40 @@ exports.getExam = async (req, res, next) => {
     let resolvedAttemptId = attemptIdParam != null ? attemptIdParam : null;
 
     if (resolvedAttemptId == null) {
-      // Deterministic resolution via package document for this exam
-      // We use the package's attempt_id (not "latest attempt") to avoid ambiguity
-      const pkgByExam = await ExamPackage.findOne({ exam_id: String(examIdNum) }, { attempt_id: 1, _id: 0 }).lean();
-      if (pkgByExam && pkgByExam.attempt_id != null) {
-        resolvedAttemptId = normalizeToInt(pkgByExam.attempt_id);
-      }
+      // Deterministic resolution via SQL: attempt with non-null package_ref for this exam
+      try {
+        const { rows } = await pool.query(
+          `SELECT ea.attempt_id
+             FROM exam_attempts ea
+            WHERE ea.exam_id = $1
+              AND ea.package_ref IS NOT NULL
+            ORDER BY ea.created_at DESC, ea.attempt_no DESC, ea.attempt_id DESC
+            LIMIT 1`,
+          [examIdNum],
+        );
+        const row = rows && rows[0] ? rows[0] : null;
+        if (row && row.attempt_id != null) {
+          resolvedAttemptId = normalizeToInt(row.attempt_id);
+        }
+      } catch {}
+    }
+
+    if (resolvedAttemptId == null) {
+      // Fallback deterministic resolution: any attempt for this exam by created_at desc
+      try {
+        const { rows } = await pool.query(
+          `SELECT ea.attempt_id
+             FROM exam_attempts ea
+            WHERE ea.exam_id = $1
+            ORDER BY ea.created_at DESC, ea.attempt_no DESC, ea.attempt_id DESC
+            LIMIT 1`,
+          [examIdNum],
+        );
+        const row = rows && rows[0] ? rows[0] : null;
+        if (row && row.attempt_id != null) {
+          resolvedAttemptId = normalizeToInt(row.attempt_id);
+        }
+      } catch {}
     }
 
     if (resolvedAttemptId == null) {
