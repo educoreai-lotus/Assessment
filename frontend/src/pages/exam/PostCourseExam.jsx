@@ -266,7 +266,6 @@ export default function PostCourseExam() {
       if (!examId || !attemptId) return;
       // Start exam only when package is ready AND proctoring session has started
       if (!examReady) return;
-      if (!proctoringStartedRef.current) return;
       if (hasStartedRef.current) return;
       try {
         setQuestionsLoading(true);
