@@ -8,7 +8,7 @@ function getOpenAiConfig() {
   return { apiKey, model, temperature };
 }
 
-async function callOpenAiChat({ system, user, json = true }) {
+async function callOpenAiChat({ system, user, json = true, timeoutMs }) {
   const { apiKey, model, temperature } = getOpenAiConfig();
   const headers = {
     'Authorization': `Bearer ${apiKey}`,
@@ -23,7 +23,11 @@ async function callOpenAiChat({ system, user, json = true }) {
     ],
     response_format: json ? { type: 'json_object' } : undefined,
   };
-  const { data } = await axios.post('https://api.openai.com/v1/chat/completions', body, { headers, timeout: 60000 });
+  const { data } = await axios.post(
+    'https://api.openai.com/v1/chat/completions',
+    body,
+    { headers, timeout: Number.isFinite(Number(timeoutMs)) ? Number(timeoutMs) : 60000 }
+  );
   const content = data?.choices?.[0]?.message?.content || '';
   return content;
 }
@@ -90,9 +94,9 @@ Hints:
   return { system, user };
 }
 
-async function generateTheoreticalQuestions({ items, seed }) {
+async function generateTheoreticalQuestions({ items, seed, timeoutMs }) {
   const { system, user } = buildTheoreticalGenPrompt({ items, seed });
-  const content = await callOpenAiChat({ system, user, json: true });
+  const content = await callOpenAiChat({ system, user, json: true, timeoutMs });
   let parsed = {};
   try {
     parsed = JSON.parse(content);
