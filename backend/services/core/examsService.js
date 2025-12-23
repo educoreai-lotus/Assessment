@@ -2864,14 +2864,67 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     try {
       const uniqueSkills = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
       const skillIdToNameMap = new Map((Array.isArray(skillsArray) ? skillsArray : []).map(s => [String(s.skill_id), String(s.skill_name || '')]));
-      const items = [];
-      if (exam_type === 'postcourse') {
+
+      // Post-course: per-skill generation with one retry; no mocks; enforce uniqueness globally
+      if (exam_type === 'postcourse' && !isTest) {
+        const seenStems = new Set();
+        const addIfUnique = (q) => {
+          const stem = String(q?.stem || q?.question || q?.prompt?.question || '').trim();
+          if (!stem) return false;
+          const key = stem.toLowerCase();
+          if (seenStems.has(key)) return false;
+          seenStems.add(key);
+          return true;
+        };
+        const withTimeout = (promise, ms) => {
+          let t;
+          const timeout = new Promise((_, reject) => {
+            t = setTimeout(() => reject(new Error(`timeout_of_${ms}ms_exceeded`)), ms);
+          });
+          return Promise.race([promise, timeout]).finally(() => { if (t) clearTimeout(t); });
+        };
         for (const sid of uniqueSkills) {
           const sname = skillIdToNameMap.get(sid) || '';
-          items.push({ skill_id: sid, skill_name: sname, type: 'mcq', difficulty: 'medium', humanLanguage: 'en' });
-          items.push({ skill_id: sid, skill_name: sname, type: 'open', difficulty: 'medium', humanLanguage: 'en' });
+          for (const type of ['mcq', 'open']) {
+            let attempt = 0;
+            let accepted = false;
+            while (attempt < 2 && !accepted) {
+              attempt += 1;
+              try {
+                const seed = `${Date.now()}-${Math.random()}`;
+                const gen = await withTimeout(
+                  generateTheoreticalQuestions({ items: [{ skill_id: sid, skill_name: sname, type, difficulty: 'medium', humanLanguage: 'en' }], seed }),
+                  30000
+                );
+                const arr = Array.isArray(gen) ? gen : [];
+                for (const raw of arr) {
+                  // Validate and normalize
+                  let validation = { valid: true, reasons: [] };
+                  try { validation = await validateQuestion({ question: raw }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; }
+                  const hints = raw?.hint ? [String(raw.hint)] : undefined;
+                  const normalized = normalizeAiQuestion({ ...raw, hint: hints });
+                  // must match skill and type
+                  const skillOk = String(normalized?.skill_id || '').trim() === String(sid);
+                  const typeOk = String(normalized?.type || '').toLowerCase() === String(type);
+                  if (validation?.valid && skillOk && typeOk && addIfUnique(normalized)) {
+                    questions.push(normalized);
+                    accepted = true;
+                    break;
+                  }
+                }
+              } catch (e) {
+                try { console.log('[POSTCOURSE][AI][RETRY]', { skill_id: sid, type, attempt, error: e?.message }); } catch {}
+              }
+            }
+            if (!accepted) {
+              try { console.log('[POSTCOURSE][AI][SKIPPED_SKILL_TYPE]', { skill_id: sid, type, reason: 'generation_failed_or_duplicate' }); } catch {}
+            }
+          }
         }
+        questions = validateTheoreticalQuestions(questions);
       } else {
+        // baseline or test path: existing batch behavior
+        const items = [];
         for (let i = 0; i < questionCount; i += 1) {
           const sid = uniqueSkills[i % Math.max(uniqueSkills.length, 1)];
           if (!sid) continue;
@@ -2879,48 +2932,47 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           const sname = skillIdToNameMap.get(sid) || '';
           items.push({ skill_id: sid, skill_name: sname, difficulty: 'medium', humanLanguage: 'en', type });
         }
-      }
-      let generated = [];
-      if (isTest) {
-        const sid = (Array.isArray(items) && items[0]?.skill_id) || 's_general';
-        generated = [{ qid: 'test_mcq', type: 'mcq', skill_id: sid, difficulty: 'medium', question: `MCQ for ${sid}`, options: ['A','B','C'], correct_answer: 'A' },
-                     { qid: 'test_open', type: 'open', skill_id: sid, difficulty: 'medium', question: `Explain ${sid}` }];
-      } else {
-        const seed = `${Date.now()}-${Math.random()}`;
-        generated = await generateTheoreticalQuestions({ items, seed });
-      }
-      const validated = [];
-      for (const q of generated) {
-        let validation = { valid: true, reasons: [] };
-        if (!isTest) { try { validation = await validateQuestion({ question: q }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; } }
-        const hints = q?.hint ? [String(q.hint)] : undefined;
-        validated.push(normalizeAiQuestion({ ...q, hint: hints }));
-      }
-      questions = validateTheoreticalQuestions(validated);
-
-      // Strict per-skill enforcement: keep only questions that clearly match requested skill
-      try {
-        if (exam_type === 'baseline') {
-          const allowed = new Set(uniqueSkills);
-          const before = Array.isArray(questions) ? questions.length : 0;
-          const strictlyMatched = (Array.isArray(questions) ? questions : []).filter((q) => {
-            const sid = String(q?.skill_id || '').trim();
-            if (!allowed.has(sid)) return false;
-            const stem = String(q?.stem || q?.prompt?.question || '').toLowerCase();
-            const name = String(skillIdToNameMap.get(sid) || '').toLowerCase();
-            if (!name) return true; // if no name, rely on sid match
-            // Require mention of skill name token (e.g., "useEffect", "JOIN")
-            return stem.includes(name);
-          });
-          const after = strictlyMatched.length;
-          if (after === 0) {
-            console.log('[BASELINE][AI][STRICT_FILTER]', { removed: before, kept: 0, reason: 'no_strict_matches' });
-          } else if (after !== before) {
-            console.log('[BASELINE][AI][STRICT_FILTER]', { removed: before - after, kept: after });
-          }
-          if (after > 0) questions = strictlyMatched;
+        let generated = [];
+        if (isTest) {
+          const sid = (Array.isArray(items) && items[0]?.skill_id) || 's_general';
+          generated = [{ qid: 'test_mcq', type: 'mcq', skill_id: sid, difficulty: 'medium', question: `MCQ for ${sid}`, options: ['A','B','C'], correct_answer: 'A' },
+                       { qid: 'test_open', type: 'open', skill_id: sid, difficulty: 'medium', question: `Explain ${sid}` }];
+        } else {
+          const seed = `${Date.now()}-${Math.random()}`;
+          generated = await generateTheoreticalQuestions({ items, seed });
         }
-      } catch {}
+        const validated = [];
+        for (const q of generated) {
+          let validation = { valid: true, reasons: [] };
+          if (!isTest) { try { validation = await validateQuestion({ question: q }); } catch { validation = { valid: false, reasons: ['validation_call_failed'] }; } }
+          const hints = q?.hint ? [String(q.hint)] : undefined;
+          validated.push(normalizeAiQuestion({ ...q, hint: hints }));
+        }
+        questions = validateTheoreticalQuestions(validated);
+
+        // Strict per-skill enforcement for baseline only
+        try {
+          if (exam_type === 'baseline') {
+            const allowed = new Set(uniqueSkills);
+            const before = Array.isArray(questions) ? questions.length : 0;
+            const strictlyMatched = (Array.isArray(questions) ? questions : []).filter((q) => {
+              const sid = String(q?.skill_id || '').trim();
+              if (!allowed.has(sid)) return false;
+              const stem = String(q?.stem || q?.prompt?.question || '').toLowerCase();
+              const name = String(skillIdToNameMap.get(sid) || '').toLowerCase();
+              if (!name) return true;
+              return stem.includes(name);
+            });
+            const after = strictlyMatched.length;
+            if (after === 0) {
+              console.log('[BASELINE][AI][STRICT_FILTER]', { removed: before, kept: 0, reason: 'no_strict_matches' });
+            } else if (after !== before) {
+              console.log('[BASELINE][AI][STRICT_FILTER]', { removed: before - after, kept: after });
+            }
+            if (after > 0) questions = strictlyMatched;
+          }
+        } catch {}
+      }
 
       // Emit per-skill question counts for baseline
       try {
@@ -2938,18 +2990,20 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       } catch {}
     } catch (e) {
       if (String(exam_type).toLowerCase() === 'postcourse') {
-        await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'theory_generation_failed', failed_step: 'generate_questions', progress: 100 });
-        return;
-      }
-      try {
-        const { buildMockQuestions } = require("../mocks/theoryMock");
-        const skillsForMocks = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
-        const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
-        const normalizedMcqs = mocks.map((m) => ({ qid: m.qid, type: 'mcq', skill_id: m.skill_id, difficulty: 'medium', question: m.prompt?.question || '', stem: m.prompt?.question || '', options: Array.isArray(m.prompt?.options) ? m.prompt.options : [], correct_answer: m.prompt?.correct_answer || '' }));
-        questions = validateTheoreticalQuestions([...normalizedMcqs]);
-      } catch (e2) {
-        await setExamStatus(examId, { status: 'FAILED', error_message: e2?.message || 'generation_failed', failed_step: 'generate_questions', progress: 100 });
-        return;
+        // Do not fail entire exam; proceed with coding questions only
+        try { console.log('[POSTCOURSE][AI][ERROR_NONBLOCKING]', { message: e?.message, step: 'generate_questions' }); } catch {}
+        questions = [];
+      } else {
+        try {
+          const { buildMockQuestions } = require("../mocks/theoryMock");
+          const skillsForMocks = Array.from(new Set((skillsArray || []).map((s)=>String(s.skill_id)).filter(Boolean)));
+          const mocks = buildMockQuestions({ skills: skillsForMocks, amount: Math.max(1, skillsForMocks.length) });
+          const normalizedMcqs = mocks.map((m) => ({ qid: m.qid, type: 'mcq', skill_id: m.skill_id, difficulty: 'medium', question: m.prompt?.question || '', stem: m.prompt?.question || '', options: Array.isArray(m.prompt?.options) ? m.prompt.options : [], correct_answer: m.prompt?.correct_answer || '' }));
+          questions = validateTheoreticalQuestions([...normalizedMcqs]);
+        } catch (e2) {
+          await setExamStatus(examId, { status: 'FAILED', error_message: e2?.message || 'generation_failed', failed_step: 'generate_questions', progress: 100 });
+          return;
+        }
       }
     }
     await setExamStatus(examId, { status: 'PREPARING', progress: 80 });
