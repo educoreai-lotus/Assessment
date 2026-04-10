@@ -1,9 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { Navigate, createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import './index.css';
-import { ingestAccessTokenFromHash } from './services/accessToken';
+import { getAccessToken, ingestAccessTokenFromHash } from './services/accessToken';
 import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
 import Baseline from './pages/Baseline.jsx';
@@ -18,22 +18,32 @@ import Cancelled from './pages/exam/Cancelled.jsx';
 
 ingestAccessTokenFromHash();
 
+function RequireAccessToken({ children }) {
+  const token = getAccessToken();
+  if (!token) return <Navigate to="/" replace />;
+  return children;
+}
+
+function protectedPage(element) {
+  return <RequireAccessToken>{withMotion(element)}</RequireAccessToken>;
+}
+
 const routes = [
   {
     path: '/',
     element: <App />,
     children: [
       { index: true, element: withMotion(<HomePage />) },
-      { path: 'exam/baseline', element: withMotion(<Baseline />) },
-      { path: 'exam/postcourse', element: withMotion(<PostCourseExam />) },
-      { path: 'exam-intro', element: withMotion(<ExamIntro />) },
-      { path: 'coordinator-entry', element: withMotion(<CoordinatorEntry />) },
-      { path: 'results', element: withMotion(<ResultsDashboard />) },
-      { path: 'results/baseline', element: withMotion(<BaselineResults />) },
-      { path: 'results/baseline/:attemptId', element: withMotion(<BaselineResults />) },
-      { path: 'results/postcourse', element: withMotion(<PostCourseResults />) },
-      { path: 'results/postcourse/:attemptId', element: withMotion(<PostCourseResults />) },
-      { path: 'exam/cancelled', element: withMotion(<Cancelled />) },
+      { path: 'exam/baseline', element: protectedPage(<Baseline />) },
+      { path: 'exam/postcourse', element: protectedPage(<PostCourseExam />) },
+      { path: 'exam-intro', element: protectedPage(<ExamIntro />) },
+      { path: 'coordinator-entry', element: protectedPage(<CoordinatorEntry />) },
+      { path: 'results', element: protectedPage(<ResultsDashboard />) },
+      { path: 'results/baseline', element: protectedPage(<BaselineResults />) },
+      { path: 'results/baseline/:attemptId', element: protectedPage(<BaselineResults />) },
+      { path: 'results/postcourse', element: protectedPage(<PostCourseResults />) },
+      { path: 'results/postcourse/:attemptId', element: protectedPage(<PostCourseResults />) },
+      { path: 'exam/cancelled', element: protectedPage(<Cancelled />) },
       { path: 'dev/health', element: withMotion(<Health />) },
     ],
   },
