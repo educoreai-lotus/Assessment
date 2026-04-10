@@ -64,14 +64,11 @@ function normalizeEnvelope(envelope) {
 
   if (response.answer == null) response.answer = '';
 
-  // Default action adapters
+  // Default action adapters: baseline may be inferred for skills-origin envelopes only.
+  // Post-course must set payload.action explicitly (matches frontend coordinatorEnvelope).
   const reqLower = requester.toLowerCase();
-  if (!payload.action) {
-    if (reqLower.includes('skills')) {
-      payload.action = 'start-baseline-exam';
-    } else if (reqLower.includes('course')) {
-      payload.action = 'start-postcourse-exam';
-    }
+  if (!payload.action && reqLower.includes('skills')) {
+    payload.action = 'start-baseline-exam';
   }
 
   return {

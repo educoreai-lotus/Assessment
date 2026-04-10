@@ -8,7 +8,10 @@ import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
 import Baseline from './pages/Baseline.jsx';
 import PostCourseExam from './pages/exam/PostCourseExam.jsx';
-import ExamIntro from './pages/ExamIntro.jsx';
+import {
+  BlockPostcourseWhenBaselineOnly,
+  ExamIntroWithBaselineOnlyGuard,
+} from './components/BaselineOnlyRouteGuards.jsx';
 import CoordinatorEntry from './pages/CoordinatorEntry.jsx';
 import ResultsDashboard from './pages/results/ResultsDashboard.jsx';
 import BaselineResults from './pages/BaselineResults.jsx';
@@ -35,14 +38,35 @@ const routes = [
     children: [
       { index: true, element: withMotion(<HomePage />) },
       { path: 'exam/baseline', element: protectedPage(<Baseline />) },
-      { path: 'exam/postcourse', element: protectedPage(<PostCourseExam />) },
-      { path: 'exam-intro', element: protectedPage(<ExamIntro />) },
+      {
+        path: 'exam/postcourse',
+        element: protectedPage(
+          <BlockPostcourseWhenBaselineOnly>
+            <PostCourseExam />
+          </BlockPostcourseWhenBaselineOnly>,
+        ),
+      },
+      { path: 'exam-intro', element: protectedPage(<ExamIntroWithBaselineOnlyGuard />) },
       { path: 'coordinator-entry', element: protectedPage(<CoordinatorEntry />) },
       { path: 'results', element: protectedPage(<ResultsDashboard />) },
       { path: 'results/baseline', element: protectedPage(<BaselineResults />) },
       { path: 'results/baseline/:attemptId', element: protectedPage(<BaselineResults />) },
-      { path: 'results/postcourse', element: protectedPage(<PostCourseResults />) },
-      { path: 'results/postcourse/:attemptId', element: protectedPage(<PostCourseResults />) },
+      {
+        path: 'results/postcourse',
+        element: protectedPage(
+          <BlockPostcourseWhenBaselineOnly>
+            <PostCourseResults />
+          </BlockPostcourseWhenBaselineOnly>,
+        ),
+      },
+      {
+        path: 'results/postcourse/:attemptId',
+        element: protectedPage(
+          <BlockPostcourseWhenBaselineOnly>
+            <PostCourseResults />
+          </BlockPostcourseWhenBaselineOnly>,
+        ),
+      },
       { path: 'exam/cancelled', element: protectedPage(<Cancelled />) },
       { path: 'dev/health', element: withMotion(<Health />) },
     ],

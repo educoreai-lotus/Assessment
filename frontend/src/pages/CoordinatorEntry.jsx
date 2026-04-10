@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { setBaselineOnlyLaunch } from '../services/baselineOnlyLaunch';
 import { normalizeEnvelope, parseEnvelope } from '../utils/coordinatorEnvelope';
 
 function maskUrlForDebug(href) {
@@ -75,9 +76,12 @@ export default function CoordinatorEntry() {
       if (env.payload?.course_name) params.set('courseName', String(env.payload.course_name));
       if (env.payload?.user_id) params.set('userId', String(env.payload.user_id));
       if (env.payload?.user_name) params.set('userName', String(env.payload.user_name));
+      if (env.payload?.skillName) params.set('skillName', String(env.payload.skillName));
+      else if (env.payload?.competency_name) params.set('skillName', String(env.payload.competency_name));
 
       if (action === 'start-baseline-exam') {
         params.set('examType', 'baseline');
+        setBaselineOnlyLaunch();
         try {
           // eslint-disable-next-line no-console
           console.log('[DBG][CoordinatorEntry][navigate]', {

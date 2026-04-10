@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { examApi } from '../services/examApi';
+import { isBaselineOnlyLaunch, setBaselineOnlyLaunch } from '../services/baselineOnlyLaunch';
 import { useRef } from 'react';
 
 const BASELINE_CTX_SESSION_KEY = 'assessment_baseline_context';
@@ -30,6 +31,13 @@ function readBaselineContextFromSession() {
   } catch {
     return null;
   }
+}
+
+/** Directory-style baseline handoff: user + competency present in the URL (not session fallback). */
+function hasDirectoryStyleBaselineHandoffInUrl(searchParams) {
+  const uid = (searchParams.get('userId') || searchParams.get('user_id') || '').trim();
+  const skill = (searchParams.get('skillName') || searchParams.get('competency_name') || '').trim();
+  return !!(uid && skill);
 }
 
 function saveBaselineContextToSession({ examType, userId, skillName }) {
@@ -142,6 +150,9 @@ export default function ExamIntro() {
         } catch {}
         setCtxSaved(true);
         setCtxError('');
+        if (hasDirectoryStyleBaselineHandoffInUrl(searchParams)) {
+          setBaselineOnlyLaunch();
+        }
       } catch {
         try {
           // eslint-disable-next-line no-console
@@ -155,6 +166,9 @@ export default function ExamIntro() {
 
   async function handleStart() {
     if (startingExam) return;
+    if (examType === 'postcourse' && isBaselineOnlyLaunch()) {
+      return;
+    }
     if (examType === 'baseline' && !ctxSaved) {
       // block start until context saved
       return;

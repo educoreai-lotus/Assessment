@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useBaselineOnlyLaunch } from '../../hooks/useBaselineOnlyLaunch';
 
 const base =
   'px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-emeraldbrand-700/10 transition-colors dark:text-neutral-200 dark:hover:text-white dark:hover:bg-emeraldbrand-700/40';
 const active = 'bg-emeraldbrand-700/20 text-gray-900 dark:bg-emeraldbrand-700/60 dark:text-white shadow-soft';
 
 export default function Navbar() {
+  const baselineOnlyLaunch = useBaselineOnlyLaunch();
   const [theme, setTheme] = useState(null); // 'light' | 'dark' | null
 
   useEffect(() => {
@@ -55,7 +57,9 @@ export default function Navbar() {
         <nav className="flex items-center gap-1">
           <NavLink to="/" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Home</NavLink>
           <NavLink to="/exam/baseline" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Baseline</NavLink>
-          <NavLink to="/exam/postcourse" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Post-Course</NavLink>
+          {!baselineOnlyLaunch && (
+            <NavLink to="/exam/postcourse" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Post-Course</NavLink>
+          )}
           <NavLink to="/results" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Results</NavLink>
           {/* Dev/Health removed from navbar */}
         </nav>

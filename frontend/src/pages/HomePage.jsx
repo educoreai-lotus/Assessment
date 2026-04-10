@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { useBaselineOnlyLaunch } from '../hooks/useBaselineOnlyLaunch';
 
 const features = [
   {
@@ -17,6 +18,7 @@ const features = [
 ];
 
 export default function HomePage() {
+  const baselineOnlyLaunch = useBaselineOnlyLaunch();
   return (
     <div className="container-safe py-12">
       <motion.section
@@ -33,7 +35,9 @@ export default function HomePage() {
         </p>
         <div className="mt-8 flex justify-center gap-3">
           <Link className="btn-emerald" to="/exam/baseline">Take Baseline Exam</Link>
-          <Link className="btn-emerald" to="/exam/postcourse">Take Post-Course Exam</Link>
+          {!baselineOnlyLaunch && (
+            <Link className="btn-emerald" to="/exam/postcourse">Take Post-Course Exam</Link>
+          )}
         </div>
       </motion.section>
 

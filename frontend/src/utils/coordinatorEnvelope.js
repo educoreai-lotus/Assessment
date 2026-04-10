@@ -41,9 +41,10 @@ export function normalizeEnvelope(envelope) {
   if (response.answer == null) response.answer = '';
 
   const reqLower = requester.toLowerCase();
-  if (!payload.action) {
-    if (reqLower.includes('skills')) payload.action = 'start-baseline-exam';
-    else if (reqLower.includes('course')) payload.action = 'start-postcourse-exam';
+  // Never infer post-course from requester_service alone (too ambiguous for Directory flows).
+  // Post-course coordinator handoffs must send payload.action === 'start-postcourse-exam' explicitly.
+  if (!payload.action && reqLower.includes('skills')) {
+    payload.action = 'start-baseline-exam';
   }
 
   return { requester_service: requester, payload, response };

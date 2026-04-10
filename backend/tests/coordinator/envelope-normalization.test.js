@@ -17,6 +17,15 @@ describe('Coordinator Envelope Utils', () => {
     });
   });
 
+  test('course requester without payload.action does not infer post-course action', () => {
+    const norm = normalizeEnvelope({
+      requester_service: 'course-builder',
+      payload: { course_id: 'c_1' },
+      response: { answer: '' },
+    });
+    expect(norm.payload.action).toBeUndefined();
+  });
+
   test('raw Course Builder object is normalized with envelope wrapper and action', () => {
     const raw = { learner_id: 'u_999', course_id: 'c_777', course_name: 'Intro to JS' };
     // adapter emulation: wrap if no requester_service
