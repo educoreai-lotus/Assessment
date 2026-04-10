@@ -1,6 +1,11 @@
 const pool = require('../config/supabaseDB');
 const { ProctoringSession, ProctoringViolation, Incident } = require('../models');
 const { sendAlertEmail } = require('../services/emailService');
+const { resolveAttemptDirectoryAccess } = require('../services/core/attemptsService');
+
+function skipResourceOwnership(req) {
+  return process.env.NODE_ENV === 'test' && !req.user;
+}
 
 exports.startCamera = async (req, res, next) => {
   try {
@@ -8,6 +13,15 @@ exports.startCamera = async (req, res, next) => {
     console.log("🔥 Incoming attempt id =", attempt_id);
     if (!attempt_id) {
       return res.status(400).json({ error: 'attempt_id_required' });
+    }
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const access = await resolveAttemptDirectoryAccess(attempt_id, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'attempt_not_found' });
     }
     // [TRACE] proctoring start (attempt-only)
     try {
@@ -88,6 +102,15 @@ exports.reportFocusViolation = async (req, res, next) => {
     if (!attempt_id) {
       return res.status(400).json({ error: 'attempt_id_required' });
     }
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const access = await resolveAttemptDirectoryAccess(attempt_id, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'attempt_not_found' });
+    }
 
     if (process.env.NODE_ENV === 'test') {
       return res.json({ warning: 1 });
@@ -161,6 +184,15 @@ exports.reportIncident = async (req, res, next) => {
     const { type, strike, timestamp, details } = req.body || {};
     if (!attempt_id) {
       return res.status(400).json({ error: 'attempt_id_required' });
+    }
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const access = await resolveAttemptDirectoryAccess(attempt_id, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'attempt_not_found' });
     }
 
     // Resolve exam_id (best-effort)

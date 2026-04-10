@@ -1,10 +1,31 @@
-const { getAttemptsForUser, getAttemptDetail, getAttemptSkills } = require('../services/core/attemptsService');
+const {
+  getAttemptsForUser,
+  getAttemptDetail,
+  getAttemptSkills,
+  routeUserIdMatchesDirectoryUser,
+  resolveAttemptDirectoryAccess,
+} = require('../services/core/attemptsService');
 const pool = require('../config/supabaseDB');
+
+function skipResourceOwnership(req) {
+  return process.env.NODE_ENV === 'test' && !req.user;
+}
 
 exports.getUserAttempts = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const attempts = await getAttemptsForUser(userId);
+    let effectiveUserId = userId;
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      if (!routeUserIdMatchesDirectoryUser(userId, dir)) {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      effectiveUserId = dir;
+    }
+    const attempts = await getAttemptsForUser(effectiveUserId);
     return res.json(attempts);
   } catch (err) {
     return next(err);
@@ -14,6 +35,15 @@ exports.getUserAttempts = async (req, res, next) => {
 exports.getAttemptById = async (req, res, next) => {
   try {
     const { attemptId } = req.params;
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const access = await resolveAttemptDirectoryAccess(attemptId, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'not_found' });
+    }
     const data = await getAttemptDetail(attemptId);
     if (!data) return res.status(404).json({ error: 'not_found' });
     const status = data?.status || null;
@@ -32,6 +62,15 @@ exports.getAttemptById = async (req, res, next) => {
 exports.getAttemptSkills = async (req, res, next) => {
   try {
     const { attemptId } = req.params;
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const access = await resolveAttemptDirectoryAccess(attemptId, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'not_found' });
+    }
     const data = await getAttemptSkills(attemptId);
     return res.json(data);
   } catch (err) {
@@ -42,6 +81,15 @@ exports.getAttemptSkills = async (req, res, next) => {
 exports.getRemainingTime = async (req, res, next) => {
   try {
     const { attemptId } = req.params;
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const access = await resolveAttemptDirectoryAccess(attemptId, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'not_found' });
+    }
     const { rows } = await pool.query(
       `SELECT expires_at FROM exam_attempts WHERE attempt_id = $1`,
       [attemptId]

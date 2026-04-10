@@ -16,6 +16,7 @@ const testEmailRouter = require("./routes/testEmail");
 const emailTestRoute = require("./routes/emailTest");
 const aiQueryRouter = require('./routes/aiQuery');
 const grpcServer = require('./src/grpc/server');
+const { authenticate } = require('./middleware/authenticate');
 
 const PORT = process.env.PORT || 4000;
 const API_BASE = '/api/v1';
@@ -165,16 +166,17 @@ app.get('/health/mongo', async (req, res) => {
 
 // Mount integration endpoints EXACTLY as per integration map (no version prefix)
 app.use('/api', integrationRoutes);
-app.use('/api/results', resultsRouter);
+
+// User-facing API: Coordinator /request → nAuth (skipped in NODE_ENV=test)
+app.use('/api/results', authenticate, resultsRouter);
+app.use('/api/ai-query', authenticate, aiQueryRouter);
+app.use('/api/exams', authenticate, examsRouter);
+app.use('/api/attempts', authenticate, attemptsRouter);
+app.use('/api/packages', authenticate, packagesRouter);
+app.use('/api/proctoring', authenticate, proctoringRouter);
+
 app.use("/api", testEmailRouter);
 app.use("/api/test-email", emailTestRoute);
-app.use('/api/ai-query', aiQueryRouter);
-
-// New Assessment API v1 routers
-app.use('/api/exams', examsRouter);
-app.use('/api/attempts', attemptsRouter);
-app.use('/api/packages', packagesRouter);
-app.use('/api/proctoring', proctoringRouter);
 
 // Temporary debug endpoint for inbound routing validation
 app.post('/debug/inbound', (req, res) => {

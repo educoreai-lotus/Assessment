@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import './index.css';
+import { ingestAccessTokenFromHash } from './services/accessToken';
 import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
 import Baseline from './pages/Baseline.jsx';
@@ -14,6 +15,8 @@ import BaselineResults from './pages/BaselineResults.jsx';
 import PostCourseResults from './pages/PostCourseResults.jsx';
 import Health from './pages/dev/Health.jsx';
 import Cancelled from './pages/exam/Cancelled.jsx';
+
+ingestAccessTokenFromHash();
 
 const routes = [
   {

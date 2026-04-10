@@ -15,6 +15,20 @@ const pool = require('../config/supabaseDB');
 const { ProctoringSession, ExamPackage } = require('../models');
 const { ExamContext } = require('../models');
 const { normalizeToInt } = require("../services/core/idNormalizer");
+const {
+  isAttemptOwnedByDirectoryUser,
+  resolveAttemptDirectoryAccess,
+  resolveExamDirectoryAccess,
+  routeUserIdMatchesDirectoryUser,
+} = require('../services/core/attemptsService');
+
+function skipResourceOwnership(req) {
+  return process.env.NODE_ENV === 'test' && !req.user;
+}
+function getDirectoryUserId(req) {
+  const dir = req.user?.directoryUserId;
+  return dir && String(dir).trim() !== '' ? String(dir).trim() : '';
+}
 const proctoringController = require('./../controllers/proctoringController');
 const { safeFetchCoverage } = require('../services/gateways/courseBuilderGateway');
 
@@ -26,6 +40,13 @@ exports.cancelExam = async (req, res, next) => {
     const examIdNum = normalizeToInt(examId);
     if (examIdNum == null) {
       return res.status(400).json({ error: 'invalid_exam_id' });
+    }
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      if (!dir) return res.status(403).json({ error: 'forbidden' });
+      const access = await resolveExamDirectoryAccess(examIdNum, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'not_found' });
     }
     const pool = require('../config/supabaseDB');
     let targetAttempt = normalizeToInt(attempt_id);
@@ -47,6 +68,12 @@ exports.cancelExam = async (req, res, next) => {
 
     if (!Number.isFinite(targetAttempt)) {
       return res.json({ ok: true }); // nothing to cancel
+    }
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      const access = await resolveAttemptDirectoryAccess(targetAttempt, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'attempt_not_found' });
     }
 
     const attemptRowRes = await pool.query(
@@ -79,13 +106,24 @@ exports.cancelExam = async (req, res, next) => {
 exports.saveExamContext = async (req, res, next) => {
   try {
     const examType = String(req.body?.exam_type || '').toLowerCase();
-    const userId = req.body?.user_id;
+    const bodyUserId = req.body?.user_id;
+    const authUserId = getDirectoryUserId(req);
     const competencyName = typeof req.body?.competency_name === 'string' && req.body.competency_name.trim() !== '' ? req.body.competency_name.trim() : null;
     if (examType !== 'baseline') {
       return res.status(400).json({ error: 'invalid_exam_type' });
     }
-    if (!userId || !competencyName) {
+    if (!skipResourceOwnership(req) && !authUserId) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    if (!competencyName) {
       return res.status(400).json({ error: 'baseline_context_incomplete' });
+    }
+    const userId = !skipResourceOwnership(req) ? authUserId : bodyUserId;
+    if (!userId) {
+      return res.status(400).json({ error: 'baseline_context_incomplete' });
+    }
+    if (!skipResourceOwnership(req) && bodyUserId && !routeUserIdMatchesDirectoryUser(bodyUserId, authUserId)) {
+      return res.status(403).json({ error: 'forbidden' });
     }
     // Upsert by user_id + exam_type
     await ExamContext.findOneAndUpdate(
@@ -107,12 +145,20 @@ exports.saveExamContext = async (req, res, next) => {
 // POST /api/exams/postcourse/coverage - build postcourse exam after fetching coverage_map
 exports.requestPostcourseCoverage = async (req, res, next) => {
   try {
-    // Frontend has no learner/course context; resolve the most recent stored context
+    const authUserId = getDirectoryUserId(req);
+    if (!skipResourceOwnership(req) && !authUserId) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    // Frontend has no learner/course context; resolve latest context for authenticated learner
     let ctx = null;
     try {
-      ctx = await ExamContext.findOne({ exam_type: 'postcourse' }).sort({ updated_at: -1 }).lean();
+      const filter = { exam_type: 'postcourse' };
+      if (!skipResourceOwnership(req)) {
+        filter.user_id = String(authUserId);
+      }
+      ctx = await ExamContext.findOne(filter).sort({ updated_at: -1 }).lean();
     } catch {}
-    const userId = ctx?.user_id || null;
+    const userId = !skipResourceOwnership(req) ? String(authUserId) : (ctx?.user_id || null);
     const userName = ctx?.metadata?.user_name || null;
     const courseId = ctx?.metadata?.course_id || null;
     const courseName = ctx?.metadata?.course_name || null;
@@ -266,6 +312,13 @@ exports.getExam = async (req, res, next) => {
     if (examIdNum == null) {
       return res.status(400).json({ error: 'invalid_exam_id' });
     }
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      if (!dir) return res.status(403).json({ error: 'forbidden' });
+      const access = await resolveExamDirectoryAccess(examIdNum, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'not_found' });
+    }
     // Gate readiness on SQL exam status to avoid race conditions
     let examStatus = null;
     let examType = null;
@@ -347,28 +400,40 @@ exports.createExam = async (req, res, next) => {
     if (!exam_type) {
       return res.status(400).json({ error: 'user_id_and_exam_type_required' });
     }
+    const authUserId = getDirectoryUserId(req);
+    if (!skipResourceOwnership(req) && !authUserId) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
 
     let userStr = String(user_id || '');
     let isBaseline = String(exam_type).toLowerCase() === 'baseline';
 
     if (isBaseline) {
-      // For baseline, ignore client-provided user_id and resolve from ExamContext only
+      // For baseline, ignore client-provided user_id and resolve from scoped ExamContext
       let ctx = null;
       try {
         const { ExamContext } = require('../models');
-        ctx = await ExamContext.findOne({ exam_type: 'baseline' }).sort({ updated_at: -1 }).lean();
+        const filter = { exam_type: 'baseline' };
+        if (!skipResourceOwnership(req)) {
+          filter.user_id = String(authUserId);
+        }
+        ctx = await ExamContext.findOne(filter).sort({ updated_at: -1 }).lean();
       } catch {}
       if (!ctx || !ctx.user_id || !ctx.competency_name) {
         try { console.error('[BASELINE][CONTEXT][MISSING]', { reason: 'createExam entry', hasCtx: !!ctx }); } catch {}
         return res.status(400).json({ error: 'baseline_context_incomplete' });
       }
-      userStr = String(ctx.user_id);
+      userStr = !skipResourceOwnership(req) ? String(authUserId) : String(ctx.user_id);
     } else {
-      // Enforce numeric user id for non-baseline
-      if (!user_id) return res.status(400).json({ error: 'user_id_and_exam_type_required' });
-      const userInt = Number(String(user_id).replace(/[^0-9]/g, ""));
+      // Non-baseline user identity comes from authenticated user
+      userStr = !skipResourceOwnership(req) ? String(authUserId) : String(user_id || '');
+      if (!userStr) return res.status(400).json({ error: 'user_id_and_exam_type_required' });
+      if (!skipResourceOwnership(req) && user_id && !routeUserIdMatchesDirectoryUser(user_id, authUserId)) {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const userInt = Number(String(userStr).replace(/[^0-9]/g, ""));
       if (!Number.isFinite(userInt)) {
-        try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'invalid_user_id', user_id_original: user_id, user_id_numeric: null }); } catch {}
+        try { console.log('[TRACE][EXAM][CREATE][ERROR]', { error: 'invalid_user_id', user_id_original: userStr, user_id_numeric: null }); } catch {}
         return res.status(400).json({ error: 'invalid_user_id' });
       }
     }
@@ -459,6 +524,16 @@ exports.startExam = async (req, res, next) => {
     if (Number(attRow.exam_id) !== Number(examIdNum)) {
       try { console.log('[TRACE][EXAM][START][MISMATCH]', { exam_id: examIdNum, attempt_exam_id: attRow.exam_id, attempt_id: attemptIdNum }); } catch {}
       return res.status(400).json({ error: 'attempt_exam_mismatch', message: 'Attempt does not belong to provided exam_id' });
+    }
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const owned = await isAttemptOwnedByDirectoryUser(attemptIdNum, dir);
+      if (!owned) {
+        return res.status(403).json({ error: 'forbidden' });
+      }
     }
     const expAt = attRow?.expires_at ? new Date(attRow.expires_at) : null;
     if (expAt && new Date() > expAt) {
@@ -731,6 +806,17 @@ exports.submitExam = async (req, res, next) => {
       return res.status(400).json({ error: 'exam_mismatch', message: 'Attempt does not belong to provided exam_id' });
     }
 
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const owned = await isAttemptOwnedByDirectoryUser(attemptIdNum, dir);
+      if (!owned) {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+    }
+
     if (att.status === 'canceled') {
       return res.status(403).json({ error: 'attempt_canceled', message: 'Attempt was canceled' });
     }
@@ -892,6 +978,13 @@ exports.completeCodingForExam = async (req, res, next) => {
     if (examIdNum == null || attemptIdNum == null) {
       return res.status(400).json({ error: 'invalid_exam_or_attempt_id' });
     }
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      if (!dir) return res.status(403).json({ error: 'forbidden' });
+      const access = await resolveAttemptDirectoryAccess(attemptIdNum, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'attempt_not_found' });
+    }
 
     // Normalize score and skills feedback
     const score =
@@ -980,6 +1073,13 @@ exports.submitCodingGrade = async (req, res, next) => {
     // Guards
     if (attemptIdNum == null || examIdNum == null) {
       return res.status(400).json({ error: 'invalid_exam_or_attempt_id' });
+    }
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      if (!dir) return res.status(403).json({ error: 'forbidden' });
+      const access = await resolveAttemptDirectoryAccess(attemptIdNum, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'attempt_not_found' });
     }
 
     // [DEVLAB][GRADE][RECEIVE][START]
@@ -1172,6 +1272,13 @@ exports.startProctoring = async (req, res, next) => {
     if (attemptIdNum == null) {
       return res.status(400).json({ error: 'invalid_attempt_id' });
     }
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      if (!dir) return res.status(403).json({ error: 'forbidden' });
+      const access = await resolveAttemptDirectoryAccess(attemptIdNum, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'attempt_not_found' });
+    }
 
     // In test, mimic existing behavior without hitting Postgres
     if (process.env.NODE_ENV === 'test') {
@@ -1213,6 +1320,13 @@ exports.resolveExam = async (req, res, next) => {
     if (examIdNum == null) {
       return res.status(400).json({ error: 'invalid_exam_id' });
     }
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      if (!dir) return res.status(403).json({ error: 'forbidden' });
+      const access = await resolveExamDirectoryAccess(examIdNum, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'not_found' });
+    }
   const { rows } = await pool
       .query(
         `SELECT attempt_id, attempt_no, started_at, expires_at, duration_minutes, status
@@ -1250,6 +1364,13 @@ exports.getExamStatus = async (req, res, next) => {
     const { examId } = req.params;
     const examIdNum = normalizeToInt(examId);
     if (examIdNum == null) return res.status(400).json({ error: 'invalid_exam_id' });
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      if (!dir) return res.status(403).json({ error: 'forbidden' });
+      const access = await resolveExamDirectoryAccess(examIdNum, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'not_found' });
+    }
     const { rows } = await pool
       .query(
         `SELECT COALESCE(status, 'READY') AS status,

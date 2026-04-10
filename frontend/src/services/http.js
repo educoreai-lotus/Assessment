@@ -1,4 +1,9 @@
 import axios from 'axios';
+import {
+  getAccessToken,
+  clearAccessToken,
+  applyRotatedTokenFromResponse,
+} from './accessToken';
 
 // Candidate API hosts in priority order
 function candidateHosts() {
@@ -25,6 +30,38 @@ export const http = axios.create({
   timeout: 45000,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
+});
+
+function isProtectedApiPath(url) {
+  const u = String(url || '');
+  return (
+    u.startsWith('/api/exams') ||
+    u.startsWith('/api/attempts') ||
+    u.startsWith('/api/results') ||
+    u.startsWith('/api/packages') ||
+    u.startsWith('/api/proctoring') ||
+    u.startsWith('/api/ai-query')
+  );
+}
+
+http.interceptors.request.use((config) => {
+  const isProtected = isProtectedApiPath(config?.url);
+  const token = getAccessToken();
+  if (isProtected && !token) {
+    clearAccessToken();
+    try {
+      window.location.replace('/');
+    } catch {}
+    return Promise.reject(new Error('missing_access_token'));
+  }
+  if (token) {
+    const h = config.headers;
+    const existing = h.Authorization ?? h.authorization;
+    if (!existing) {
+      h.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
 });
 
 async function probe(url) {
@@ -68,10 +105,19 @@ export const httpReady = (async () => {
   } catch {}
 })();
 
-// Diagnostics to surface failing URL in production
+// Token rotation + diagnostics + 401 cleanup (platform pattern)
 http.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    applyRotatedTokenFromResponse(res);
+    return res;
+  },
   (error) => {
+    if (error?.response?.status === 401) {
+      clearAccessToken();
+      try {
+        window.location.replace('/');
+      } catch {}
+    }
     try {
       // eslint-disable-next-line no-console
       console.error('[HTTP][ERROR]', {

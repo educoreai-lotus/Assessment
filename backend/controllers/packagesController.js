@@ -1,8 +1,22 @@
 const { getPackageByExamId } = require('../services/core/examsService');
+const { resolveExamDirectoryAccess } = require('../services/core/attemptsService');
+
+function skipResourceOwnership(req) {
+  return process.env.NODE_ENV === 'test' && !req.user;
+}
 
 exports.getPackage = async (req, res, next) => {
   try {
     const { examId } = req.params;
+    if (!skipResourceOwnership(req)) {
+      const dir = req.user?.directoryUserId;
+      if (!dir || String(dir).trim() === '') {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+      const access = await resolveExamDirectoryAccess(examId, dir);
+      if (access === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (access === 'not_found') return res.status(404).json({ error: 'not_found' });
+    }
     const pkg = await getPackageByExamId(examId);
     if (!pkg) return res.status(404).json({ error: 'not_found' });
     const removeHintsDeep = (input) => {

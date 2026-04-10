@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
+import { jsonHeadersWithAuth } from '../services/accessToken';
 
 export default function CameraPreview({ onReady, onError, attemptId, onPhoneDetected }) {
   const videoRef = useRef(null);
@@ -95,7 +96,7 @@ export default function CameraPreview({ onReady, onError, attemptId, onPhoneDete
                   console.warn('[PROCTORING][PHONE][DETECTED]', phone);
                   await fetch(`/api/proctoring/${encodeURIComponent(attemptId)}/incident`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: jsonHeadersWithAuth(),
                     body: JSON.stringify({ type: 'phone_detected' }),
                   });
                   onPhoneDetected?.(phone);

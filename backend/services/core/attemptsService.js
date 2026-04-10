@@ -14,11 +14,91 @@ const pool = require('../../config/supabaseDB');
 const { ExamPackage } = require('../../models');
 const { normalizeToInt } = require('./idNormalizer');
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Same binding strategy as getAttemptsForUser: exams.user_id (numeric) OR exams.user_uuid.
+ */
+function parseUserIdForExamOwnerLookup(userId) {
+  const userStr = String(userId ?? '');
+  const userInt = Number(userStr.replace(/[^0-9]/g, ''));
+  const maybeUuid = UUID_RE.test(userStr) ? userStr : null;
+  return {
+    userInt: Number.isFinite(userInt) ? userInt : null,
+    maybeUuid,
+  };
+}
+
+/**
+ * Route :userId is untrusted; allow only when it matches the authenticated Directory id
+ * (string equality, case-insensitive UUID, or normalizeToInt equality for legacy numeric ids).
+ */
+function routeUserIdMatchesDirectoryUser(paramUserId, directoryUserId) {
+  if (directoryUserId == null || String(directoryUserId).trim() === '') return false;
+  const p = String(paramUserId ?? '').trim();
+  const d = String(directoryUserId).trim();
+  if (p === d) return true;
+  if (UUID_RE.test(p) && UUID_RE.test(d) && p.toLowerCase() === d.toLowerCase()) return true;
+  const pi = normalizeToInt(p);
+  const di = normalizeToInt(d);
+  if (pi != null && di != null && pi === di) return true;
+  return false;
+}
+
+/**
+ * Attempt exists and exam row is owned by directoryUserId (SQL: e.user_id OR e.user_uuid).
+ * @returns {'not_found'|'forbidden'|'ok'}
+ */
+async function resolveAttemptDirectoryAccess(attemptId, directoryUserId) {
+  const attemptInt = normalizeToInt(attemptId);
+  if (attemptInt == null) return 'not_found';
+  const { userInt, maybeUuid } = parseUserIdForExamOwnerLookup(directoryUserId);
+  const { rows } = await pool.query(
+    `
+      SELECT (e.user_id = $2 OR e.user_uuid = $3::uuid) AS is_owner
+      FROM exam_attempts ea
+      JOIN exams e ON e.exam_id = ea.exam_id
+      WHERE ea.attempt_id = $1
+    `,
+    [attemptInt, userInt, maybeUuid],
+  );
+  if (rows.length === 0) return 'not_found';
+  return rows[0].is_owner ? 'ok' : 'forbidden';
+}
+
+async function isAttemptOwnedByDirectoryUser(attemptId, directoryUserId) {
+  const r = await resolveAttemptDirectoryAccess(attemptId, directoryUserId);
+  return r === 'ok';
+}
+
+/**
+ * Exam exists and is owned by directoryUserId (SQL: e.user_id OR e.user_uuid).
+ * @returns {'not_found'|'forbidden'|'ok'}
+ */
+async function resolveExamDirectoryAccess(examId, directoryUserId) {
+  const examInt = normalizeToInt(examId);
+  if (examInt == null) return 'not_found';
+  const { userInt, maybeUuid } = parseUserIdForExamOwnerLookup(directoryUserId);
+  const { rows } = await pool.query(
+    `
+      SELECT (e.user_id = $2 OR e.user_uuid = $3::uuid) AS is_owner
+      FROM exams e
+      WHERE e.exam_id = $1
+    `,
+    [examInt, userInt, maybeUuid],
+  );
+  if (rows.length === 0) return 'not_found';
+  return rows[0].is_owner ? 'ok' : 'forbidden';
+}
+
+async function isExamOwnedByDirectoryUser(examId, directoryUserId) {
+  const r = await resolveExamDirectoryAccess(examId, directoryUserId);
+  return r === 'ok';
+}
+
 async function getAttemptsForUser(userId) {
-  // Accept both numeric and UUID identifiers
-  const userStr = String(userId);
-  const userInt = Number(userStr.replace(/[^0-9]/g, ""));
-  const maybeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userStr) ? userStr : null;
+  const { userInt, maybeUuid } = parseUserIdForExamOwnerLookup(userId);
   const { rows } = await pool.query(
     `
       SELECT ea.attempt_id, ea.attempt_no, ea.final_grade, ea.passed, ea.submitted_at,
@@ -28,11 +108,11 @@ async function getAttemptsForUser(userId) {
       WHERE (e.user_id = $1 OR e.user_uuid = $2::uuid)
       ORDER BY ea.created_at DESC NULLS LAST, ea.attempt_id DESC
     `,
-    [Number.isFinite(userInt) ? userInt : null, maybeUuid]
+    [userInt, maybeUuid]
   );
   return rows.map((r) => ({
     exam_id: r.exam_id,
-    user_id: Number(userInt),
+    user_id: userInt != null ? Number(userInt) : null,
     course_id: r.course_id != null ? Number(r.course_id) : null,
     exam_type: r.exam_type,
     attempt_id: r.attempt_id,
@@ -150,6 +230,15 @@ async function getAttemptSkills(attemptId) {
   };
 }
 
-module.exports = { getAttemptsForUser, getAttemptDetail, getAttemptSkills };
+module.exports = {
+  getAttemptsForUser,
+  getAttemptDetail,
+  getAttemptSkills,
+  routeUserIdMatchesDirectoryUser,
+  resolveAttemptDirectoryAccess,
+  isAttemptOwnedByDirectoryUser,
+  resolveExamDirectoryAccess,
+  isExamOwnedByDirectoryUser,
+};
 
 
