@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 
 const { runAIQueryAndApply } = require('../services/aiQuery/aiQueryService');
+const { requireAiQueryOperator } = require('../middleware/requireAiQueryOperator');
 
 // POST /api/ai-query/run
-router.post('/run', async (req, res) => {
+router.post('/run', requireAiQueryOperator, async (req, res) => {
 	try {
 		const { operation, params } = req.body || {};
 		if (!operation || !params || typeof params !== 'object') {

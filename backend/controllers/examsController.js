@@ -402,6 +402,24 @@ exports.getExam = async (req, res, next) => {
     if (attemptIdParam == null) {
       return res.status(202).json({ package_ready: false });
     }
+    // Server-side binding: caller must own the attempt, and attempt must belong to :examId
+    if (!skipResourceOwnership(req)) {
+      const dir = getDirectoryUserId(req);
+      if (!dir) return res.status(403).json({ error: 'forbidden' });
+      const attAccess = await resolveAttemptDirectoryAccess(attemptIdParam, dir);
+      if (attAccess === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+      if (attAccess === 'not_found') return res.status(404).json({ error: 'not_found' });
+    }
+    const { rows: attemptBindRows } = await pool.query(
+      `SELECT exam_id FROM exam_attempts WHERE attempt_id = $1`,
+      [attemptIdParam],
+    );
+    if (!attemptBindRows || attemptBindRows.length === 0) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    if (Number(attemptBindRows[0].exam_id) !== Number(examIdNum)) {
+      return res.status(400).json({ error: 'attempt_exam_mismatch' });
+    }
     // If exam not READY, not ready
     if (examStatus !== 'READY') {
       return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
@@ -411,6 +429,13 @@ exports.getExam = async (req, res, next) => {
     const pkgAttempt = await ExamPackage.findOne({ attempt_id: aid }).lean();
     if (!pkgAttempt) {
       return res.status(200).json({ package_ready: false });
+    }
+    if (
+      pkgAttempt.exam_id != null &&
+      String(pkgAttempt.exam_id).trim() !== '' &&
+      String(pkgAttempt.exam_id) !== String(examIdNum)
+    ) {
+      return res.status(400).json({ error: 'package_exam_mismatch' });
     }
     // Exactly one readiness log
     try {
