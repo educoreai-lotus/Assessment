@@ -3,6 +3,18 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { examApi } from '../services/examApi';
 import { useRef } from 'react';
 
+function maskUrlForDebug(href) {
+  try {
+    const u = new URL(href);
+    const hash = u.hash || '';
+    if (!hash) return u.toString();
+    const cleanHash = hash.replace(/(access_token=)[^&]+/i, '$1***');
+    return `${u.origin}${u.pathname}${u.search}${cleanHash}`;
+  } catch {
+    return String(href || '').replace(/(access_token=)[^&]+/i, '$1***');
+  }
+}
+
 export default function ExamIntro() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -29,10 +41,39 @@ export default function ExamIntro() {
 
   // Persist baseline context from Directory URL (userId, skillName) before start
   useEffect(() => {
+    try {
+      const uidDbg = (userId || '').trim();
+      const compDbg = (skillName || '').trim();
+      // eslint-disable-next-line no-console
+      console.log('[DBG][ExamIntro][effect:start]', {
+        href: maskUrlForDebug(window.location.href),
+        search: searchParams.toString(),
+        examType,
+        userId,
+        skillName,
+        examId,
+        attemptId,
+        courseId,
+        uid: uidDbg,
+        compName: compDbg,
+      });
+    } catch {}
     if (examType !== 'baseline') return;
     const uid = (userId || '').trim();
     const compName = (skillName || '').trim();
     if (!uid || !compName) {
+      try {
+        // eslint-disable-next-line no-console
+        console.warn('[DBG][ExamIntro][missing_context_branch]', {
+          examType,
+          userId,
+          skillName,
+          uid,
+          compName,
+          search: searchParams.toString(),
+          href: maskUrlForDebug(window.location.href),
+        });
+      } catch {}
       setCtxError('Missing baseline context from Directory');
       setCtxSaved(false);
       return;
@@ -41,6 +82,15 @@ export default function ExamIntro() {
     didPostContext.current = true;
     (async () => {
       try {
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[DBG][ExamIntro][saveContext:call]', {
+            payloadKeys: ['exam_type', 'user_id', 'competency_name'],
+            exam_type: 'baseline',
+            user_id: uid,
+            competency_name: decodeURIComponent(compName),
+          });
+        } catch {}
         await examApi.saveContext({
           exam_type: 'baseline',
           user_id: uid,
@@ -50,9 +100,17 @@ export default function ExamIntro() {
         console.log('[INTRO][CONTEXT_SAVED]', { exam_type: 'baseline', user_id: uid, competency_name: decodeURIComponent(compName) });
         // eslint-disable-next-line no-console
         console.log('[FE][CONTEXT][POSTED_ONCE]', { userId: uid, skillName: decodeURIComponent(compName) });
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[DBG][ExamIntro][saveContext:success]');
+        } catch {}
         setCtxSaved(true);
         setCtxError('');
       } catch {
+        try {
+          // eslint-disable-next-line no-console
+          console.error('[DBG][ExamIntro][saveContext:failed]');
+        } catch {}
         setCtxSaved(false);
         setCtxError('Failed to save baseline context. Please refresh.');
       }

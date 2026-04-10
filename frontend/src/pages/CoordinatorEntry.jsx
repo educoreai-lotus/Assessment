@@ -2,6 +2,18 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { normalizeEnvelope, parseEnvelope } from '../utils/coordinatorEnvelope';
 
+function maskUrlForDebug(href) {
+  try {
+    const u = new URL(href);
+    const hash = u.hash || '';
+    if (!hash) return u.toString();
+    const cleanHash = hash.replace(/(access_token=)[^&]+/i, '$1***');
+    return `${u.origin}${u.pathname}${u.search}${cleanHash}`;
+  } catch {
+    return String(href || '').replace(/(access_token=)[^&]+/i, '$1***');
+  }
+}
+
 export default function CoordinatorEntry() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -9,6 +21,13 @@ export default function CoordinatorEntry() {
 
   useEffect(() => {
     try {
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[DBG][CoordinatorEntry][mount]', {
+          href: maskUrlForDebug(window.location.href),
+          search: searchParams.toString(),
+        });
+      } catch {}
       const qpEnv = searchParams.get('envelope');
       let source = null;
       if (qpEnv) {
@@ -34,6 +53,19 @@ export default function CoordinatorEntry() {
 
       const env = normalizeEnvelope(source);
       const action = (env.payload?.action || '').toLowerCase();
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[DBG][CoordinatorEntry][inbound]', {
+          action,
+          payload: env.payload || null,
+          has_examType: !!env.payload?.examType,
+          has_exam_type: !!env.payload?.exam_type,
+          has_userId: !!env.payload?.userId,
+          has_user_id: !!env.payload?.user_id,
+          has_skillName: !!env.payload?.skillName,
+          has_competency_name: !!env.payload?.competency_name,
+        });
+      } catch {}
 
       const params = new URLSearchParams();
       // Common known fields
@@ -46,11 +78,31 @@ export default function CoordinatorEntry() {
 
       if (action === 'start-baseline-exam') {
         params.set('examType', 'baseline');
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[DBG][CoordinatorEntry][navigate]', {
+            target: `/exam-intro?${params.toString()}`,
+            has_examType: params.has('examType'),
+            has_userId: params.has('userId'),
+            has_skillName: params.has('skillName'),
+            has_competency_name: params.has('competency_name'),
+          });
+        } catch {}
         navigate(`/exam-intro?${params.toString()}`, { replace: true });
         return;
       }
       if (action === 'start-postcourse-exam') {
         params.set('examType', 'postcourse');
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[DBG][CoordinatorEntry][navigate]', {
+            target: `/exam-intro?${params.toString()}`,
+            has_examType: params.has('examType'),
+            has_userId: params.has('userId'),
+            has_skillName: params.has('skillName'),
+            has_competency_name: params.has('competency_name'),
+          });
+        } catch {}
         navigate(`/exam-intro?${params.toString()}`, { replace: true });
         return;
       }

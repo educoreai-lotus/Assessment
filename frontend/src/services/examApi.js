@@ -44,7 +44,33 @@ export const examApi = {
   },
   async saveContext(payload) {
     await httpReady;
-    return http.post('/api/exams/context', payload).then(r => r.data);
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[DBG][examApi.saveContext][call]', {
+        payloadKeys: payload && typeof payload === 'object' ? Object.keys(payload) : [],
+        exam_type: payload?.exam_type,
+        user_id: payload?.user_id,
+        competency_name: payload?.competency_name,
+      });
+    } catch {}
+    return http.post('/api/exams/context', payload)
+      .then((r) => {
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[DBG][examApi.saveContext][success]', { status: r?.status });
+        } catch {}
+        return r.data;
+      })
+      .catch((err) => {
+        try {
+          // eslint-disable-next-line no-console
+          console.error('[DBG][examApi.saveContext][failed]', {
+            status: err?.response?.status,
+            error: err?.response?.data?.error || err?.message,
+          });
+        } catch {}
+        throw err;
+      });
   },
   async postcourseCoverage() {
     await httpReady;
