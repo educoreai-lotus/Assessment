@@ -7,6 +7,9 @@ import CameraPreview from '../components/CameraPreview';
 import { examApi } from '../services/examApi';
 import { http } from '../services/http';
 
+/** TEMP diagnostic: max wait for package_ready polling (5 min). Revert after baseline prep timing is tuned. */
+const BASELINE_PACKAGE_POLL_MAX_MS = 300000;
+
 export default function Baseline() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -95,15 +98,41 @@ export default function Baseline() {
     return () => window.removeEventListener('message', handleMessage);
   }, [examId, attemptId]);
 
-  async function waitForPackage(examId, maxWaitMs = 90000) {
+  async function waitForPackage(examId, maxWaitMs = BASELINE_PACKAGE_POLL_MAX_MS) {
     const start = Date.now();
+  let attempt = 0;
     while (Date.now() - start < maxWaitMs) {
+    attempt += 1;
+    const reqUrl = `/api/exams/${encodeURIComponent(examId)}`;
       try {
-        const res = await http.get(`/api/exams/${encodeURIComponent(examId)}`);
+      const res = await http.get(reqUrl);
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[DBG][Baseline][waitForPackage][poll]', {
+          attempt,
+          url: reqUrl,
+          httpStatus: res?.status,
+          package_ready: !!res?.data?.package_ready,
+          exam_status: res?.data?.status ?? null,
+          error: res?.data?.error ?? null,
+          body: res?.data ?? null,
+        });
+      } catch {}
         if (res?.data?.package_ready) {
           return res.data;
         }
+    } catch (e) {
+      try {
+        // eslint-disable-next-line no-console
+        console.error('[DBG][Baseline][waitForPackage][poll_error]', {
+          attempt,
+          url: reqUrl,
+          httpStatus: e?.response?.status ?? null,
+          body: e?.response?.data ?? null,
+          message: e?.message ?? null,
+        });
       } catch {}
+    }
       await new Promise((r) => setTimeout(r, 1500));
     }
     throw new Error('package_not_ready_timeout');

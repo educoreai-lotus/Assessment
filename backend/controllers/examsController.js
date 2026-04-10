@@ -338,10 +338,34 @@ exports.getExam = async (req, res, next) => {
     // Baseline: preserve existing behavior (exam-scoped readiness)
     if (!isPostCourse) {
       const pkg = await ExamPackage.findOne({ exam_id: String(examIdNum) }).lean();
+      try {
+        console.log('[DBG][getExam][baseline][lookup]', {
+          exam_id: examIdNum,
+          exam_status: examStatus || null,
+          package_found: !!pkg,
+          package_id: pkg?._id ? String(pkg._id) : null,
+        });
+      } catch {}
       if (!pkg) {
+        try {
+          console.log('[DBG][getExam][baseline][return]', {
+            exam_id: examIdNum,
+            branch: 'not_ready_no_package',
+            package_ready: false,
+            status: examStatus || 'PREPARING',
+          });
+        } catch {}
         return res.status(202).json({ package_ready: false });
       }
       if (examStatus !== 'READY') {
+        try {
+          console.log('[DBG][getExam][baseline][return]', {
+            exam_id: examIdNum,
+            branch: 'not_ready_status_not_ready',
+            package_ready: false,
+            status: examStatus || 'PREPARING',
+          });
+        } catch {}
         return res.status(200).json({ package_ready: false, status: examStatus || 'PREPARING' });
       }
       try {
@@ -351,6 +375,15 @@ exports.getExam = async (req, res, next) => {
         return res.status(500).json({ error: 'grading_missing', message: 'Grading not available for completed exam' });
       }
       const responsePayload = { package_ready: true, ...pkg };
+      try {
+        console.log('[DBG][getExam][baseline][return]', {
+          exam_id: examIdNum,
+          branch: 'ready_true',
+          package_ready: true,
+          status: examStatus || null,
+          package_id: pkg?._id ? String(pkg._id) : null,
+        });
+      } catch {}
       try {
         const perSkill = Array.isArray(pkg?.grading?.per_skill) ? pkg.grading.per_skill : (Array.isArray(pkg?.metadata?.skills) ? pkg.metadata.skills.map(s => ({ skill_id: s.skill_id, score: 0, status: 'not_acquired' })) : []);
         const finalGrade = pkg?.grading?.final_grade != null ? Number(pkg.grading.final_grade) : null;
@@ -390,6 +423,12 @@ exports.getExam = async (req, res, next) => {
     // Return ready immediately
     return res.status(200).json({ package_ready: true, attempt_id: aid, exam_id: Number(examIdNum), ...pkgAttempt });
   } catch (err) {
+    try {
+      console.error('[DBG][getExam][error]', {
+        exam_id: req?.params?.examId || null,
+        message: err?.message || String(err),
+      });
+    } catch {}
     return next(err);
   }
 };
@@ -474,7 +513,23 @@ exports.createExam = async (req, res, next) => {
     // Immediately kick off async preparation (do NOT await), unless an in-flight prep already started
     try {
       const alreadyPreparing = String(resp?.status || '').toUpperCase() === 'PREPARING' && Number(resp?.progress || 0) > 0;
+      try {
+        console.log('[DBG][createExam][result]', {
+          exam_id: resp?.exam_id ?? null,
+          attempt_id: resp?.attempt_id ?? null,
+          status: resp?.status ?? null,
+          progress: resp?.progress ?? null,
+          alreadyPreparing,
+        });
+      } catch {}
       if (!alreadyPreparing) {
+        try {
+          console.log('[DBG][createExam][prepare_schedule]', {
+            exam_id: resp?.exam_id ?? null,
+            attempt_id: resp?.attempt_id ?? null,
+            scheduled: true,
+          });
+        } catch {}
         setImmediate(() => {
           try { console.log('[TRACE] prepareExamAsync started', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id }); } catch {}
           prepareExamAsync(resp.exam_id, resp.attempt_id, { user_id: userStr, exam_type, course_id, course_name })
@@ -482,6 +537,14 @@ exports.createExam = async (req, res, next) => {
         });
       } else {
         try { console.log('[TRACE][PREP][IDEMPOTENT][REUSE]', { exam_id: resp?.exam_id, attempt_id: resp?.attempt_id }); } catch {}
+        try {
+          console.log('[DBG][createExam][prepare_schedule]', {
+            exam_id: resp?.exam_id ?? null,
+            attempt_id: resp?.attempt_id ?? null,
+            scheduled: false,
+            reason: 'already_preparing_reuse',
+          });
+        } catch {}
       }
     } catch {}
 

@@ -2581,10 +2581,21 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
     return;
   }
   __activePrepAttempts.add(Number(attemptId));
-  const watchdogMs = Number.isFinite(Number(process.env.PREP_TIMEOUT_MS)) ? Number(process.env.PREP_TIMEOUT_MS) : 120000;
+  /** TEMP diagnostic: default prep watchdog when PREP_TIMEOUT_MS unset — must exceed frontend baseline poll (~5m). */
+  const PREP_WATCHDOG_DEFAULT_MS_DIAG = 360000;
+  const watchdogMs = Number.isFinite(Number(process.env.PREP_TIMEOUT_MS))
+    ? Number(process.env.PREP_TIMEOUT_MS)
+    : PREP_WATCHDOG_DEFAULT_MS_DIAG;
   const startedAt = Date.now();
   let watchdogTimer = null;
   async function runPrep() {
+    try {
+      console.log('[DBG][prepareExamAsync][start]', {
+        exam_id: examId,
+        attempt_id: attemptId,
+        exam_type,
+      });
+    } catch {}
     try { console.log('[ARCH][BOUNDARY] learning_analytics is external pull-only and never participates in exam build or DevLab flows'); } catch {}
     // Deployment/version trace to verify active runtime on Railway/host
     try {
@@ -2619,8 +2630,24 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           ctx = await ExamContext.findOne({ attempt_id: String(attemptId) }).lean();
           if (!ctx) ctx = await ExamContext.findOne({ exam_id: String(examId) }).lean();
         } catch {}
+        try {
+          console.log('[DBG][prepareExamAsync][baseline_context]', {
+            exam_id: examId,
+            attempt_id: attemptId,
+            found: !!ctx,
+            has_user_id: !!ctx?.user_id,
+            has_competency_name: !!ctx?.competency_name,
+          });
+        } catch {}
         if (!ctx || !ctx.competency_name || !ctx.user_id) {
           try { console.error('[BASELINE][CTX][MISSING]', { exam_id: examId, attempt_id: attemptId, hasCtx: !!ctx, competency: ctx?.competency_name || null }); } catch {}
+          try {
+            console.error('[DBG][prepareExamAsync][failed_branch]', {
+              exam_id: examId,
+              attempt_id: attemptId,
+              reason: 'baseline_context_missing',
+            });
+          } catch {}
           await setExamStatus(examId, { status: 'FAILED', error_message: 'competency_name_missing', failed_step: 'fetch_baseline_skills', progress: 100 });
           return;
         }
@@ -2630,6 +2657,14 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
           user_id: ctx.user_id,
           competency_name: ctx.competency_name,
         };
+        try {
+          console.log('[DBG][prepareExamAsync][skills_fetch][start]', {
+            exam_id: examId,
+            attempt_id: attemptId,
+            user_id: ctx.user_id,
+            competency_name: ctx.competency_name,
+          });
+        } catch {}
         try { console.log('[BASELINE][SKILLS_ENGINE][FETCH]', { exam_id: examId, attempt_id: attemptId, user_id: ctx.user_id, competency_name: ctx.competency_name }); } catch {}
         const { sendToCoordinator } = require('../integrations/envelopeSender');
         const { normalizeSkillsEngineResponse } = require('../gateways/skillsEngineGateway');
@@ -2731,10 +2766,26 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         // Fallback to competency_name-derived minimal skill if none returned
         const effectiveSkills = Array.isArray(skillsFromSe) ? skillsFromSe : [];
         if (effectiveSkills.length === 0) {
+          try {
+            console.error('[DBG][prepareExamAsync][skills_fetch][end]', {
+              exam_id: examId,
+              attempt_id: attemptId,
+              ok: false,
+              skills_count: 0,
+            });
+          } catch {}
           await setExamStatus(examId, { status: 'FAILED', error_message: 'baseline_requires_skills', failed_step: 'fetch_baseline_skills', progress: 100 });
           try { console.error('[BASELINE][BUILD][ERROR]', { reason: 'Baseline build requires skills[]', exam_id: examId, attempt_id: attemptId }); } catch {}
           return;
         }
+        try {
+          console.log('[DBG][prepareExamAsync][skills_fetch][end]', {
+            exam_id: examId,
+            attempt_id: attemptId,
+            ok: true,
+            skills_count: effectiveSkills.length,
+          });
+        } catch {}
         try {
           const first = effectiveSkills?.[0] || {};
           console.log('[BASELINE][SKILLS_ENGINE][FETCH][SUCCESS]', { skills_count: effectiveSkills.length });
@@ -3173,6 +3224,13 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         mappedQuestionType: typeof (mappedCodingQuestions?.[0]?.question),
       });
     } catch {}
+      try {
+        console.log('[DBG][prepareExamAsync][package_save][start]', {
+          exam_id: examId,
+          attempt_id: attemptId,
+          exam_type,
+        });
+      } catch {}
       const pkg = await buildExamPackageDoc({
         exam_id: examId,
         attempt_id: attemptId,
@@ -3194,6 +3252,13 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         const tag = String(exam_type).toLowerCase() === 'postcourse' ? '[POSTCOURSE][BUILD][PACKAGE_WRITE]' : '[BASELINE][BUILD][PACKAGE_WRITE]';
         console.log(tag, { exam_id: examId, attempt_id: attemptId, skills_count: Array.isArray(skillsArray) ? skillsArray.length : 0 });
       } catch {}
+      try {
+        console.log('[DBG][prepareExamAsync][package_save][success]', {
+          exam_id: examId,
+          attempt_id: attemptId,
+          package_id: String(pkg?._id || ''),
+        });
+      } catch {}
       try { console.log('[PACKAGE][WRITE][AFTER]', { exam_id: examId, attempt_id: attemptId, package_id: String(pkg?._id || '') }); } catch {}
       await pool.query(`UPDATE exam_attempts SET package_ref = $1 WHERE attempt_id = $2`, [pkg._id, attemptId]);
       try {
@@ -3207,13 +3272,33 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         });
       } catch {}
     } catch (e) {
+      try {
+        console.error('[DBG][prepareExamAsync][failed_branch]', {
+          exam_id: examId,
+          attempt_id: attemptId,
+          reason: 'persist_package_failed',
+          message: e?.message || null,
+        });
+      } catch {}
       await setExamStatus(examId, { status: 'FAILED', error_message: e?.message || 'persist_package_failed', failed_step: 'persist_package', progress: 100 });
       return;
     }
 
     try { console.log('[EXAM][STATUS][READY][BEFORE]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    try {
+      console.log('[DBG][prepareExamAsync][status_ready][before]', {
+        exam_id: examId,
+        attempt_id: attemptId,
+      });
+    } catch {}
     await setExamStatus(examId, { status: 'READY', progress: 100 });
     try { console.log('[EXAM][STATUS][READY]', { exam_id: examId, attempt_id: attemptId }); } catch {}
+    try {
+      console.log('[DBG][prepareExamAsync][status_ready][after]', {
+        exam_id: examId,
+        attempt_id: attemptId,
+      });
+    } catch {}
   }
 
   // Outer watchdog race
@@ -3223,6 +3308,14 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
         try {
           const elapsed = Date.now() - startedAt;
           try { console.log('[PREP][WATCHDOG][FIRE]', { exam_id: examId, attempt_id: attemptId, watchdogMs, elapsed_ms: elapsed }); } catch {}
+          try {
+            console.error('[DBG][prepareExamAsync][watchdog_timeout]', {
+              exam_id: examId,
+              attempt_id: attemptId,
+              watchdog_ms: watchdogMs,
+              elapsed_ms: elapsed,
+            });
+          } catch {}
           await setExamStatus(examId, { status: 'FAILED', failed_step: 'prep_timeout', error_message: 'prep_timeout', progress: 100 });
         } catch {}
         reject(new Error('prep_timeout'));
@@ -3240,6 +3333,13 @@ async function prepareExamAsync(examId, attemptId, { user_id, exam_type, course_
       }
     } catch {}
   } catch (e) {
+    try {
+      console.error('[DBG][prepareExamAsync][caught_error]', {
+        exam_id: examId,
+        attempt_id: attemptId,
+        message: e?.message || null,
+      });
+    } catch {}
     // Only mark FAILED if not already finalized
     try {
       const { rows } = await pool.query(`SELECT status FROM exams WHERE exam_id = $1`, [examId]).catch(() => ({ rows: [] }));
