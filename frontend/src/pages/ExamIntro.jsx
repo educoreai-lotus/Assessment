@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { examApi } from '../services/examApi';
 import { useRef } from 'react';
 
+const BASELINE_CTX_SESSION_KEY = 'assessment_baseline_context';
+
 function maskUrlForDebug(href) {
   try {
     const u = new URL(href);
@@ -13,6 +15,34 @@ function maskUrlForDebug(href) {
   } catch {
     return String(href || '').replace(/(access_token=)[^&]+/i, '$1***');
   }
+}
+
+function readBaselineContextFromSession() {
+  try {
+    const raw = sessionStorage.getItem(BASELINE_CTX_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const examType = String(parsed?.examType || '').toLowerCase();
+    const userId = String(parsed?.userId || '').trim();
+    const skillName = String(parsed?.skillName || '').trim();
+    if (examType !== 'baseline' || !userId || !skillName) return null;
+    return { examType, userId, skillName };
+  } catch {
+    return null;
+  }
+}
+
+function saveBaselineContextToSession({ examType, userId, skillName }) {
+  try {
+    if (String(examType).toLowerCase() !== 'baseline') return;
+    const uid = String(userId || '').trim();
+    const sname = String(skillName || '').trim();
+    if (!uid || !sname) return;
+    sessionStorage.setItem(
+      BASELINE_CTX_SESSION_KEY,
+      JSON.stringify({ examType: 'baseline', userId: uid, skillName: sname }),
+    );
+  } catch {}
 }
 
 export default function ExamIntro() {
@@ -27,6 +57,9 @@ export default function ExamIntro() {
   const userId = searchParams.get('userId') || '';
   const userName = searchParams.get('userName') || '';
   const skillName = searchParams.get('skillName') || '';
+  const sessionCtx = examType === 'baseline' ? readBaselineContextFromSession() : null;
+  const effectiveUserId = (userId || '').trim() || (sessionCtx?.userId || '');
+  const effectiveSkillName = (skillName || '').trim() || (sessionCtx?.skillName || '');
 
   const [ack, setAck] = useState(false);
   const [ctxSaved, setCtxSaved] = useState(examType !== 'baseline');
@@ -42,8 +75,8 @@ export default function ExamIntro() {
   // Persist baseline context from Directory URL (userId, skillName) before start
   useEffect(() => {
     try {
-      const uidDbg = (userId || '').trim();
-      const compDbg = (skillName || '').trim();
+      const uidDbg = effectiveUserId;
+      const compDbg = effectiveSkillName;
       // eslint-disable-next-line no-console
       console.log('[DBG][ExamIntro][effect:start]', {
         href: maskUrlForDebug(window.location.href),
@@ -51,6 +84,8 @@ export default function ExamIntro() {
         examType,
         userId,
         skillName,
+        sessionUserId: sessionCtx?.userId || '',
+        sessionSkillName: sessionCtx?.skillName || '',
         examId,
         attemptId,
         courseId,
@@ -59,8 +94,8 @@ export default function ExamIntro() {
       });
     } catch {}
     if (examType !== 'baseline') return;
-    const uid = (userId || '').trim();
-    const compName = (skillName || '').trim();
+    const uid = effectiveUserId;
+    const compName = effectiveSkillName;
     if (!uid || !compName) {
       try {
         // eslint-disable-next-line no-console
@@ -78,6 +113,7 @@ export default function ExamIntro() {
       setCtxSaved(false);
       return;
     }
+    saveBaselineContextToSession({ examType: 'baseline', userId: uid, skillName: compName });
     if (didPostContext.current) return;
     didPostContext.current = true;
     (async () => {
@@ -115,7 +151,7 @@ export default function ExamIntro() {
         setCtxError('Failed to save baseline context. Please refresh.');
       }
     })();
-  }, [examType, userId, skillName]);
+  }, [examType, userId, skillName, effectiveUserId, effectiveSkillName, searchParams]);
 
   async function handleStart() {
     if (startingExam) return;
@@ -147,9 +183,9 @@ export default function ExamIntro() {
       if (attemptId) params.set('attemptId', attemptId);
       if (courseId) params.set('courseId', courseId);
       if (courseName) params.set('courseName', courseName);
-      if (userId) params.set('userId', userId);
+      if (effectiveUserId) params.set('userId', effectiveUserId);
       if (userName) params.set('userName', userName);
-      if (skillName) params.set('skillName', skillName);
+      if (effectiveSkillName) params.set('skillName', effectiveSkillName);
       params.set('introAccepted', 'true');
       navigate(`/exam/baseline?${params.toString()}`);
     } catch (err) {
