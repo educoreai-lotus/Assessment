@@ -22,8 +22,10 @@ const UUID_RE =
  */
 function parseUserIdForExamOwnerLookup(userId) {
   const userStr = String(userId ?? '');
-  const userInt = Number(userStr.replace(/[^0-9]/g, ''));
   const maybeUuid = UUID_RE.test(userStr) ? userStr : null;
+  // IMPORTANT: never coerce UUID text into digits for integer comparison.
+  // For UUID identities, owner lookup must use e.user_uuid only.
+  const userInt = maybeUuid ? null : Number(userStr.replace(/[^0-9]/g, ''));
   return {
     userInt: Number.isFinite(userInt) ? userInt : null,
     maybeUuid,
