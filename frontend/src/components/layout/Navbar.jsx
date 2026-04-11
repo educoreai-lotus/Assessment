@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useBaselineOnlyLaunch } from '../../hooks/useBaselineOnlyLaunch';
+import { logout } from '../../services/nauthLogout';
 
 const base =
   'px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-emeraldbrand-700/10 transition-colors dark:text-neutral-200 dark:hover:text-white dark:hover:bg-emeraldbrand-700/40';
@@ -63,7 +64,16 @@ export default function Navbar() {
           <NavLink to="/results" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>Results</NavLink>
           {/* Dev/Health removed from navbar */}
         </nav>
-        <div className="flex items-center">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-emeraldbrand-700/10 transition-colors dark:text-neutral-200 dark:hover:text-white dark:hover:bg-emeraldbrand-700/40"
+            onClick={() => {
+              void logout();
+            }}
+          >
+            Logout
+          </button>
           <button
             type="button"
             aria-label="Toggle theme"
