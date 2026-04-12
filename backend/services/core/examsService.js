@@ -34,6 +34,14 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+/** attempt_skills.status CHECK allows only 'acquired' | 'failed'. */
+function normalizeAttemptSkillStatusForDb(status) {
+  const s = String(status || '').toLowerCase();
+  if (s === 'acquired' || s === 'failed') return s;
+  if (s === 'error' || s === 'not_acquired') return 'failed';
+  return 'failed';
+}
+
 /**
  * Determine whether coding grading is pending for a given attempt and package.
  * Coding is considered present if there are coding_questions or a DevLab UI block.
@@ -2189,6 +2197,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
 
   // 11) Upsert attempt_skills
   for (const s of perSkill) {
+    const statusForPg = normalizeAttemptSkillStatusForDb(s.status);
     await pool.query(
       `
         INSERT INTO attempt_skills (attempt_id, skill_id, skill_name, score, status)
@@ -2198,7 +2207,7 @@ async function submitAttempt({ attempt_id, exam_id, answers, devlab }) {
           score = EXCLUDED.score,
           status = EXCLUDED.status
       `,
-      [attemptIdNum, s.skill_id, s.skill_name, s.score, s.status],
+      [attemptIdNum, s.skill_id, s.skill_name, s.score, statusForPg],
     );
   }
 
