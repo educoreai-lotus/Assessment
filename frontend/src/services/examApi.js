@@ -1,5 +1,8 @@
 import { http, httpReady } from './http';
 
+/** Synchronous submit waits for DevLab (backend up to 60s) plus grading/DB; keep above that bound. */
+const EXAM_SUBMIT_TIMEOUT_MS = 90000;
+
 export const examApi = {
   async create(payload) {
     await httpReady;
@@ -24,7 +27,9 @@ export const examApi = {
   },
   async submit(examId, payload) {
     await httpReady;
-    return http.post(`/api/exams/${encodeURIComponent(examId)}/submit`, payload).then(r => r.data);
+    return http
+      .post(`/api/exams/${encodeURIComponent(examId)}/submit`, payload, { timeout: EXAM_SUBMIT_TIMEOUT_MS })
+      .then((r) => r.data);
   },
   async proctoringStart(attemptId) {
     await httpReady;
